@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "ziplime"
+version = "0.1.0"
+description = ""
+authors = ["Lime Financial <support@lime.co>"]
+readme = "README.md"
+packages = [{include = "ziplime"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "1.26.4"
+zipline-reloaded = "3.1.dev4"
+dask = "^2024.7.1"
+setuptools = "^72.1.0"
+lime-trader-sdk = "^0.3.9"
+limexhub = "^0.1.23"
+joblib = "^1.4.2"
+
+[tool.poetry.scripts]
+weather = "ziplime.cli:cli"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -49,7 +49,6 @@ def create_lime_equities_bundle(
         bundle_name: str,
         period: Period,
         symbol_list: list[str] = None,
-        retries: int = 5,
 ):
     limex_api_key = environ.get("LIMEX_API_KEY", None)
     lime_sdk_credentials_file = environ.get("LIME_SDK_CREDENTIALS_FILE", None)
@@ -86,8 +85,9 @@ def create_lime_equities_bundle(
                 date_from=start_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc),
                 date_to=end_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc),
                 show_progress=show_progress,
-                retries=retries
         ):
+            if len(raw_data) == 0:
+                continue
             asset_metadata = gen_asset_metadata(data=raw_data[["symbol", "date"]], show_progress=show_progress)
 
             if not asset_metadata_inserted:
@@ -136,8 +136,8 @@ def register_lime_equities_bundle(
         start_session: datetime.datetime,
         end_session: datetime.datetime,
         symbol_list: list[str],
-        period: Period = Period.DAY,
-        calendar_name: str = "NYSE"
+        period: Period,
+        calendar_name: str
 ):
     start_session, end_session = normalize_daily_start_end_session(
         calendar_name=calendar_name, start_session=start_session, end_session=end_session
@@ -147,7 +147,6 @@ def register_lime_equities_bundle(
         f=create_lime_equities_bundle(
             bundle_name=bundle_name,
             symbol_list=symbol_list,
-            retries=5,
             period=period
         ),
         start_session=start_session,

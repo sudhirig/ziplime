@@ -20,25 +20,35 @@ class LimeDataProvider:
         self._limex_api_key = limex_api_key
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
 
-
         self._logger = logging.getLogger(__name__)
         self._limex_client = limexhub.RestAPI(token=limex_api_key)
-        self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file,logger=self._logger)
-
+        self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
 
     def fetch_historical_data_table(self, symbols: list[str],
                                     period: Period,
                                     date_from: datetime.datetime,
                                     date_to: datetime.datetime,
-                                    show_progress: bool,
-                                    retries: int):
+                                    show_progress: bool):
 
         def fetch_historical(limex_api_key: str, symbol: str):
             limex_client = limexhub.RestAPI(token=limex_api_key)
+            timeframe = 3
+            if period == Period.MINUTE:
+                timeframe = 1
+            elif period == Period.HOUR:
+                timeframe = 2
+            elif period == Period.DAY:
+                timeframe = 3
+            elif period == Period.WEEK:
+                timeframe = 4
+            elif period == Period.MONTH:
+                timeframe = 5
+            elif period == Period.QUARTER:
+                timeframe = 6
             df = limex_client.candles(symbol=symbol,
                                       from_date=date_from,
                                       to_date=date_to,
-                                      timeframe=3)
+                                      timeframe=timeframe)
 
             # "date",
             # "ex-dividend",
@@ -46,7 +56,8 @@ class LimeDataProvider:
 
             if len(df) > 0:
                 df = df.reset_index()
-                df = df.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "Date": "date"})
+                df = df.rename(
+                    columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "Date": "date"})
                 df = df.set_index('date', drop=False)
                 df.index = pd.to_datetime(df.index, utc=True)
                 df["symbol"] = symbol
@@ -79,19 +90,18 @@ class LimeDataProvider:
             period: Period,
             date_from: datetime.datetime,
             date_to: datetime.datetime,
-            show_progress: bool,
-            retries: int):
+            show_progress: bool):
         historical_data = self.fetch_historical_data_table(symbols=symbols, period=period, date_from=date_from,
                                                            date_to=date_to,
-                                                           show_progress=show_progress, retries=retries)
+                                                           show_progress=show_progress)
 
         yield historical_data
 
-        live_data_start_date = max(historical_data.index) if len(historical_data) > 0 else date_from
+        live_data_start_date = max(historical_data.index)[0].to_pydatetime().replace(tzinfo=datetime.timezone.utc) if len(historical_data) > 0 else date_from
 
         for quotes in self.fetch_live_data_table(symbols=symbols, period=period, date_from=live_data_start_date,
                                                  date_to=date_to,
-                                                 show_progress=show_progress, retries=retries):
+                                                 show_progress=show_progress):
             yield quotes
 
     def fetch_live_data_table(
@@ -100,48 +110,45 @@ class LimeDataProvider:
             period: Period,
             date_from: datetime.datetime,
             date_to: datetime.datetime,
-            show_progress: bool,
-            retries: int):
+            show_progress: bool):
 
         live_data_queue = Queue()
 
         def fetch_live(lime_trader_sdk_credentials_file: str, symbol: str):
-            latest_date = date_from
             lime_client = LimeClient.from_file(lime_trader_sdk_credentials_file, logger=self._logger)
-            current_date = datetime.datetime.now(tz=datetime.timezone.utc)
-            quotes = lime_client.market.get_quotes_history(
-                symbol=symbol, period=period, from_date=latest_date,
-                to_date=current_date
-            )
-            while True:
+            try:
+                quotes = lime_client.market.get_quotes_history(
+                    symbol=symbol, period=period, from_date=date_from,
+                    to_date=date_to
+                )
                 df = LimeDataProvider.load_data_table(
                     quotes=[LimeQuote(symbol=symbol, quote_history=quote) for quote in quotes],
                     show_progress=show_progress
                 )
-                live_data_queue.put(df)
-                if quotes:
-                    latest_date = quotes[-1].timestamp
-                time.sleep(2)
-                current_date = datetime.datetime.now(tz=datetime.timezone.utc)
-                quotes = lime_client.market.get_quotes_history(
-                    symbol=symbol, period=period, from_date=latest_date,
-                    to_date=current_date
-                )
+            except Exception as e:
+                self._logger.error("Error fetching data using lime trader sdk")
+                df = pd.DataFrame()
+            live_data_queue.put(df)
 
         res = Parallel(n_jobs=len(symbols), prefer="threads", return_as="generator_unordered")(
             delayed(fetch_live)(self._lime_sdk_credentials_file, symbol) for symbol in symbols)
 
         if show_progress:
             self._logger.info("Downloading live Lime Trader SDK metadata.")
-
+        processed_symbols = 0
         while True:
+            if processed_symbols == len(symbols):
+                break
             item = live_data_queue.get()
             yield item
+            processed_symbols += 1
 
     @staticmethod
     def load_data_table(quotes: list[LimeQuote], show_progress: bool = False):
+        if not quotes:
+            return pd.DataFrame()
         data_table = pd.DataFrame(
-            [dict(**asdict(quote_hist.quote_history), symbol=quote_hist.symbol) for quote_hist in quotes],)
+            [dict(**asdict(quote_hist.quote_history), symbol=quote_hist.symbol) for quote_hist in quotes], )
 
         data_table.rename(
             columns={

@@ -2,9 +2,11 @@ import datetime
 import logging
 import os
 from pathlib import Path
+import pandas as pd
 
 import click
 import zipline
+from ziplime.data import bundles as bundles_module
 
 from click import DateTime
 from lime_trader.models.market import Period
@@ -16,6 +18,9 @@ from ziplime.config.register_bundles import register_lime_symbol_list_equities_b
 from zipline import __main__ as zipline__main__
 from zipline.utils.run_algo import load_extensions
 from zipline.extensions import create_args
+
+from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter
+from ziplime.data.bcolz_minute_bars import ZiplimeBcolzMinuteBarWriter
 
 DEFAULT_BUNDLE = "lime"
 
@@ -87,8 +92,8 @@ def main(ctx, extension, strict_extensions, default_extension, x):
 
 
 @main.command(context_settings=dict(
-    ignore_unknown_options=True,
-    allow_extra_args=True,
+    # ignore_unknown_options=True,
+    # allow_extra_args=True,
 ))
 @click.option(
     "-b",
@@ -127,8 +132,19 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     type=click.Choice(['minute', 'hour', 'day', 'week', 'month', 'quarter'], case_sensitive=False),
 )
 @click.option("-s", '--symbols')
+@click.option(
+    "--assets-version",
+    type=int,
+    multiple=True,
+    help="Version of the assets db to which to downgrade.",
+)
+@click.option(
+    "--show-progress/--no-show-progress",
+    default=True,
+    help="Print progress information to the terminal.",
+)
 @click.pass_context
-def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols):
+def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, show_progress, assets_version):
     """Top level ziplime entry point."""
     symbols_parsed = symbols.split(',') if symbols else None
 
@@ -151,15 +167,29 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols):
 
     # clean up lime only params and set new bundle name
     new_params["bundle"] = bundle_name
-    del new_params["start_date"]
-    del new_params["end_date"]
-    del new_params["symbols"]
-    del new_params["new_bundle_name"]
-    del new_params["period"]
+    # del new_params["start_date"]
+    # del new_params["end_date"]
+    # del new_params["symbols"]
+    # del new_params["new_bundle_name"]
+    # del new_params["period"]
 
-    ctx.params = new_params
-    func = getattr(zipline__main__, "ingest")
-    ctx.forward(func)
+    # ctx.params = new_params
+    bundles_module.ingest(
+        bundle_name,
+        os.environ,
+        pd.Timestamp.utcnow(),
+        assets_version,
+        show_progress,
+
+        minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
+        daily_bar_writer_class=ZiplimeBcolzDailyBarWriter,
+        # start_session=start_date,
+        # end_session=end_date,
+        # symbols=symbols_parsed,
+        # period=period
+    )
+    # func = getattr(zipline__main__, "ingest")
+    # ctx.forward(func)
 
 
 @main.command(context_settings=dict(

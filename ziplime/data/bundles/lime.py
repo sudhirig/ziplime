@@ -1,5 +1,5 @@
 import datetime
-from os import _Environ, environ
+from os import environ, _Environ
 import logging
 import pandas as pd
 
@@ -12,7 +12,7 @@ from zipline.data.bcolz_minute_bars import BcolzMinuteBarWriter
 from zipline.utils.cache import dataframe_cache
 from zipline.utils.calendar_utils import register_calendar_alias
 
-from zipline.data.bundles import core as bundles, register
+from ziplime.data.bundles import core as bundles, register
 import numpy as np
 
 from ziplime.data.lime_data_provider import LimeDataProvider
@@ -73,6 +73,9 @@ def create_lime_equities_bundle(
             cache: dataframe_cache,
             show_progress: bool,
             output_dir: str,
+            # period: Period,
+            # symbols: list[str],
+            **kwargs
     ):
         logger.info(f"Ingesting equities bundle {bundle_name} for period {start_session} - {end_session}")
 
@@ -98,13 +101,23 @@ def create_lime_equities_bundle(
                 asset_db_writer.write(equities=asset_metadata, exchanges=exchanges)
                 asset_metadata_inserted = True
             symbol_map = asset_metadata.symbol
-            sessions = calendar.sessions_in_range(start=start_session, end=end_session)
+
 
             raw_data.set_index(["date", "symbol"], inplace=True)
-            daily_bar_writer.write(
-                data=parse_pricing_and_vol(data=raw_data, sessions=sessions, symbol_map=symbol_map),
-                show_progress=show_progress,
-            )
+            if period == Period.DAY:
+                sessions = calendar.sessions_in_range(start=start_session, end=end_session)
+                daily_bar_writer.write(
+                    data=parse_pricing_and_vol(data=raw_data, sessions=sessions, symbol_map=symbol_map),
+                    show_progress=show_progress,
+                )
+            elif period == Period.MINUTE:
+                sessions = calendar.sessions_minutes(start=start_session, end=end_session)
+                minute_bar_writer.write(
+                    data=parse_pricing_and_vol(data=raw_data, sessions=sessions, symbol_map=symbol_map),
+                    show_progress=show_progress,
+                )
+            else:
+                raise Exception("Unsupported period.")
 
             # Write empty splits and divs - they are not present in API
             divs_splits = {
@@ -156,3 +169,6 @@ def register_lime_equities_bundle(
 
 
 register_calendar_alias("LIME", "NYSE")
+
+
+# zipline.data.bcolz_daily_bars.BcolzDailyBarWriter = CustomClass

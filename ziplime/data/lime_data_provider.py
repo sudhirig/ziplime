@@ -11,6 +11,7 @@ from click import progressbar
 from joblib import Parallel, delayed
 from lime_trader import LimeClient
 from lime_trader.models.market import Period
+from sqlalchemy.dialects.mssql.information_schema import columns
 
 from ziplime.domain.lime_quote import LimeQuote
 
@@ -50,19 +51,58 @@ class LimeDataProvider:
                                       to_date=date_to,
                                       timeframe=timeframe)
 
-            # "date",
-            # "ex-dividend",
-            # "split_ratio",
+            # fundamental = limex_client.fundamental(
+            #     symbol=symbol,
+            #     from_date=date_from,
+            #     to_date=date_to,
+            #     fields=None
+            # )
+
+            # fundamental = fundamental.reset_index()
+
+            # fundamental = fundamental.set_index('date', drop=False)
+
+            # date
+            # total_share_holder_equity_value
+            # total_share_holder_equity_ttm
+            # total_liabilities_value
+            # total_liabilities_ttm
+            # total_assets_value
+            # total_assets_ttm
+            # shares_outstanding_value
+            # shares_outstanding_ttm
+            # roe_value
+            # roe_ttm
+            # revenue_value
+            # revenue_ttm
+            # return_on_tangible_equity_value
+            # return_on_tangible_equity_ttm
+            # quick_ratio_value
+            # quick_ratio_ttm
+            # price_sales_value
+            # price_sales_ttm
+            # price_fcf_value
+            # price_fcf_ttm
+            # fundamental = fundamental.set_index('date', drop=False)
+
+            fundamental_new = pd.DataFrame()
+            # for index, row in fundamental.iterrows():
+            #     fundamental_new['']
+            #     print(row['c1'], row['c2'])
 
             if len(df) > 0:
                 df = df.reset_index()
                 df = df.rename(
                     columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "Date": "date"})
+                df["total_sells"] = 100
+                # fundamental['date'] = pd.to_datetime(fundamental['date'])
+                # df = pd.merge(df, fundamental, on='date')
                 df = df.set_index('date', drop=False)
                 df.index = pd.to_datetime(df.index, utc=True)
                 df["symbol"] = symbol
                 df['dividend'] = 0
                 df['split'] = 0
+
             return df
 
         total_days = (date_to - date_from).days
@@ -161,3 +201,5 @@ class LimeDataProvider:
         # data_table = data_table.reset_index()
         data_table = data_table.set_index('date', drop=False)
         return data_table
+
+

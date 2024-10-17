@@ -330,4 +330,4 @@ tags
 envs/*.env
 static/
 .idea/
-test.py
+dual_moving_average.py

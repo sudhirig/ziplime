@@ -23,8 +23,10 @@ from zipline.utils.input_validation import ensure_timestamp, optionally
 import zipline.utils.paths as pth
 from zipline.utils.preprocess import preprocess
 
+from ziplime.constants.default_columns import DEFAULT_COLUMNS
 from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter, ZiplimeBcolzDailyBarReader
 from ziplime.data.bcolz_minute_bars import ZiplimeBcolzMinuteBarWriter, ZiplimeBcolzMinuteBarReader
+from ziplime.domain.column_specification import ColumnSpecification
 
 log = logging.getLogger(__name__)
 
@@ -347,10 +349,11 @@ def _make_bundle_core():
             environ=os.environ,
             timestamp=None,
             assets_versions=(),
-            show_progress=False,
+            show_progress: bool=False,
             minute_bar_writer_class = ZiplimeBcolzMinuteBarWriter,
-            daily_bar_writer_class=ZiplimeBcolzDailyBarWriter,
-
+            daily_bar_writer_class = ZiplimeBcolzDailyBarWriter,
+            minute_bar_writer_cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
+            daily_bar_writer_cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
             **kwargs,
     ):
         """Ingest data for a given bundle.
@@ -410,18 +413,19 @@ def _make_bundle_core():
                     calendar,
                     start_session,
                     end_session,
+                    cols=daily_bar_writer_cols,
                 )
                 # Do an empty write to ensure that the daily ctables exist
                 # when we create the SQLiteAdjustmentWriter below. The
                 # SQLiteAdjustmentWriter needs to open the daily ctables so
                 # that it can compute the adjustment ratios for the dividends.
 
-                daily_bar_writer.write(())
                 minute_bar_writer = minute_bar_writer_class(
                     wd.ensure_dir(*minute_equity_relative(name, timestr)),
                     calendar,
                     start_session,
                     end_session,
+                    cols=minute_bar_writer_cols,
                     minutes_per_day=bundle.minutes_per_day,
                 )
                 assets_db_path = wd.getpath(*asset_db_relative(name, timestr))

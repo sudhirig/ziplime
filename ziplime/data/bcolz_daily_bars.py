@@ -11,10 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
 import warnings
 from functools import partial
 
+from exchange_calendars import ExchangeCalendar
 from zipline.data._equities import _read_bcolz_data, _compute_row_slices
+
+from ziplime.constants.default_columns import DEFAULT_COLUMNS
+from ziplime.domain.column_specification import ColumnSpecification
 
 with warnings.catch_warnings():  # noqa
     warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -34,20 +39,19 @@ from zipline.utils.input_validation import expect_element
 from zipline.utils.memoize import lazyval
 from zipline.utils.numpy_utils import float64_dtype, iNaT, uint32_dtype
 
-
 logger = logging.getLogger("UsEquityPricing")
 
 OHLC = frozenset(["open", "high", "low", "close"])
-US_EQUITY_PRICING_BCOLZ_COLUMNS = (
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume",
-    "day",
-    "id",
-)
-
+# US_EQUITY_PRICING_BCOLZ_COLUMNS = (
+#     "open",
+#     "high",
+#     "low",
+#     "close",
+#     "volume",
+#     "day",
+#     "id",
+# )
+#
 UINT32_MAX = np.iinfo(np.uint32).max
 
 
@@ -129,15 +133,18 @@ class ZiplimeBcolzDailyBarWriter:
     zipline.data.bcolz_daily_bars.BcolzDailyBarReader
     """
 
-    _csv_dtypes = {
-        "open": float64_dtype,
-        "high": float64_dtype,
-        "low": float64_dtype,
-        "close": float64_dtype,
-        "volume": float64_dtype,
-    }
+    # _csv_dtypes = {
+    #     "open": float64_dtype,
+    #     "high": float64_dtype,
+    #     "low": float64_dtype,
+    #     "close": float64_dtype,
+    #     "volume": float64_dtype,
+    # }
 
-    def __init__(self, filename, calendar, start_session, end_session):
+    def __init__(self, filename: str, calendar: ExchangeCalendar, start_session: pd.Timestamp,
+                 end_session: pd.Timestamp, cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
+):
+        self.cols = cols
         self._filename = filename
         start_session = start_session.tz_localize(None)
         end_session = end_session.tz_localize(None)
@@ -161,7 +168,7 @@ class ZiplimeBcolzDailyBarWriter:
         return value if value is None else str(value[0])
 
     def write(
-        self, data, assets=None, show_progress=False, invalid_data_behavior="warn"
+            self, data, assets=None, show_progress=False, invalid_data_behavior="warn"
     ):
         """
 
@@ -209,6 +216,9 @@ class ZiplimeBcolzDailyBarWriter:
             What to do when data is encountered that is outside the range of
             a uint32.
         """
+        d_types = [
+
+        ]
         read = partial(
             pd.read_csv,
             parse_dates=["day"],
@@ -234,8 +244,8 @@ class ZiplimeBcolzDailyBarWriter:
 
         # Maps column name -> output carray.
         columns = {
-            k: carray(np.array([], dtype=uint32_dtype))
-            for k in US_EQUITY_PRICING_BCOLZ_COLUMNS
+            k.name: carray(np.array([], dtype=np.dtype(k.write_type)))
+            for k in self.cols #US_EQUITY_PRICING_BCOLZ_COLUMNS
         }
 
         earliest_date = None
@@ -288,7 +298,6 @@ class ZiplimeBcolzDailyBarWriter:
                 sessions.slice_indexer(asset_first_day, asset_last_day)
             ]
             if len(table) != len(asset_sessions):
-
                 missing_sessions = asset_sessions.difference(
                     pd.to_datetime(np.array(table["day"]), unit="s")
                 ).tolist()
@@ -314,8 +323,8 @@ class ZiplimeBcolzDailyBarWriter:
 
         # This writes the table to disk.
         full_table = ctable(
-            columns=[columns[colname] for colname in US_EQUITY_PRICING_BCOLZ_COLUMNS],
-            names=US_EQUITY_PRICING_BCOLZ_COLUMNS,
+            columns=[columns[col.name] for col in self.cols],
+            names=[col.name for col in self.cols],
             rootdir=self._filename,
             mode="w",
         )
@@ -338,9 +347,9 @@ class ZiplimeBcolzDailyBarWriter:
         if isinstance(raw_data, ctable):
             # we already have a ctable so do nothing
             return raw_data
-
+        ohlc_columns = [col.name for col in self.cols if col.name not in ("date", "symbol")]
         winsorise_uint32(raw_data, invalid_data_behavior, "volume", *OHLC)
-        processed = (raw_data[list(OHLC)] * 1000).round().astype("uint32")
+        processed = (raw_data[ohlc_columns] * 1000).round().astype("uint32")
         dates = raw_data.index.values.astype("datetime64[s]")
         check_uint32_safe(dates.max().view(np.int64), "day")
         processed["day"] = dates.astype("uint32")

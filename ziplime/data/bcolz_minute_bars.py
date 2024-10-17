@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ import bcolz
 import numpy as np
 import pandas as pd
 from bcolz import ctable
+from exchange_calendars import ExchangeCalendar
 from intervaltree import IntervalTree
 from lru import LRU
 from pandas import HDFStore
@@ -39,6 +41,9 @@ from zipline.utils.calendar_utils import get_calendar
 from zipline.utils.cli import maybe_show_progress
 from zipline.utils.compat import mappingproxy
 from zipline.utils.memoize import lazyval
+
+from ziplime.constants.default_columns import DEFAULT_COLUMNS
+from ziplime.domain.column_specification import ColumnSpecification
 
 logger = logging.getLogger("MinuteBars")
 
@@ -104,7 +109,7 @@ def _sid_subdir_path(sid):
     )
 
 
-def convert_cols(cols, zeroed_columns, scale_factor, sid, invalid_data_behavior):
+def convert_cols(cols, scale_factor: int, sid: int, invalid_data_behavior: str):
     """Adapt OHLCV columns into uint32 columns.
 
     Parameters
@@ -191,7 +196,7 @@ class ZiplimeBcolzMinuteBarMetadata:
         return os.path.join(rootdir, cls.METADATA_FILENAME)
 
     @classmethod
-    def read(cls, rootdir):
+    def read(cls, rootdir: str):
         path = cls.metadata_path(rootdir)
         with open(path) as fp:
             raw_data = json.load(fp)
@@ -243,14 +248,14 @@ class ZiplimeBcolzMinuteBarMetadata:
             )
 
     def __init__(
-        self,
-        default_ohlc_ratio,
-        ohlc_ratios_per_sid,
-        calendar,
-        start_session,
-        end_session,
-        minutes_per_day,
-        version=FORMAT_VERSION,
+            self,
+            default_ohlc_ratio: int,
+            ohlc_ratios_per_sid: dict[int, int],
+            calendar: ExchangeCalendar,
+            start_session: datetime.datetime,
+            end_session: datetime.datetime,
+            minutes_per_day: int,
+            version: int = FORMAT_VERSION,
     ):
         self.calendar = calendar
         self.start_session = start_session
@@ -260,7 +265,7 @@ class ZiplimeBcolzMinuteBarMetadata:
         self.minutes_per_day = minutes_per_day
         self.version = version
 
-    def write(self, rootdir):
+    def write(self, rootdir: str):
         """Write the metadata to a JSON file in the rootdir.
 
         Values contained in the metadata are:
@@ -391,23 +396,24 @@ class ZiplimeBcolzMinuteBarWriter:
     zipline.data.minute_bars.BcolzMinuteBarReader
     """
 
-    COL_NAMES = (
-        "open", "high", "low", "close", "volume", "total_sells"
-    )
+    # COL_NAMES = (
+    #     "open", "high", "low", "close", "volume", "total_sells"
+    # )
 
     def __init__(
-        self,
-        rootdir,
-        calendar,
-        start_session,
-        end_session,
-        minutes_per_day,
-        default_ohlc_ratio=OHLC_RATIO,
-        ohlc_ratios_per_sid=None,
-        expectedlen=DEFAULT_EXPECTEDLEN,
-        write_metadata=True,
+            self,
+            rootdir: str,
+            calendar: ExchangeCalendar,
+            start_session: datetime.datetime,
+            end_session: datetime.datetime,
+            minutes_per_day: int,
+            default_ohlc_ratio: int = OHLC_RATIO,
+            ohlc_ratios_per_sid: dict = None,
+            expectedlen: int = DEFAULT_EXPECTEDLEN,
+            write_metadata: bool = True,
+            cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
     ):
-
+        self._cols = cols
         self._rootdir = rootdir
         self._start_session = start_session
         self._end_session = end_session
@@ -438,7 +444,7 @@ class ZiplimeBcolzMinuteBarWriter:
             metadata.write(self._rootdir)
 
     @classmethod
-    def open(cls, rootdir, end_session=None):
+    def open(cls, rootdir: str, cols: list[ColumnSpecification], end_session: pd.Timestamp = None):
         """Open an existing ``rootdir`` for writing.
 
         Parameters
@@ -503,6 +509,7 @@ class ZiplimeBcolzMinuteBarWriter:
             The midnight of the last date written in to the output for the
             given sid.
         """
+
         sizes_path = "{0}/close/meta/sizes".format(self.sidpath(sid))
         if not os.path.exists(sizes_path):
             return pd.NaT
@@ -550,7 +557,7 @@ class ZiplimeBcolzMinuteBarWriter:
             return self._init_ctable(sidpath)
         return bcolz.ctable(rootdir=sidpath, mode="a")
 
-    def _zerofill(self, table, numdays):
+    def _zerofill(self, table, numdays: int):
         # Compute the number of minutes to be filled, accounting for the
         # possibility of a partial day's worth of minutes existing for
         # the previous day.
@@ -611,7 +618,7 @@ class ZiplimeBcolzMinuteBarWriter:
         for k, v in kwargs.items():
             table.attrs[k] = v
 
-    def write(self, data, show_progress=False, invalid_data_behavior="warn"):
+    def write(self, data, show_progress=False, invalid_data_behavior: str = "warn"):
         """Write a stream of minute data.
 
         Parameters
@@ -642,7 +649,7 @@ class ZiplimeBcolzMinuteBarWriter:
             for e in it:
                 write_sid(*e, invalid_data_behavior=invalid_data_behavior)
 
-    def write_sid(self, sid, df, invalid_data_behavior="warn"):
+    def write_sid(self, sid: int, df: pd.DataFrame, invalid_data_behavior: str = "warn"):
         """Write the OHLCV data for the given sid.
         If there is no bcolz ctable yet created for the sid, create it.
         If the length of the bcolz ctable is not exactly to the date before
@@ -663,8 +670,8 @@ class ZiplimeBcolzMinuteBarWriter:
             index : DatetimeIndex of market minutes.
         """
         cols = {}
-        for col in self.COL_NAMES:
-            cols[col] = df[col].values
+        for col in self._cols:
+            cols[col.name] = df[col.name].values
         # cols = {
         #     "open": df.open.values,
         #     "high": df.high.values,
@@ -677,7 +684,7 @@ class ZiplimeBcolzMinuteBarWriter:
         # index and value lengths.
         self._write_cols(sid, dts, cols, invalid_data_behavior)
 
-    def write_cols(self, sid, dts, cols, invalid_data_behavior="warn"):
+    def write_cols(self, sid:int, dts, cols, invalid_data_behavior: str = "warn"):
         """Write the OHLCV data for the given sid.
         If there is no bcolz ctable yet created for the sid, create it.
         If the length of the bcolz ctable is not exactly to the date before
@@ -698,19 +705,19 @@ class ZiplimeBcolzMinuteBarWriter:
             close : float64
             volume : float64|int64
         """
-        if not all(len(dts) == len(cols[name]) for name in self.COL_NAMES):
+        if not all(len(dts) == len(cols[col.name]) for col in self._cols):
             raise BcolzMinuteWriterColumnMismatch(
                 "Length of dts={0} should match cols: {1}".format(
                     len(dts),
                     " ".join(
-                        "{0}={1}".format(name, len(cols[name]))
-                        for name in self.COL_NAMES
+                        "{0}={1}".format(col.name, len(cols[col.name]))
+                        for col in self._cols
                     ),
                 )
             )
         self._write_cols(sid, dts, cols, invalid_data_behavior)
 
-    def _write_cols(self, sid, dts, cols, invalid_data_behavior):
+    def _write_cols(self, sid, dts, cols, invalid_data_behavior: str):
         """Internal method for `write_cols` and `write`.
 
         Parameters
@@ -769,7 +776,7 @@ class ZiplimeBcolzMinuteBarWriter:
 
         # Get all the minutes we wish to write (all market minutes after the
         # latest currently written, up to and including last_minute_to_write)
-        all_minutes_in_window = all_minutes[num_rec_mins : latest_min_count + 1]
+        all_minutes_in_window = all_minutes[num_rec_mins: latest_min_count + 1]
 
         minutes_count = all_minutes_in_window.size
         zeroed_columns = []
@@ -788,7 +795,7 @@ class ZiplimeBcolzMinuteBarWriter:
 
         ohlc_ratio = self.ohlc_ratio_for_sid(sid)
 
-        converted_res = convert_cols(cols, zeroed_columns, ohlc_ratio, sid, invalid_data_behavior)
+        converted_res = convert_cols(cols, ohlc_ratio, sid, invalid_data_behavior)
 
         for col, item in zip(zeroed_columns, converted_res):
             col[dt_ixs] = item
@@ -914,7 +921,7 @@ class ZiplimeBcolzMinuteBarReader(MinuteBarReader):
         return ZiplimeBcolzMinuteBarMetadata.read(self._rootdir)
 
     @property
-    def trading_calendar(self):
+    def trading_calendar(self) -> ExchangeCalendar:
         return self.calendar
 
     @lazyval
@@ -923,7 +930,7 @@ class ZiplimeBcolzMinuteBarReader(MinuteBarReader):
         return close
 
     @property
-    def first_trading_day(self):
+    def first_trading_day(self) -> datetime.datetime:
         return self._start_session
 
     def _ohlc_ratio_inverse_for_sid(self, sid):
@@ -981,10 +988,10 @@ class ZiplimeBcolzMinuteBarReader(MinuteBarReader):
         for market_open, early_close in self._minutes_to_exclude():
             start_pos = self._find_position_of_minute(early_close) + 1
             end_pos = (
-                self._find_position_of_minute(market_open) + self._minutes_per_day - 1
+                    self._find_position_of_minute(market_open) + self._minutes_per_day - 1
             )
             data = (start_pos, end_pos)
-            itree[start_pos : end_pos + 1] = data
+            itree[start_pos: end_pos + 1] = data
         return itree
 
     def _exclusion_indices_for_range(self, start_idx, end_idx):
@@ -1210,12 +1217,12 @@ class ZiplimeBcolzMinuteBarReader(MinuteBarReader):
 
             for i, sid in enumerate(sids):
                 carray = self._open_minute_file(field, sid)
-                values = carray[start_idx : end_idx + 1]
+                values = carray[start_idx: end_idx + 1]
                 if indices_to_exclude is not None:
                     for excl_start, excl_stop in indices_to_exclude[::-1]:
                         excl_slice = np.s_[
-                            excl_start - start_idx : excl_stop - start_idx + 1
-                        ]
+                                     excl_start - start_idx: excl_stop - start_idx + 1
+                                     ]
                         values = np.delete(values, excl_slice)
 
                 where = values != 0
@@ -1223,8 +1230,8 @@ class ZiplimeBcolzMinuteBarReader(MinuteBarReader):
                 # written data for all the minutes requested
                 if field != "volume":
                     out[: len(where), i][where] = values[
-                        where
-                    ] * self._ohlc_ratio_inverse_for_sid(sid)
+                                                      where
+                                                  ] * self._ohlc_ratio_inverse_for_sid(sid)
                 else:
                     out[: len(where), i][where] = values[where]
 
@@ -1289,7 +1296,7 @@ class H5MinuteBarUpdateWriter:
         """
 
         with HDFStore(
-            self._path, "w", complevel=self._complevel, complib=self._complib
+                self._path, "w", complevel=self._complevel, complib=self._complib
         ) as store:
             data = pd.concat(frames, keys=frames.keys()).sort_index()
             data.index.set_names(["sid", "date_time"], inplace=True)

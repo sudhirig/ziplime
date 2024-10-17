@@ -78,7 +78,7 @@ def main(ctx, extension, strict_extensions, default_extension, x):
             bundle_name=bundle,
             symbols=[],
             start_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
-            end_session=datetime.datetime.utcnow().replace(minute=0, hour=0, second=0, microsecond=0),
+            end_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
             period=Period("day"),
         )
 

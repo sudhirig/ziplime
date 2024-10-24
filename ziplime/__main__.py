@@ -1,8 +1,12 @@
 import datetime
 import logging
 import os
-from pathlib import Path
 import pandas as pd
+from zipline.__main__ import ipython_only
+
+from zipline.utils.calendar_utils import get_calendar
+from zipline.utils.cli import Date
+from ziplime.utils.run_algo import _run, BenchmarkSpec
 
 import click
 import zipline
@@ -21,6 +25,7 @@ from zipline.extensions import create_args
 
 from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter
 from ziplime.data.bcolz_minute_bars import ZiplimeBcolzMinuteBarWriter
+from ziplime.utils.bundle_utils import register_default_bundles
 
 DEFAULT_BUNDLE = "lime"
 
@@ -71,16 +76,7 @@ def main(ctx, extension, strict_extensions, default_extension, x):
         datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
 
-    data_path = data_root()
-    lime_bundle_names = [x for x in [x for x in next(os.walk(data_path))][1] if x.startswith(DEFAULT_BUNDLE)]
-    for bundle in lime_bundle_names:
-        register_lime_symbol_list_equities_bundle(
-            bundle_name=bundle,
-            symbols=[],
-            start_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
-            end_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
-            period=Period("day"),
-        )
+    register_default_bundles()
 
     create_args(x, zipline.extension_args)
     load_extensions(
@@ -245,17 +241,216 @@ def bundles(ctx):
     ctx.forward(func)
 
 
-@main.command(context_settings=dict(
-    ignore_unknown_options=True,
-    allow_extra_args=True,
-))
+@main.command()
+@click.option(
+    "-f",
+    "--algofile",
+    default=None,
+    type=click.File("r"),
+    help="The file that contains the algorithm to run.",
+)
+@click.option(
+    "-t",
+    "--algotext",
+    help="The algorithm script to run.",
+)
+@click.option(
+    "-D",
+    "--define",
+    multiple=True,
+    help="Define a name to be bound in the namespace before executing"
+    " the algotext. For example '-Dname=value'. The value may be any "
+    "python expression. These are evaluated in order so they may refer "
+    "to previously defined names.",
+)
+@click.option(
+    "--data-frequency",
+    type=click.Choice({"daily", "minute"}),
+    default="daily",
+    show_default=True,
+    help="The data frequency of the simulation.",
+)
+@click.option(
+    "--capital-base",
+    type=float,
+    default=10e6,
+    show_default=True,
+    help="The starting capital for the simulation.",
+)
+@click.option(
+    "-b",
+    "--bundle",
+    default=DEFAULT_BUNDLE,
+    metavar="BUNDLE-NAME",
+    show_default=True,
+    help="The data bundle to use for the simulation.",
+)
+@click.option(
+    "--bundle-timestamp",
+    type=Timestamp(),
+    default=pd.Timestamp.utcnow(),
+    show_default=False,
+    help="The date to lookup data on or before.\n" "[default: <current-time>]",
+)
+@click.option(
+    "-bf",
+    "--benchmark-file",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=str),
+    help="The csv file that contains the benchmark returns",
+)
+@click.option(
+    "--benchmark-symbol",
+    default=None,
+    type=click.STRING,
+    help="The symbol of the instrument to be used as a benchmark "
+    "(should exist in the ingested bundle)",
+)
+@click.option(
+    "--benchmark-sid",
+    default=None,
+    type=int,
+    help="The sid of the instrument to be used as a benchmark "
+    "(should exist in the ingested bundle)",
+)
+@click.option(
+    "--no-benchmark",
+    is_flag=True,
+    default=False,
+    help="If passed, use a benchmark of zero returns.",
+)
+@click.option(
+    "-s",
+    "--start",
+    type=Date(as_timestamp=True),
+    help="The start date of the simulation.",
+)
+@click.option(
+    "-e",
+    "--end",
+    type=Date(as_timestamp=True),
+    help="The end date of the simulation.",
+)
+@click.option(
+    "-o",
+    "--output",
+    default="-",
+    metavar="FILENAME",
+    show_default=True,
+    help="The location to write the perf data. If this is '-' the perf will"
+    " be written to stdout.",
+)
+@click.option(
+    "--trading-calendar",
+    metavar="TRADING-CALENDAR",
+    default="XNYS",
+    help="The calendar you want to use e.g. XLON. XNYS is the default.",
+)
+@click.option(
+    "--print-algo/--no-print-algo",
+    is_flag=True,
+    default=False,
+    help="Print the algorithm to stdout.",
+)
+@click.option(
+    "--metrics-set",
+    default="default",
+    help="The metrics set to use. New metrics sets may be registered in your"
+    " extension.py.",
+)
+@click.option(
+    "--blotter",
+    default="default",
+    help="The blotter to use.",
+    show_default=True,
+)
+@ipython_only(
+    click.option(
+        "--local-namespace/--no-local-namespace",
+        is_flag=True,
+        default=None,
+        help="Should the algorithm methods be " "resolved in the local namespace.",
+    )
+)
 @click.pass_context
-def run(ctx):
-    """Top level ziplime entry point."""
-    new_params = dict(**ctx.params)
-    ctx.params = new_params
-    func = getattr(zipline__main__, "run")
-    ctx.forward(func)
+def run(
+    ctx,
+    algofile,
+    algotext,
+    define,
+    data_frequency,
+    capital_base,
+    bundle,
+    bundle_timestamp,
+    benchmark_file,
+    benchmark_symbol,
+    benchmark_sid,
+    no_benchmark,
+    start,
+    end,
+    output,
+    trading_calendar,
+    print_algo,
+    metrics_set,
+    local_namespace,
+    blotter,
+):
+    """Run a backtest for the given algorithm."""
+    # check that the start and end dates are passed correctly
+    if start is None and end is None:
+        # check both at the same time to avoid the case where a user
+        # does not pass either of these and then passes the first only
+        # to be told they need to pass the second argument also
+        ctx.fail(
+            "must specify dates with '-s' / '--start' and '-e' / '--end'",
+        )
+    if start is None:
+        ctx.fail("must specify a start date with '-s' / '--start'")
+    if end is None:
+        ctx.fail("must specify an end date with '-e' / '--end'")
+
+    if (algotext is not None) == (algofile is not None):
+        ctx.fail(
+            "must specify exactly one of '-f' / "
+            "'--algofile' or"
+            " '-t' / '--algotext'",
+        )
+
+    trading_calendar = get_calendar(trading_calendar)
+
+    benchmark_spec = BenchmarkSpec.from_cli_params(
+        no_benchmark=no_benchmark,
+        benchmark_sid=benchmark_sid,
+        benchmark_symbol=benchmark_symbol,
+        benchmark_file=benchmark_file,
+    )
+
+    return _run(
+        initialize=None,
+        handle_data=None,
+        before_trading_start=None,
+        analyze=None,
+        algofile=algofile,
+        algotext=algotext,
+        defines=define,
+        data_frequency=data_frequency,
+        capital_base=capital_base,
+        bundle=bundle,
+        bundle_timestamp=bundle_timestamp,
+        start=start,
+        end=end,
+        output=output,
+        trading_calendar=trading_calendar,
+        print_algo=print_algo,
+        metrics_set=metrics_set,
+        local_namespace=local_namespace,
+        environ=os.environ,
+        blotter=blotter,
+        benchmark_spec=benchmark_spec,
+        custom_loader=None,
+    )
+
+
 
 
 if __name__ == "__main__":

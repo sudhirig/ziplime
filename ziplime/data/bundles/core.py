@@ -7,11 +7,12 @@ import warnings
 import click
 import logging
 import pandas as pd
+from attr import dataclass
 from zipline.data.adjustments import SQLiteAdjustmentReader, SQLiteAdjustmentWriter
 from zipline.utils.calendar_utils import get_calendar
 from toolz import curry, complement, take
 
-from zipline.assets import AssetDBWriter, AssetFinder, ASSET_DB_VERSION
+from zipline.assets import AssetDBWriter, AssetFinder, ASSET_DB_VERSION, Asset
 from zipline.assets.asset_db_migrations import downgrade
 from zipline.utils.cache import (
     dataframe_cache,
@@ -144,11 +145,35 @@ RegisteredBundle = namedtuple(
     ],
 )
 
-BundleData = namedtuple(
-    "BundleData",
-    "asset_finder equity_minute_bar_reader equity_daily_bar_reader "
-    "adjustment_reader",
-)
+
+@dataclass
+class BundleData:
+    name: str
+    asset_finder: AssetFinder
+    equity_minute_bar_reader: ZiplimeBcolzMinuteBarReader
+    equity_daily_bar_reader: ZiplimeBcolzDailyBarReader
+    adjustment_reader: SQLiteAdjustmentReader
+
+    cached_data: pd.DataFrame = None
+
+    def get_fundamental_data(self, asset: Asset):
+        if self.cached_data is not None:
+            return self.cached_data
+
+        cached_data = self.load_raw_arrays(
+        columns=['open', 'close', FundamentalData.TOTAL_SHARE_HOLDER_EQUITY_VALUE],
+        start_date=start,
+        end_date=end,
+        assets=[spx_asset],
+    )
+
+
+
+# BundleData = namedtuple(
+#     "BundleData",
+#     "asset_finder equity_minute_bar_reader equity_daily_bar_reader "
+#     "adjustment_reader",
+# )
 
 BundleCore = namedtuple(
     "BundleCore",
@@ -349,9 +374,9 @@ def _make_bundle_core():
             environ=os.environ,
             timestamp=None,
             assets_versions=(),
-            show_progress: bool=False,
-            minute_bar_writer_class = ZiplimeBcolzMinuteBarWriter,
-            daily_bar_writer_class = ZiplimeBcolzDailyBarWriter,
+            show_progress: bool = False,
+            minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
+            daily_bar_writer_class=ZiplimeBcolzDailyBarWriter,
             minute_bar_writer_cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
             daily_bar_writer_cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
             **kwargs,
@@ -540,6 +565,7 @@ def _make_bundle_core():
             timestamp = pd.Timestamp.utcnow()
         timestr = most_recent_data(name, timestamp, environ=environ)
         return BundleData(
+            name=name,
             asset_finder=AssetFinder(
                 asset_db_path(name, timestr, environ=environ),
             ),

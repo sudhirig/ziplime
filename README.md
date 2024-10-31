@@ -29,7 +29,7 @@ Ingest data:
 ```Bash
 poetry run python -m ziplime ingest -b lime --period day --start-date 2024-06-01 --end-date 2024-07-31 --symbols AAPL,TSLA,AMZN
 ```
-Run  strategy
+Run strategy
 ```Bash
 poetry run python -m ziplime run -b lime --start 2024-06-01 --end 2024-07-31 --data-frequency daily --capital-base 100000 --no-benchmark -f test.py
 ```

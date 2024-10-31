@@ -18,7 +18,7 @@ from zipline.utils.calendar_utils import get_calendar
 
 from ziplime.data import bundles
 from zipline.data.benchmarks import get_benchmark_returns_from_file
-from zipline.data.data_portal import DataPortal
+from ziplime.data.data_portal import DataPortal
 from zipline.finance import metrics
 from zipline.finance.trading import SimulationParameters
 from zipline.pipeline.data import USEquityPricing
@@ -169,6 +169,7 @@ def _run(
         adjustment_reader=bundle_data.adjustment_reader,
         future_minute_reader=bundle_data.equity_minute_bar_reader,
         future_daily_reader=bundle_data.equity_daily_bar_reader,
+        fields=bundle_data.equity_daily_bar_reader._table.names + ["price"]
     )
 
     pipeline_loader = USEquityPricingLoader.without_fx(

@@ -19,10 +19,10 @@ def handle_data(context: TradingAlgorithm, data: BarData):
     # Compute averages
     # data.history() has to be called with the same params
     # from above and returns a pandas dataframe.
-    short_mavg = data.history(context.asset, 'price', bar_count=10, frequency="1d").mean()
-    long_mavg = data.history(context.asset, 'price', bar_count=15, frequency="1d").mean()
+    short_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
+    long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
     return_on_tangible_equity_mean = data.history(
-        context.asset, 'return_on_tangible_equity_value', bar_count=15,
+        context.asset, 'return_on_tangible_equity_value', bar_count=200,
         frequency="1d"
     ).mean()
     # Trading logic

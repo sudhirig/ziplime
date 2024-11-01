@@ -163,13 +163,6 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
 
     # clean up lime only params and set new bundle name
     new_params["bundle"] = bundle_name
-    # del new_params["start_date"]
-    # del new_params["end_date"]
-    # del new_params["symbols"]
-    # del new_params["new_bundle_name"]
-    # del new_params["period"]
-
-    # ctx.params = new_params
     bundles_module.ingest(
         bundle_name,
         os.environ,

@@ -26,7 +26,7 @@ from zipline.finance.trading import SimulationParameters
 from zipline.pipeline.data import USEquityPricing
 from zipline.pipeline.loaders import USEquityPricingLoader
 
-import zipline.utils.paths as pth
+import ziplime.utils.paths as pth
 from zipline.extensions import load
 from zipline.errors import SymbolNotFound
 from ziplime.algorithm import TradingAlgorithm, NoBenchmark

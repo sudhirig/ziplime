@@ -3,6 +3,8 @@ import os
 import sys
 import warnings
 
+from ziplime.utils.bundle_utils import register_default_bundles
+
 try:
     from pygments import highlight
     from pygments.lexers import PythonLexer
@@ -275,6 +277,7 @@ def load_extensions(default, extensions, strict, environ, reload=False):
         Reload any extensions that have already been loaded.
     """
     if default:
+        register_default_bundles()
         default_extension_path = pth.default_extension(environ=environ)
         pth.ensure_file(default_extension_path)
         # put the default extension first so other extensions can depend on

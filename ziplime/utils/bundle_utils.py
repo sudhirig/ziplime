@@ -11,7 +11,10 @@ from ziplime.data.bundles.core import BundleData
 
 def register_default_bundles():
     data_path = data_root()
-    lime_bundle_names = [x for x in [x for x in next(os.walk(data_path))][1] if x.startswith(DEFAULT_BUNDLE)]
+    if not next(os.walk(data_path), None):
+        lime_bundle_names = []
+    else:
+        lime_bundle_names = [x for x in [x for x in next(os.walk(data_path), [])][1] if x.startswith(DEFAULT_BUNDLE)]
     for bundle in lime_bundle_names:
         register_lime_symbol_list_equities_bundle(
             bundle_name=bundle,

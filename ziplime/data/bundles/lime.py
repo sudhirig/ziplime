@@ -50,17 +50,6 @@ def create_lime_equities_bundle(
         period: Period,
         symbol_list: list[str] = None,
 ):
-    limex_api_key = environ.get("LIMEX_API_KEY", None)
-    lime_sdk_credentials_file = environ.get("LIME_SDK_CREDENTIALS_FILE", None)
-    if limex_api_key is None:
-        raise ValueError(
-            "Please set LIMEX_API_KEY environment variable and retry."
-        )
-    if lime_sdk_credentials_file is None:
-        raise ValueError(
-            "Please set LIME_SDK_CREDENTIALS_FILE environment variable and retry."
-        )
-
     def ingest(
             environ: _Environ,
             asset_db_writer: AssetDBWriter,
@@ -77,6 +66,16 @@ def create_lime_equities_bundle(
             # symbols: list[str],
             **kwargs
     ):
+        limex_api_key = environ.get("LIMEX_API_KEY", None)
+        lime_sdk_credentials_file = environ.get("LIME_SDK_CREDENTIALS_FILE", None)
+        if limex_api_key is None:
+            raise ValueError(
+                "Please set LIMEX_API_KEY environment variable and retry."
+            )
+        if lime_sdk_credentials_file is None:
+            raise ValueError(
+                "Please set LIME_SDK_CREDENTIALS_FILE environment variable and retry."
+            )
         logger.info(f"Ingesting equities bundle {bundle_name} for period {start_session} - {end_session}")
 
         data_provider = LimeDataProvider(limex_api_key=limex_api_key,

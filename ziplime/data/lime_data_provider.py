@@ -159,13 +159,13 @@ class LimeDataProvider:
         if show_progress:
             with progressbar(length=len(symbols) * total_days, label="Downloading historical data from LimexHub",
                              file=sys.stdout) as pbar:
-                res = Parallel(n_jobs=len(symbols), prefer="threads", return_as="generator_unordered")(
+                res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator_unordered")(
                     delayed(fetch_historical)(self._limex_api_key, symbol) for symbol in symbols)
                 for item in res:
                     pbar.update(total_days)
                     final = pd.concat([final, item])
         else:
-            res = Parallel(n_jobs=len(symbols), prefer="threads", return_as="generator_unordered")(
+            res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator_unordered")(
                 delayed(fetch_historical)(self._limex_api_key, symbol) for symbol in symbols)
             for item in res:
                 final = pd.concat([final, item])
@@ -219,7 +219,7 @@ class LimeDataProvider:
                 df = pd.DataFrame()
             live_data_queue.put(df)
 
-        res = Parallel(n_jobs=max(1, multiprocessing.cpu_count() - 1), prefer="threads", return_as="generator_unordered", )(
+        res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator_unordered", )(
             delayed(fetch_live)(self._lime_sdk_credentials_file, symbol) for symbol in symbols)
 
         if show_progress:

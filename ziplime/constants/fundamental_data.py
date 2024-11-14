@@ -10,12 +10,15 @@ class FundamentalDataValueType(enum.Enum):
 
 
 class FundamentalData(enum.Enum):
-    TOTAL_SHARE_HOLDER_EQUITY_VALUE = "total_share_holder_equity"
+    TOTAL_SHARE_HOLDER_EQUITY = "total_share_holder_equity"
     # TOTAL_LIABILITIES = "total_liabilities"
     # TOTAL_ASSETS = "total_assets"
     # SHARES_OUTSTANDING = "shares_outstanding"
+    # OPERATING_INCOME = "operating_income"
+
     ROI = "roi"
     ROE = "roe"
+    ROA = "roa"
     REVENUE = "revenue"
     RETURN_ON_TANGIBLE_EQUITY = "return_on_tangible_equity"
     QUICK_RATIO = "quick_ratio"
@@ -24,8 +27,19 @@ class FundamentalData(enum.Enum):
     PE_RATIO = "pe_ratio"
     PRICE_BOOK = "price_book"
     OPERATING_MARGIN = "operating_margin"
-
-    # OPERATING_INCOME = "operating_income"
+    NET_WORTH = "net_worth"
+    NET_INCOME = "net_income"
+    NUMBER_OF_EMPLOYEES = "number_of_employees"
+    GROSS_PROFIT = "gross_profit"
+    EPS_FORECAST = "eps_forecast"
+    NET_PROFIT_MARGIN = "net_profit_margin"
+    DIVIDEND_YIELD = "dividend_yield"
+    GROSS_MARGIN = "gross_margin"
+    EBITDA = "ebitda"
+    EPS = "eps"
+    DEBT_EQUITY_RATIO = "debt_equity_ratio"
+    CURRENT_RATIO = "current_ratio"
+    LONG_TERM_DEBT = "long_term_debt"
 
     def property(self, value_type: FundamentalDataValueType):
         return self.value + "_" + value_type.value

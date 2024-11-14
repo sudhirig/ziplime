@@ -2,20 +2,18 @@ import datetime
 import logging
 import multiprocessing
 import sys
-import time
 from dataclasses import asdict
 from queue import Queue
 
 import limexhub
 import numpy
-import numpy as np
 import pandas as pd
 from click import progressbar
 from joblib import Parallel, delayed
 from lime_trader import LimeClient
 from lime_trader.models.market import Period
 
-from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS, FundamentalData
+from ziplime.constants.fundamental_data import FundamentalData
 from ziplime.domain.lime_quote import LimeQuote
 
 
@@ -44,10 +42,6 @@ class LimeDataProvider:
         dr = pd.date_range(date_from, date_to, freq='D')
         fundamental_new = pd.DataFrame(columns=["date", "symbol"])
         fundamental_new.set_index(keys=["date", "symbol"], inplace=True, drop=True)
-        if period in (Period.DAY, Period.MONTH, Period.WEEK, Period.QUARTER, Period.YEAR):
-            use_datetime = False
-        else:
-            use_datetime = True
         use_datetime = True
         for fund_col in FundamentalData:
             col_name = fund_col.value
@@ -108,44 +102,13 @@ class LimeDataProvider:
                                       to_date=date_to,
                                       timeframe=timeframe)
 
-            # fundamental = fundamental.reset_index()
-
-            # fundamental = fundamental.set_index('date', drop=False)
-
-            # date
-            # total_share_holder_equity_value
-            # total_share_holder_equity_ttm
-            # total_liabilities_value
-            # total_liabilities_ttm
-            # total_assets_value
-            # total_assets_ttm
-            # shares_outstanding_value
-            # shares_outstanding_ttm
-            # roe_value
-            # roe_ttm
-            # revenue_value
-            # revenue_ttm
-            # return_on_tangible_equity_value
-            # return_on_tangible_equity_ttm
-            # quick_ratio_value
-            # quick_ratio_ttm
-            # price_sales_value
-            # price_sales_ttm
-            # price_fcf_value
-            # price_fcf_ttm
-            # fundamental = fundamental.set_index('date', drop=False)
-
             fundamental = self.get_fundamental_data(limex_client, symbol, date_from, date_to ,period=period)
             if len(df) > 0:
                 df = df.reset_index()
                 df = df.rename(
                     columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "Date": "date"})
-                df["total_sells"] = 100
-                # fundamental['date'] = pd.to_datetime(fundamental['date'])
-                # df = pd.merge(df, fundamental, on='date')
                 df = df.set_index('date', drop=False)
                 df.index = pd.to_datetime(df.index, utc=True)
-                # df["symbol"] = symbol
                 df['dividend'] = 0
                 df['split'] = 0
                 final_df = pd.concat([df, fundamental], ignore_index=False, axis=1)
@@ -242,7 +205,6 @@ class LimeDataProvider:
         data_table.rename(
             columns={
                 "timestamp": "date",
-                # "ex-dividend": "ex_dividend",
             },
             inplace=True,
             copy=False,

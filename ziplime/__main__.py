@@ -99,6 +99,13 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     show_default=True,
     help="The data bundle to ingest.",
 )
+@click.option(
+    "-c",
+    "--calendar",
+    default="NYSE",
+    show_default=True,
+    help="Default calendar to use.",
+)
 @click.option('--new-bundle-name', default=None)
 @click.option(
     "--start-date",
@@ -140,7 +147,7 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     help="Print progress information to the terminal.",
 )
 @click.pass_context
-def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, show_progress, assets_version):
+def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, show_progress, assets_version, calendar):
     """Top level ziplime entry point."""
     symbols_parsed = symbols.split(',') if symbols else None
 
@@ -157,6 +164,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         start_session=start_date,
         end_session=end_date,
         period=Period(period),
+        calendar_name=calendar
     )
 
     new_params = dict(**ctx.params)

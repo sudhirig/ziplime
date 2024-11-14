@@ -9,7 +9,7 @@ from ziplime.constants.bundles import DEFAULT_BUNDLE
 from ziplime.data.bundles.core import BundleData
 
 
-def register_default_bundles():
+def register_default_bundles(calendar_name: str = "NYSE"):
     data_path = data_root()
     if not next(os.walk(data_path), None):
         lime_bundle_names = []
@@ -22,6 +22,7 @@ def register_default_bundles():
             start_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
             end_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
             period=Period("day"),
+            calendar_name=calendar_name
         )
 
 

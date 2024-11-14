@@ -15,6 +15,6 @@ def normalize_daily_start_end_session(
     if not (cal.is_session(end_session)):
         end_session = cal.previous_close(end_session).floor(freq="D")
 
-    start_session = pd.Timestamp(ts_input=start_session, tzinfo=None)
-    end_session = pd.Timestamp(ts_input=end_session, tzinfo=None)
+    start_session = pd.Timestamp(ts_input=start_session, tzinfo=None).tz_localize(None)
+    end_session = pd.Timestamp(ts_input=end_session, tzinfo=None).tz_localize(None)
     return start_session, end_session

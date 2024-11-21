@@ -48,6 +48,7 @@ def parse_pricing_and_vol(data: pd.DataFrame, sessions: pd.IndexSlice, symbol_ma
 def create_lime_equities_bundle(
         bundle_name: str,
         period: Period,
+        fundamental_data_list: list[str],
         symbol_list: list[str] = None,
 ):
     def ingest(
@@ -87,6 +88,7 @@ def create_lime_equities_bundle(
                 date_from=start_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc),
                 date_to=end_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc),
                 show_progress=show_progress,
+                fundamental_data_list=fundamental_data_list
         ):
             if len(raw_data) == 0:
                 continue
@@ -149,7 +151,8 @@ def register_lime_equities_bundle(
         end_session: datetime.datetime,
         symbol_list: list[str],
         period: Period,
-        calendar_name: str
+        calendar_name: str,
+        fundamental_data_list: list[str],
 ):
     start_session, end_session = normalize_daily_start_end_session(
         calendar_name=calendar_name, start_session=start_session, end_session=end_session
@@ -159,6 +162,7 @@ def register_lime_equities_bundle(
         f=create_lime_equities_bundle(
             bundle_name=bundle_name,
             symbol_list=symbol_list,
+            fundamental_data_list=fundamental_data_list,
             period=period
         ),
         start_session=start_session,

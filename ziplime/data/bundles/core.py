@@ -156,17 +156,6 @@ class BundleData:
 
     cached_data: pd.DataFrame = None
 
-    def get_fundamental_data(self, asset: Asset):
-        if self.cached_data is not None:
-            return self.cached_data
-
-        cached_data = self.load_raw_arrays(
-        columns=['open', 'close', FundamentalData.TOTAL_SHARE_HOLDER_EQUITY_VALUE],
-        start_date=start,
-        end_date=end,
-        assets=[spx_asset],
-    )
-
 
 
 # BundleData = namedtuple(

@@ -31,7 +31,9 @@ class LimeDataProvider:
                              date_from: datetime.datetime,
                              date_to: datetime.datetime,
                              period: Period,
+                             fundamental_data_list: set[str]
                              ):
+        # print("FUNDAMENTAL DATA")
         fundamental = limex_client.fundamental(
             symbol=symbol,
             from_date=date_from,
@@ -44,27 +46,58 @@ class LimeDataProvider:
         fundamental_new.set_index(keys=["date", "symbol"], inplace=True, drop=True)
         use_datetime = True
         for fund_col in FundamentalData:
+
+            # print(fund_col.value)
+
             col_name = fund_col.value
-            res_df = pd.DataFrame(columns=["date", "symbol", f"{col_name}_ttm", f"{col_name}_value",
-                                           f"{col_name}_add_value"
-                                           ])
+            ttm_col = f"{col_name}_ttm"
+            value_col = f"{col_name}_value"
+            add_value_col = f"{col_name}_add_value"
+            columns = ["date", "symbol"]
+            if ttm_col in fundamental_data_list:
+                columns.append(ttm_col)
+            if value_col in fundamental_data_list:
+                columns.append(value_col)
+            if add_value_col in fundamental_data_list:
+                columns.append(add_value_col)
+
+            res_df = pd.DataFrame(columns=columns)
 
             if "field" in fundamental.columns:
                 values_for_col = fundamental[fundamental.field == col_name]
                 for index, row in values_for_col.iterrows():
                     if use_datetime:
-                        dt = datetime.datetime.combine(row.date,time=datetime.time(), tzinfo=datetime.timezone.utc)
+                        dt = datetime.datetime.combine(row.date, time=datetime.time(), tzinfo=datetime.timezone.utc)
                     else:
                         dt = row.date
+
+                    vals = [dt, symbol]
+                    if ttm_col in columns:
+                        vals.append(row.ttm)
+                    if value_col in columns:
+                        vals.append(row.value)
+                    if add_value_col in columns:
+                        vals.append(row.add_value)
+
                     res_df = pd.concat([pd.DataFrame([
-                        [dt, symbol, row.ttm, row.value, row.add_value],
+                        vals,
                     ], columns=res_df.columns), res_df], ignore_index=True)
             else:
+                vals = [date_from, symbol]
+                if ttm_col in columns:
+                    vals.append(numpy.nan)
+                if value_col in columns:
+                    vals.append(numpy.nan)
+                if add_value_col in columns:
+                    vals.append(numpy.nan)
+
                 res_df = pd.concat([pd.DataFrame([
-                    [date_from, symbol, numpy.nan, numpy.nan, numpy.nan],
+                    vals,
                 ], columns=res_df.columns), res_df], ignore_index=True)
             res_df.set_index("date", inplace=True, drop=True)
-            res_df = res_df.reindex(dr, fill_value=None)
+            # if fund_col.value == "dividend_yield":
+            #     print("A")
+            res_df = res_df.reindex(dr, fill_value=None)  # .ffill().bfill()
             res_df["symbol"] = symbol
             res_df.reset_index(inplace=True)
             res_df.rename(columns={"index": "date"}, inplace=True)
@@ -81,7 +114,9 @@ class LimeDataProvider:
                                     period: Period,
                                     date_from: datetime.datetime,
                                     date_to: datetime.datetime,
-                                    show_progress: bool):
+                                    show_progress: bool,
+                                    fundamental_data_list: set[str]
+                                    ):
 
         def fetch_historical(limex_api_key: str, symbol: str):
             limex_client = limexhub.RestAPI(token=limex_api_key)
@@ -103,7 +138,8 @@ class LimeDataProvider:
                                       to_date=date_to,
                                       timeframe=timeframe)
 
-            fundamental = self.get_fundamental_data(limex_client, symbol, date_from, date_to ,period=period)
+            fundamental = self.get_fundamental_data(limex_client, symbol, date_from, date_to, period=period,
+                                                    fundamental_data_list=fundamental_data_list)
             if len(df) > 0:
                 df = df.reset_index()
                 df = df.rename(
@@ -114,6 +150,7 @@ class LimeDataProvider:
                 df['split'] = 0
                 final_df = pd.concat([df, fundamental], ignore_index=False, axis=1)
                 final_df = final_df[final_df.date.notnull()]
+                final_df["symbol"] = symbol
                 return final_df
             return df
 
@@ -123,7 +160,8 @@ class LimeDataProvider:
         if show_progress:
             with progressbar(length=len(symbols) * total_days, label="Downloading historical data from LimexHub",
                              file=sys.stdout) as pbar:
-                res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator_unordered")(
+                res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads",
+                               return_as="generator_unordered")(
                     delayed(fetch_historical)(self._limex_api_key, symbol) for symbol in symbols)
                 for item in res:
                     pbar.update(total_days)
@@ -142,10 +180,12 @@ class LimeDataProvider:
             period: Period,
             date_from: datetime.datetime,
             date_to: datetime.datetime,
-            show_progress: bool):
+            show_progress: bool,
+            fundamental_data_list: list[str]):
         historical_data = self.fetch_historical_data_table(symbols=symbols, period=period, date_from=date_from,
                                                            date_to=date_to,
-                                                           show_progress=show_progress)
+                                                           show_progress=show_progress,
+                                                           fundamental_data_list=fundamental_data_list)
 
         yield historical_data
 

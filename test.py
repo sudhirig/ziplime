@@ -7,6 +7,7 @@ from ziplime.utils.bundle_utils import register_default_bundles
 from ziplime.utils.data import get_fundamental_data
 
 from ziplime.data.bundles import load
+from ziplime.utils.paths import data_path
 
 
 def initialize(context: TradingAlgorithm):
@@ -25,9 +26,10 @@ def handle_data(context: TradingAlgorithm, data: BarData):
     # from above and returns a pandas dataframe.
     short_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
     long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
+
     return_on_tangible_equity_mean = get_fundamental_data(
         data, context.asset, 'return_on_tangible_equity_value', bar_count=30,
-        frequency="1q"
+        frequency="1q", fillna=0
     )
 
     print(return_on_tangible_equity_mean)

@@ -64,7 +64,8 @@ class LimeDataProvider:
                     [date_from, symbol, numpy.nan, numpy.nan, numpy.nan],
                 ], columns=res_df.columns), res_df], ignore_index=True)
             res_df.set_index("date", inplace=True, drop=True)
-            res_df = res_df.reindex(dr, fill_value=None).ffill().bfill()
+            res_df = res_df.reindex(dr, fill_value=None)
+            res_df["symbol"] = symbol
             res_df.reset_index(inplace=True)
             res_df.rename(columns={"index": "date"}, inplace=True)
             res_df.set_index(["date", "symbol"], inplace=True)

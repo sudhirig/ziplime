@@ -6,6 +6,9 @@ from zipline.__main__ import ipython_only
 
 from zipline.utils.calendar_utils import get_calendar
 from zipline.utils.cli import Date
+
+from ziplime.constants.default_columns import DEFAULT_COLUMNS, OHLCV_COLUMNS
+from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
 from ziplime.utils.run_algo import _run, BenchmarkSpec
 
 import click
@@ -135,6 +138,7 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     type=click.Choice(['minute', 'hour', 'day', 'week', 'month', 'quarter'], case_sensitive=False),
 )
 @click.option("-s", '--symbols')
+@click.option('--fundamental-data')
 @click.option(
     "--assets-version",
     type=int,
@@ -147,10 +151,11 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     help="Print progress information to the terminal.",
 )
 @click.pass_context
-def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, show_progress, assets_version, calendar):
+def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, fundamental_data, show_progress,
+           assets_version, calendar):
     """Top level ziplime entry point."""
     symbols_parsed = symbols.split(',') if symbols else None
-
+    fundamental_data_list = fundamental_data.split(",") if fundamental_data else None
     if new_bundle_name:
         bundle_name = f"{DEFAULT_BUNDLE}-{new_bundle_name}"
         ctx.args = ['-b', new_bundle_name] + ctx.args
@@ -164,13 +169,25 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         start_session=start_date,
         end_session=end_date,
         period=Period(period),
-        calendar_name=calendar
+        calendar_name=calendar,
+        fundamental_data_list=fundamental_data_list if fundamental_data_list is not None else [
+            col.name for col in
+            FUNDAMENTAL_DATA_COLUMNS
+        ]
     )
 
     new_params = dict(**ctx.params)
 
     # clean up lime only params and set new bundle name
     new_params["bundle"] = bundle_name
+
+    fundamental_data_cols = ([
+                                 col
+                                 for col in FUNDAMENTAL_DATA_COLUMNS
+                                 if col.name in set(fundamental_data_list)
+                             ] + OHLCV_COLUMNS
+                             if fundamental_data_list is not None
+                             else DEFAULT_COLUMNS)
     bundles_module.ingest(
         bundle_name,
         os.environ,
@@ -180,6 +197,8 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
 
         minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
         daily_bar_writer_class=ZiplimeBcolzDailyBarWriter,
+        daily_bar_writer_cols=fundamental_data_cols,
+        minute_bar_writer_cols=fundamental_data_cols,
         # start_session=start_date,
         # end_session=end_date,
         # symbols=symbols_parsed,
@@ -260,9 +279,9 @@ def bundles(ctx):
     "--define",
     multiple=True,
     help="Define a name to be bound in the namespace before executing"
-    " the algotext. For example '-Dname=value'. The value may be any "
-    "python expression. These are evaluated in order so they may refer "
-    "to previously defined names.",
+         " the algotext. For example '-Dname=value'. The value may be any "
+         "python expression. These are evaluated in order so they may refer "
+         "to previously defined names.",
 )
 @click.option(
     "--data-frequency",
@@ -305,14 +324,14 @@ def bundles(ctx):
     default=None,
     type=click.STRING,
     help="The symbol of the instrument to be used as a benchmark "
-    "(should exist in the ingested bundle)",
+         "(should exist in the ingested bundle)",
 )
 @click.option(
     "--benchmark-sid",
     default=None,
     type=int,
     help="The sid of the instrument to be used as a benchmark "
-    "(should exist in the ingested bundle)",
+         "(should exist in the ingested bundle)",
 )
 @click.option(
     "--no-benchmark",
@@ -339,7 +358,7 @@ def bundles(ctx):
     metavar="FILENAME",
     show_default=True,
     help="The location to write the perf data. If this is '-' the perf will"
-    " be written to stdout.",
+         " be written to stdout.",
 )
 @click.option(
     "--trading-calendar",
@@ -357,7 +376,7 @@ def bundles(ctx):
     "--metrics-set",
     default="default",
     help="The metrics set to use. New metrics sets may be registered in your"
-    " extension.py.",
+         " extension.py.",
 )
 @click.option(
     "--blotter",
@@ -375,26 +394,26 @@ def bundles(ctx):
 )
 @click.pass_context
 def run(
-    ctx,
-    algofile,
-    algotext,
-    define,
-    data_frequency,
-    capital_base,
-    bundle,
-    bundle_timestamp,
-    benchmark_file,
-    benchmark_symbol,
-    benchmark_sid,
-    no_benchmark,
-    start,
-    end,
-    output,
-    trading_calendar,
-    print_algo,
-    metrics_set,
-    local_namespace,
-    blotter,
+        ctx,
+        algofile,
+        algotext,
+        define,
+        data_frequency,
+        capital_base,
+        bundle,
+        bundle_timestamp,
+        benchmark_file,
+        benchmark_symbol,
+        benchmark_sid,
+        no_benchmark,
+        start,
+        end,
+        output,
+        trading_calendar,
+        print_algo,
+        metrics_set,
+        local_namespace,
+        blotter,
 ):
     """Run a backtest for the given algorithm."""
     # check that the start and end dates are passed correctly
@@ -450,8 +469,6 @@ def run(
         benchmark_spec=benchmark_spec,
         custom_loader=None,
     )
-
-
 
 
 if __name__ == "__main__":

@@ -6,8 +6,9 @@ from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS, FUNDAME
 from ziplime.data.bundles.lime import register_lime_equities_bundle
 
 
-def register_lime_symbol_list_equities_bundle(bundle_name: str, start_session: datetime.datetime,
-                                              end_session: datetime.datetime,
+def register_lime_symbol_list_equities_bundle(bundle_name: str,
+                                              start_session: datetime.datetime | None,
+                                              end_session: datetime.datetime | None,
                                               symbols: list[str],
                                               fundamental_data_list: list[str] = FUNDAMENTAL_DATA_COLUMN_NAMES,
                                               period: Period = Period.DAY,

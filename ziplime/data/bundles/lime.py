@@ -147,16 +147,17 @@ def create_lime_equities_bundle(
 
 def register_lime_equities_bundle(
         bundle_name: str,
-        start_session: datetime.datetime,
-        end_session: datetime.datetime,
+        start_session: datetime.datetime | None,
+        end_session: datetime.datetime | None,
         symbol_list: list[str],
         period: Period,
         calendar_name: str,
         fundamental_data_list: list[str],
 ):
-    start_session, end_session = normalize_daily_start_end_session(
-        calendar_name=calendar_name, start_session=start_session, end_session=end_session
-    )
+    if start_session and end_session:
+        start_session, end_session = normalize_daily_start_end_session(
+            calendar_name=calendar_name, start_session=start_session, end_session=end_session
+        )
     register(
         name=bundle_name,
         f=create_lime_equities_bundle(

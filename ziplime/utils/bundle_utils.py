@@ -21,8 +21,8 @@ def register_default_bundles(calendar_name: str = "NYSE",
         register_lime_symbol_list_equities_bundle(
             bundle_name=bundle,
             symbols=[],
-            start_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
-            end_session=datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
+            start_session=None,#datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
+            end_session=None,#datetime.datetime.now().replace(minute=0, hour=0, second=0, microsecond=0),
             period=Period("day"),
             calendar_name=calendar_name,
             fundamental_data_list=fundamental_data_list

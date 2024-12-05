@@ -56,7 +56,6 @@ from zipline.data.bar_reader import NoDataOnDate
 from zipline.utils.memoize import remember_last
 from zipline.errors import HistoryWindowStartsBeforeData
 
-
 log = logging.getLogger("DataPortal")
 
 # BASE_FIELDS = frozenset(
@@ -129,20 +128,21 @@ class DataPortal:
     """
 
     def __init__(
-        self,
-        asset_finder,
-        trading_calendar,
-        first_trading_day,
-        fields: list[str],
-        equity_daily_reader=None,
-        equity_minute_reader=None,
-        future_daily_reader=None,
-        future_minute_reader=None,
-        adjustment_reader=None,
-        last_available_session=None,
-        last_available_minute=None,
-        minute_history_prefetch_length=_DEF_M_HIST_PREFETCH,
-        daily_history_prefetch_length=_DEF_D_HIST_PREFETCH,
+            self,
+            asset_finder,
+            trading_calendar,
+            first_trading_day,
+            fields: list[str],
+            fundamental_data_reader,
+            equity_daily_reader=None,
+            equity_minute_reader=None,
+            future_daily_reader=None,
+            future_minute_reader=None,
+            adjustment_reader=None,
+            last_available_session=None,
+            last_available_minute=None,
+            minute_history_prefetch_length=_DEF_M_HIST_PREFETCH,
+            daily_history_prefetch_length=_DEF_D_HIST_PREFETCH,
     ):
         self.trading_calendar = trading_calendar
 
@@ -401,7 +401,7 @@ class DataPortal:
         # own price data always wins when dealing with assets).
 
         return not (
-            field in fields and (isinstance(asset, (Asset, ContinuousFuture)))
+                field in fields and (isinstance(asset, (Asset, ContinuousFuture)))
         )
 
     def _get_fetcher_value(self, asset, field, dt):
@@ -421,9 +421,9 @@ class DataPortal:
             raise KeyError("Invalid column: " + str(field))
 
         if (
-            dt < asset.start_date.tz_localize(dt.tzinfo)
-            or (data_frequency == "daily" and session_label > asset.end_date)
-            or (data_frequency == "minute" and session_label > asset.end_date)
+                dt < asset.start_date.tz_localize(dt.tzinfo)
+                or (data_frequency == "daily" and session_label > asset.end_date)
+                or (data_frequency == "minute" and session_label > asset.end_date)
         ):
             if field == "volume":
                 return 0
@@ -620,7 +620,7 @@ class DataPortal:
         return adjustment_ratios_per_asset
 
     def get_adjusted_value(
-        self, asset, field, dt, perspective_dt, data_frequency, spot_value=None
+            self, asset, field, dt, perspective_dt, data_frequency, spot_value=None
     ):
         """Returns a scalar value representing the value
         of the desired asset's field at the given dt with adjustments applied.
@@ -744,7 +744,6 @@ class DataPortal:
             except NoDataOnDate:
                 return np.nan
 
-
     @remember_last
     def _get_days_for_window(self, end_date, bar_count):
         tds = self.trading_calendar.sessions
@@ -753,13 +752,14 @@ class DataPortal:
         if start_loc < self._first_trading_day_loc:
             raise HistoryWindowStartsBeforeData(
                 first_trading_day=self._first_trading_day.date(),
+                max_bar_count=self._first_trading_day_loc - start_loc,
                 bar_count=bar_count,
-                suggested_start_day=tds[self._first_trading_day_loc + bar_count].date(),
+                suggested_start_day=tds[min(self._first_trading_day_loc + bar_count, end_loc)].date(),
             )
-        return tds[start_loc : end_loc + 1]
+        return tds[start_loc: end_loc + 1]
 
     def _get_history_daily_window(
-        self, assets, end_dt, bar_count, field_to_use, data_frequency
+            self, assets, end_dt, bar_count, field_to_use, data_frequency
     ):
         """Internal method that returns a dataframe containing history bars
         of daily frequency for the given sids.
@@ -776,7 +776,7 @@ class DataPortal:
         return pd.DataFrame(data, index=days_for_window, columns=assets)
 
     def _get_history_daily_window_data(
-        self, assets, days_for_window, end_dt, field_to_use, data_frequency
+            self, assets, days_for_window, end_dt, field_to_use, data_frequency
     ):
         if data_frequency == "daily":
             # two cases where we use daily data for the whole range:
@@ -855,7 +855,7 @@ class DataPortal:
         return pd.DataFrame(asset_minute_data, index=minutes_for_window, columns=assets)
 
     def get_history_window(
-        self, assets, end_dt, bar_count, frequency, field, data_frequency, ffill=True
+            self, assets, end_dt, bar_count, frequency, field, data_frequency, ffill=True
     ):
         """Public API method that returns a dataframe containing the requested
         history window.  Data is fully adjusted.
@@ -952,7 +952,7 @@ class DataPortal:
             df.iloc[0, assets_with_leading_nan] = np.array(
                 initial_values, dtype=np.float64
             )
-            df.fillna(method="ffill", inplace=True)
+            df.ffill(inplace=True)
 
             # forward-filling will incorrectly produce values after the end of
             # an asset's lifetime, so write NaNs back over the asset's
@@ -1173,8 +1173,8 @@ class DataPortal:
 
     def contains(self, asset, field):
         return field in self._fields or (
-            field in self._augmented_sources_map
-            and asset in self._augmented_sources_map[field]
+                field in self._augmented_sources_map
+                and asset in self._augmented_sources_map[field]
         )
 
     def get_fetcher_assets(self, dt):

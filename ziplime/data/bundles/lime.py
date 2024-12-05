@@ -12,10 +12,15 @@ from zipline.data.bcolz_minute_bars import BcolzMinuteBarWriter
 from zipline.utils.cache import dataframe_cache
 from zipline.utils.calendar_utils import register_calendar_alias
 
+from ziplime.constants.default_columns import OHLCV_COLUMNS
+from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
+from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
 from ziplime.data.bundles import core as bundles, register
 import numpy as np
 
 from ziplime.data.lime_data_provider import LimeDataProvider
+from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
+from ziplime.domain.column_specification import ColumnSpecification
 from ziplime.utils.calendar_utils import normalize_daily_start_end_session
 
 logger = logging.getLogger(__name__)
@@ -40,107 +45,127 @@ def gen_asset_metadata(data: pd.DataFrame, show_progress: bool):
 def parse_pricing_and_vol(data: pd.DataFrame, sessions: pd.IndexSlice, symbol_map: pd.Series):
     for asset_id, symbol in symbol_map.items():
         asset_data = (
-            data.xs(symbol, level=1).reindex(sessions.tz_localize(None)).infer_objects(copy=False).fillna(0.0)
+            data.xs(symbol, level=1).infer_objects(copy=False).fillna(0.0)
         )
         yield asset_id, asset_data
 
 
-def create_lime_equities_bundle(
+def create_equities_bundle(
         bundle_name: str,
         period: Period,
-        fundamental_data_list: list[str],
+        fundamental_data_list: set[str],
         symbol_list: list[str] = None,
 ):
     def ingest(
             environ: _Environ,
+            historical_market_data_provider: AbstractHistoricalMarketDataProvider,
+            fundamental_data_provider: AbstractFundamentalDataProvider,
             asset_db_writer: AssetDBWriter,
             minute_bar_writer: BcolzMinuteBarWriter,
-            daily_bar_writer: BcolzDailyBarWriter,
+            daily_bar_writer: BcolzDataBundle,
+            fundamental_data_writer: BcolzDataBundle,
             adjustment_writer: SQLiteAdjustmentWriter,
             calendar: ExchangeCalendar,
             start_session: pd.Timestamp,
             end_session: pd.Timestamp,
             cache: dataframe_cache,
             show_progress: bool,
+            market_data_fields: list[ColumnSpecification],
+            fundamental_data_fields: list[ColumnSpecification],
             output_dir: str,
-            # period: Period,
-            # symbols: list[str],
             **kwargs
     ):
-        limex_api_key = environ.get("LIMEX_API_KEY", None)
-        lime_sdk_credentials_file = environ.get("LIME_SDK_CREDENTIALS_FILE", None)
-        if limex_api_key is None:
-            raise ValueError(
-                "Please set LIMEX_API_KEY environment variable and retry."
-            )
-        if lime_sdk_credentials_file is None:
-            raise ValueError(
-                "Please set LIME_SDK_CREDENTIALS_FILE environment variable and retry."
-            )
+        date_from = start_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc)
+        date_to = end_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc)
         logger.info(f"Ingesting equities bundle {bundle_name} for period {start_session} - {end_session}")
+        historical_data = historical_market_data_provider.get_historical_data_table(
+            symbols=symbol_list,
+            period=period,
+            date_from=date_from,
+            date_to=date_to,
+            show_progress=show_progress)
 
-        data_provider = LimeDataProvider(limex_api_key=limex_api_key,
-                                         lime_sdk_credentials_file=lime_sdk_credentials_file)
-        asset_metadata_inserted = False
-        for raw_data in data_provider.fetch_data_table(
-                symbols=symbol_list,
-                period=period,
-                date_from=start_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc),
-                date_to=end_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc),
+        if len(historical_data) == 0:
+            logger.warning(
+                f"Data source {type(historical_market_data_provider)} didn't return any data for symbols {symbol_list}")
+            return
+
+
+
+        asset_metadata = gen_asset_metadata(data=historical_data[["symbol", "date"]], show_progress=show_progress)
+
+
+        historical_data.set_index(["date", "symbol"], inplace=True)
+
+
+        # historical_data = pd.concat([historical_data, fundamental_data], ignore_index=False, axis=1)
+        # final_df = final_df[final_df.date.notnull()]
+
+
+        exchanges = pd.DataFrame(
+            data=[["LIME", "LIME", "US"]],
+            columns=["exchange", "canonical_name", "country_code"],
+        )
+
+        asset_db_writer.write(equities=asset_metadata, exchanges=exchanges)
+
+
+        symbol_map = asset_metadata.symbol
+        sessions = calendar.sessions_in_range(start=start_session, end=end_session)
+
+
+
+
+        fundamental_data = fundamental_data_provider.get_fundamental_data(symbols=symbol_list,
+                                                                          period=period,
+                                                                          date_from=date_from, date_to=date_to,
+                                                                          fundamental_data_list=fundamental_data_list)
+
+        fundamental_data_writer.write(
+            data=parse_pricing_and_vol(data=fundamental_data, sessions=sessions, symbol_map=symbol_map),
+            show_progress=show_progress,
+            calendar=calendar,
+            start_session=start_session,
+            end_session=end_session,
+            cols=fundamental_data_fields,
+            validate_sessions=False
+        )
+
+        if period == Period.DAY:
+            daily_bar_writer.write(
+                data=parse_pricing_and_vol(data=historical_data, sessions=sessions, symbol_map=symbol_map),
                 show_progress=show_progress,
-                fundamental_data_list=fundamental_data_list
-        ):
-            if len(raw_data) == 0:
-                continue
-            asset_metadata = gen_asset_metadata(data=raw_data[["symbol", "date"]], show_progress=show_progress)
-
-            if not asset_metadata_inserted:
-                exchanges = pd.DataFrame(
-                    data=[["LIME", "LIME", "US"]],
-                    columns=["exchange", "canonical_name", "country_code"],
-                )
-                asset_db_writer.write(equities=asset_metadata, exchanges=exchanges)
-                asset_metadata_inserted = True
-            symbol_map = asset_metadata.symbol
-
-
-            raw_data.set_index(["date", "symbol"], inplace=True)
-            if period == Period.DAY:
-                sessions = calendar.sessions_in_range(start=start_session, end=end_session)
-                daily_bar_writer.write(
-                    data=parse_pricing_and_vol(data=raw_data, sessions=sessions, symbol_map=symbol_map),
-                    show_progress=show_progress,
-                )
-            elif period == Period.MINUTE:
-                sessions = calendar.sessions_minutes(start=start_session, end=end_session)
-                minute_bar_writer.write(
-                    data=parse_pricing_and_vol(data=raw_data, sessions=sessions, symbol_map=symbol_map),
-                    show_progress=show_progress,
-                )
-            else:
-                raise Exception("Unsupported period.")
-
-            # Write empty splits and divs - they are not present in API
-            divs_splits = {
-                "divs": pd.DataFrame(
-                    columns=[
-                        "sid",
-                        "amount",
-                        "ex_date",
-                        "record_date",
-                        "declared_date",
-                        "pay_date",
-                    ]
-                ),
-                "splits": pd.DataFrame(columns=["sid", "ratio", "effective_date"]),
-            }
-            adjustment_writer.write(
-                splits=divs_splits["splits"], dividends=divs_splits["divs"]
+                calendar=calendar,
+                start_session=start_session,
+                end_session=end_session,
+                cols=market_data_fields,
+                validate_sessions=True
             )
-            logger.info(
-                f"Ingesting equities bundle {bundle_name} for period {start_session} - {end_session} "
-                f"and symbols {symbol_list} Completed"
-            )
+        else:
+            raise Exception("Unsupported period.")
+
+
+        # Write empty splits and divs - they are not present in API
+        divs_splits = {
+            "divs": pd.DataFrame(
+                columns=[
+                    "sid",
+                    "amount",
+                    "ex_date",
+                    "record_date",
+                    "declared_date",
+                    "pay_date",
+                ]
+            ),
+            "splits": pd.DataFrame(columns=["sid", "ratio", "effective_date"]),
+        }
+        adjustment_writer.write(
+            splits=divs_splits["splits"], dividends=divs_splits["divs"]
+        )
+        logger.info(
+            f"Ingesting equities bundle {bundle_name} for period {start_session} - {end_session} "
+            f"and symbols {symbol_list} Completed"
+        )
 
     return ingest
 
@@ -152,7 +177,7 @@ def register_lime_equities_bundle(
         symbol_list: list[str],
         period: Period,
         calendar_name: str,
-        fundamental_data_list: list[str],
+        fundamental_data_list: set[str],
 ):
     if start_session and end_session:
         start_session, end_session = normalize_daily_start_end_session(
@@ -160,7 +185,7 @@ def register_lime_equities_bundle(
         )
     register(
         name=bundle_name,
-        f=create_lime_equities_bundle(
+        f=create_equities_bundle(
             bundle_name=bundle_name,
             symbol_list=symbol_list,
             fundamental_data_list=fundamental_data_list,
@@ -173,6 +198,5 @@ def register_lime_equities_bundle(
 
 
 register_calendar_alias("LIME", "NYSE")
-
 
 # zipline.data.bcolz_daily_bars.BcolzDailyBarWriter = CustomClass

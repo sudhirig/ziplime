@@ -25,8 +25,12 @@ import zipline.utils.paths as pth
 from zipline.utils.preprocess import preprocess
 
 from ziplime.constants.default_columns import DEFAULT_COLUMNS
-from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter, ZiplimeBcolzDailyBarReader
+from ziplime.data.abstract_data_bundle import AbstractDataBundle
+from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
+from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
+from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter
 from ziplime.data.bcolz_minute_bars import ZiplimeBcolzMinuteBarWriter, ZiplimeBcolzMinuteBarReader
+from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 
 log = logging.getLogger(__name__)
@@ -49,6 +53,13 @@ def minute_equity_path(bundle_name, timestr, environ=None):
 def daily_equity_path(bundle_name, timestr, environ=None):
     return pth.data_path(
         daily_equity_relative(bundle_name, timestr),
+        environ=environ,
+    )
+
+
+def fundamental_data_path(bundle_name, timestr, environ=None):
+    return pth.data_path(
+        fundamental_data_relative(bundle_name, timestr),
         environ=environ,
     )
 
@@ -77,6 +88,10 @@ def cache_relative(bundle_name):
 
 def daily_equity_relative(bundle_name, timestr):
     return bundle_name, timestr, "daily_equities.bcolz"
+
+
+def fundamental_data_relative(bundle_name, timestr):
+    return bundle_name, timestr, "fundamental_data.bcolz"
 
 
 def minute_equity_relative(bundle_name, timestr):
@@ -151,11 +166,12 @@ class BundleData:
     name: str
     asset_finder: AssetFinder
     equity_minute_bar_reader: ZiplimeBcolzMinuteBarReader
-    equity_daily_bar_reader: ZiplimeBcolzDailyBarReader
+    equity_daily_bar_reader: AbstractDataBundle
+    fundamental_data_reader: AbstractDataBundle
+
     adjustment_reader: SQLiteAdjustmentReader
 
     cached_data: pd.DataFrame = None
-
 
 
 # BundleData = namedtuple(
@@ -316,11 +332,11 @@ def _make_bundle_core():
         --------
         zipline.data.bundles.bundles
         """
-        if name in bundles:
-            warnings.warn(
-                "Overwriting bundle with name %r" % name,
-                stacklevel=3,
-            )
+        # if name in bundles:
+        #     warnings.warn(
+        #         "Overwriting bundle with name %r" % name,
+        #         stacklevel=3,
+        #     )
 
         # NOTE: We don't eagerly compute calendar values here because
         # `register` is called at module scope in zipline, and creating a
@@ -360,14 +376,18 @@ def _make_bundle_core():
 
     def ingest(
             name,
+            fundamental_data_provider: AbstractFundamentalDataProvider,
+            historical_market_data_provider: AbstractHistoricalMarketDataProvider,
+            daily_bar_writer_class: AbstractDataBundle,
+            fundamental_data_writer_class: AbstractDataBundle,
+            market_data_fields: list[ColumnSpecification],
+            fundamental_data_fields: list[ColumnSpecification],
             environ=os.environ,
             timestamp=None,
             assets_versions=(),
             show_progress: bool = False,
             minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
-            daily_bar_writer_class=ZiplimeBcolzDailyBarWriter,
             minute_bar_writer_cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
-            daily_bar_writer_cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
             **kwargs,
     ):
         """Ingest data for a given bundle.
@@ -423,11 +443,12 @@ def _make_bundle_core():
                 )
                 daily_bars_path = wd.ensure_dir(*daily_equity_relative(name, timestr))
                 daily_bar_writer = daily_bar_writer_class(
-                    daily_bars_path,
-                    calendar,
-                    start_session,
-                    end_session,
-                    cols=daily_bar_writer_cols,
+                    daily_bars_path
+                )
+
+                fundamental_data_path = wd.ensure_dir(*fundamental_data_relative(name, timestr))
+                fundamental_data_writer = fundamental_data_writer_class(
+                    fundamental_data_path
                 )
                 # Do an empty write to ensure that the daily ctables exist
                 # when we create the SQLiteAdjustmentWriter below. The
@@ -448,7 +469,7 @@ def _make_bundle_core():
                 adjustment_db_writer = stack.enter_context(
                     SQLiteAdjustmentWriter(
                         wd.getpath(*adjustment_db_relative(name, timestr)),
-                        ZiplimeBcolzDailyBarReader(daily_bars_path),
+                        daily_bar_writer_class(daily_bars_path),
                         overwrite=True,
                     )
                 )
@@ -465,17 +486,22 @@ def _make_bundle_core():
                     )
             log.info("Ingesting %s", name)
             bundle.ingest(
-                environ,
-                asset_db_writer,
-                minute_bar_writer,
-                daily_bar_writer,
-                adjustment_db_writer,
-                calendar,
-                start_session,
-                end_session,
-                cache,
-                show_progress,
-                pth.data_path([name, timestr], environ=environ),
+                environ=environ,
+                historical_market_data_provider=historical_market_data_provider,
+                fundamental_data_provider=fundamental_data_provider,
+                asset_db_writer=asset_db_writer,
+                minute_bar_writer=minute_bar_writer,
+                daily_bar_writer=daily_bar_writer,
+                fundamental_data_writer=fundamental_data_writer,
+                adjustment_writer=adjustment_db_writer,
+                calendar=calendar,
+                start_session=start_session,
+                end_session=end_session,
+                cache=cache,
+                show_progress=show_progress,
+                output_dir=pth.data_path([name, timestr], environ=environ),
+                market_data_fields=market_data_fields,
+                fundamental_data_fields=fundamental_data_fields,
                 **kwargs,
             )
 
@@ -561,9 +587,16 @@ def _make_bundle_core():
             equity_minute_bar_reader=ZiplimeBcolzMinuteBarReader(
                 minute_equity_path(name, timestr, environ=environ),
             ),
-            equity_daily_bar_reader=ZiplimeBcolzDailyBarReader(
-                daily_equity_path(name, timestr, environ=environ),
+            equity_daily_bar_reader=BcolzDataBundle(
+                root_directory=daily_equity_path(name, timestr, environ=environ),
             ),
+            fundamental_data_reader=BcolzDataBundle(
+                root_directory=fundamental_data_path(name, timestr, environ=environ),
+            ),
+
+            # equity_daily_bar_reader=ZiplimeBcolzDailyBarReader(
+            #     daily_equity_path(name, timestr, environ=environ),
+            # ),
             adjustment_reader=SQLiteAdjustmentReader(
                 adjustment_db_path(name, timestr, environ=environ),
             ),

@@ -3,6 +3,7 @@ import os
 import sys
 import warnings
 
+from ziplime.data.data_portal_live import DataPortalLive
 from ziplime.utils.bundle_utils import register_default_bundles
 
 try:
@@ -86,6 +87,8 @@ def _run(
         blotter,
         custom_loader,
         benchmark_spec,
+        broker: str | None,
+        market_data_provider: str | None
 ):
     """Run a backtest for the given algorithm.
 
@@ -162,17 +165,32 @@ def _run(
 
     first_trading_day = bundle_data.equity_minute_bar_reader.first_trading_day
 
-    data = DataPortal(
-        bundle_data.asset_finder,
-        trading_calendar=trading_calendar,
-        first_trading_day=first_trading_day,
-        equity_minute_reader=bundle_data.equity_minute_bar_reader,
-        equity_daily_reader=bundle_data.equity_daily_bar_reader,
-        adjustment_reader=bundle_data.adjustment_reader,
-        future_minute_reader=bundle_data.equity_minute_bar_reader,
-        future_daily_reader=bundle_data.equity_daily_bar_reader,
-        fields=bundle_data.equity_daily_bar_reader._table.names + ["price"]
-    )
+    if broker:
+        data = DataPortalLive(
+            bundle_data.asset_finder,
+            broker=broker,
+            trading_calendar=trading_calendar,
+            first_trading_day=first_trading_day,
+            equity_minute_reader=bundle_data.equity_minute_bar_reader,
+            equity_daily_reader=bundle_data.equity_daily_bar_reader,
+            adjustment_reader=bundle_data.adjustment_reader,
+            future_minute_reader=bundle_data.equity_minute_bar_reader,
+            future_daily_reader=bundle_data.equity_daily_bar_reader,
+            fields=bundle_data.equity_daily_bar_reader._table.names + ["price"]
+        )
+    else:
+        data = DataPortal(
+            bundle_data.asset_finder,
+            trading_calendar=trading_calendar,
+            first_trading_day=first_trading_day,
+            equity_minute_reader=bundle_data.equity_minute_bar_reader,
+            equity_daily_reader=bundle_data.equity_daily_bar_reader,
+            fundamental_data_reader=bundle_data.fundamental_data_reader,
+            adjustment_reader=bundle_data.adjustment_reader,
+            future_minute_reader=bundle_data.equity_minute_bar_reader,
+            future_daily_reader=bundle_data.equity_daily_bar_reader,
+            fields=bundle_data.equity_daily_bar_reader._table.names + ["price"]
+        )
 
     pipeline_loader = USEquityPricingLoader.without_fx(
         bundle_data.equity_daily_bar_reader,
@@ -229,6 +247,7 @@ def _run(
             },
         )
         tr.bundle_data = bundle_data
+        tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
         perf = tr.run()
     except NoBenchmark:
         raise _RunAlgoError(
@@ -313,8 +332,8 @@ def run_algorithm(
         handle_data=None,
         before_trading_start=None,
         analyze=None,
-        data_frequency="daily",
-        bundle="quantopian-quandl",
+        data_frequency: str = "daily",
+        bundle: str = "quantopian-quandl",
         bundle_timestamp=None,
         trading_calendar=None,
         metrics_set="default",
@@ -324,6 +343,9 @@ def run_algorithm(
         strict_extensions=True,
         environ=os.environ,
         custom_loader=None,
+        print_algo: bool = False,
+        algotext=None,
+        algofile=None,
         blotter="default",
 ):
     """
@@ -405,8 +427,8 @@ def run_algorithm(
         initialize=initialize,
         before_trading_start=before_trading_start,
         analyze=analyze,
-        algofile=None,
-        algotext=None,
+        algofile=algofile,
+        algotext=algotext,
         defines=(),
         data_frequency=data_frequency,
         capital_base=capital_base,
@@ -416,13 +438,14 @@ def run_algorithm(
         end=end,
         output=os.devnull,
         trading_calendar=trading_calendar,
-        print_algo=False,
+        print_algo=print_algo,
         metrics_set=metrics_set,
         local_namespace=False,
         environ=environ,
         blotter=blotter,
         custom_loader=custom_loader,
         benchmark_spec=benchmark_spec,
+        broker=None
     )
 
 

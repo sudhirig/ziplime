@@ -1,6 +1,8 @@
 import datetime
 import logging
 import os
+from functools import partial
+
 import pandas as pd
 from zipline.__main__ import ipython_only
 
@@ -9,6 +11,7 @@ from zipline.utils.cli import Date
 
 from ziplime.constants.default_columns import DEFAULT_COLUMNS, OHLCV_COLUMNS
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
+from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
 from ziplime.utils.run_algo import _run, BenchmarkSpec
 
 import click
@@ -28,7 +31,8 @@ from zipline.extensions import create_args
 
 from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter
 from ziplime.data.bcolz_minute_bars import ZiplimeBcolzMinuteBarWriter
-from ziplime.utils.bundle_utils import register_default_bundles
+from ziplime.utils.bundle_utils import register_default_bundles, get_historical_market_data_provider, \
+    get_fundamental_data_provider, get_live_market_data_provider
 
 DEFAULT_BUNDLE = "lime"
 
@@ -150,9 +154,24 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     default=True,
     help="Print progress information to the terminal.",
 )
+@click.option(
+    "--historical-market-data-provider",
+    default="limex-hub",
+    help="Market data provider for historical data",
+    show_default=True,
+)
+@click.option(
+    "--fundamental-data-provider",
+    default="limex-hub",
+    help="Fundamental data provider",
+    show_default=True,
+)
 @click.pass_context
 def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, fundamental_data, show_progress,
-           assets_version, calendar):
+           assets_version, calendar,
+           historical_market_data_provider,
+           fundamental_data_provider
+           ):
     """Top level ziplime entry point."""
     symbols_parsed = symbols.split(',') if symbols else None
     fundamental_data_list = fundamental_data.split(",") if fundamental_data else None
@@ -185,27 +204,24 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
                                  col
                                  for col in FUNDAMENTAL_DATA_COLUMNS
                                  if col.name in set(fundamental_data_list)
-                             ] + OHLCV_COLUMNS
+                             ]
                              if fundamental_data_list is not None
                              else DEFAULT_COLUMNS)
     bundles_module.ingest(
-        bundle_name,
-        os.environ,
-        pd.Timestamp.utcnow(),
-        assets_version,
-        show_progress,
-
+        name=bundle_name,
+        environ=os.environ,
+        timestamp=pd.Timestamp.utcnow(),
+        assets_version=assets_version,
+        show_progress=show_progress,
+        historical_market_data_provider=get_historical_market_data_provider(code=historical_market_data_provider),
+        fundamental_data_provider=get_fundamental_data_provider(code=fundamental_data_provider),
         minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
-        daily_bar_writer_class=ZiplimeBcolzDailyBarWriter,
-        daily_bar_writer_cols=fundamental_data_cols,
+        daily_bar_writer_class=BcolzDataBundle,
+        fundamental_data_writer_class=BcolzDataBundle,
+        market_data_fields=OHLCV_COLUMNS,
+        fundamental_data_fields=fundamental_data_cols,
         minute_bar_writer_cols=fundamental_data_cols,
-        # start_session=start_date,
-        # end_session=end_date,
-        # symbols=symbols_parsed,
-        # period=period
     )
-    # func = getattr(zipline__main__, "ingest")
-    # ctx.forward(func)
 
 
 @main.command(context_settings=dict(
@@ -384,6 +400,18 @@ def bundles(ctx):
     help="The blotter to use.",
     show_default=True,
 )
+@click.option(
+    "--broker",
+    default=None,
+    help="The broker to use for live trading.",
+    show_default=True,
+)
+@click.option(
+    "--live-market-data-provider",
+    default="lime-trader-sdk",
+    help="Market data provider for live trading",
+    show_default=True,
+)
 @ipython_only(
     click.option(
         "--local-namespace/--no-local-namespace",
@@ -414,6 +442,8 @@ def run(
         metrics_set,
         local_namespace,
         blotter,
+        broker: str | None,
+        live_market_data_provider: str,
 ):
     """Run a backtest for the given algorithm."""
     # check that the start and end dates are passed correctly
@@ -468,6 +498,8 @@ def run(
         blotter=blotter,
         benchmark_spec=benchmark_spec,
         custom_loader=None,
+        broker=broker,
+        market_data_provider=get_live_market_data_provider(live_market_data_provider)
     )
 
 

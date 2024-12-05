@@ -46,7 +46,8 @@ class FundamentalData(enum.Enum):
 
 
 FUNDAMENTAL_DATA_COLUMNS = [
-    ColumnSpecification(name=f"{fd.value}_{fdt.value}", write_type="uint32", original_type='float')
+    ColumnSpecification(name=f"{fd.value}_{fdt.value}", write_type="uint32", original_type='float', scale_factor=1000,
+                        scaled_type="int")
     for fd in FundamentalData for fdt in FundamentalDataValueType
 ]
 

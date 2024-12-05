@@ -11,7 +11,7 @@ from ziplime.utils.paths import data_path
 
 
 def initialize(context: TradingAlgorithm):
-    context.asset = symbol('AAPL')
+    context.asset = symbol('BBRAG')
     context.i = 0
 
 
@@ -28,8 +28,9 @@ def handle_data(context: TradingAlgorithm, data: BarData):
     long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
 
     return_on_tangible_equity_mean = get_fundamental_data(
-        data, context.asset, 'return_on_tangible_equity_value', bar_count=30,
-        frequency="1q", fillna=0
+        bar_data=data, context=context, assets=context.asset,
+        fields='return_on_tangible_equity_value', bar_count=32,
+        frequency="1q", fillna=None
     )
 
     print(return_on_tangible_equity_mean)
@@ -62,6 +63,8 @@ def get_benchmark_returns(start, end):
     spx_returns = spx_prices.pct_change().dropna()
     return spx_returns
 
+
+#
 #
 # start_session = pd.Timestamp('2024-06-04')
 # end_session = pd.Timestamp('2024-10-01')

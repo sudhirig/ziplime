@@ -10,7 +10,7 @@ def register_lime_symbol_list_equities_bundle(bundle_name: str,
                                               start_session: datetime.datetime | None,
                                               end_session: datetime.datetime | None,
                                               symbols: list[str],
-                                              fundamental_data_list: list[str] = FUNDAMENTAL_DATA_COLUMN_NAMES,
+                                              fundamental_data_list: set[str] = FUNDAMENTAL_DATA_COLUMN_NAMES,
                                               period: Period = Period.DAY,
                                               calendar_name: str = "NYSE"
                                               ):

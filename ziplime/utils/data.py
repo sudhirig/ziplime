@@ -1,10 +1,25 @@
+import datetime
 from typing import Any
+from unittest.mock import inplace
 
+import numpy
 import pandas as pd
 from zipline._protocol import BarData
+from zipline.errors import HistoryWindowStartsBeforeData
+
+from ziplime.algorithm import TradingAlgorithm
+from ziplime.data.abstract_data_bundle import AbstractDataBundle
 
 
-def get_fundamental_data(bar_data: BarData, assets, fields, bar_count, frequency, fillna: Any=None):
+def get_fundamental_data(
+        bar_data: BarData,
+        context: TradingAlgorithm,
+        assets,
+        fields,
+        bar_count,
+        frequency,
+        fillna: Any = None
+):
     if frequency != '1q':
         raise Exception("Currently only frequency of 1 quarter is supported for fundamental data")
     frequency = '1d'
@@ -14,14 +29,40 @@ def get_fundamental_data(bar_data: BarData, assets, fields, bar_count, frequency
     start_date = end_date - pd.Timedelta(days=max_days_per_quarter * bar_count)
 
     total_days = max_days_per_quarter * bar_count
-    bar_data_history = bar_data.history(
-        assets, fields, total_days, frequency
-    )
+
+    # try:
+    #     bar_data_history = bar_data.history(
+    #         assets, fields, total_days, frequency
+    #     )
+    # except HistoryWindowStartsBeforeData as e:
+    #     max_bar_count = e.kwargs.get("max_bar_count", total_days)
+    #     bar_data_history = bar_data.history(
+    #         assets, fields,
+    #         total_days - max_bar_count,
+    #         frequency
+    #     )
+    fundamental_data_bundle: AbstractDataBundle = context.fundamental_data_bundle
+    first_date = fundamental_data_bundle.first_trading_day
+
+    start_date_array = start_date
+    if start_date < first_date:
+        start_date_array = first_date
+
+    dr = pd.date_range(start_date_array, bar_data.current_session, freq='D')
+
+    res = fundamental_data_bundle.load_raw_arrays_full_range(
+        [fields],
+        start_date_array,
+        bar_data.current_session,
+        [assets],
+        frequency='D'
+    )[0]
+
+    df = pd.DataFrame(data=res, index=dr)
     quarters = pd.date_range(start=start_date, end=end_date, freq='Q')
-    filtered = pd.DataFrame(bar_data_history[bar_data_history != 0][-bar_count:], index=quarters)
-
+    df = df.reindex(quarters)
     if fillna is not None:
-        filtered[filtered.isnull()] = fillna
+        df[df.isnull()] = fillna
 
-    result_series = pd.Series(data=filtered[filtered.columns[0]], index=filtered.index)
+    result_series = pd.Series(data=df[df.columns[0]], index=df.index)
     return result_series

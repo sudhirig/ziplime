@@ -7,4 +7,5 @@ class ColumnSpecification:
     original_type: str
     write_type: str
     # used only for floats/Decimals
-    scale_factor: int = None
+    scaled_type: str
+    scale_factor: int

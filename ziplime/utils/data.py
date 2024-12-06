@@ -59,7 +59,7 @@ def get_fundamental_data(
     )[0]
 
     df = pd.DataFrame(data=res, index=dr)
-    quarters = pd.date_range(start=start_date, end=end_date, freq='Q')
+    quarters = pd.date_range(start=start_date, end=end_date, freq='QE')
     df = df.reindex(quarters)
     if fillna is not None:
         df[df.isnull()] = fillna

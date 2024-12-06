@@ -34,9 +34,6 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
         data = pd.DataFrame()
         for symbol in symbols:
             res = self._get_fundamental_data(symbol, date_from, date_to, period, fundamental_data_list)
-            if res is None:
-                logging.warning(f"No fundamental data for {symbol} for period {date_from}-{date_to}.")
-                continue
             data = pd.concat([data, res], axis=0, ignore_index=False)
         data.set_index(["date", "symbol"], inplace=True)
 
@@ -58,8 +55,9 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
             fields=None
         )
         if fundamental.empty:
-            return None
-        fundamental["date"] = pd.to_datetime(fundamental.date, utc=True)
+            logging.warning(f"No fundamental data for {symbol} for period {date_from}-{date_to}.")
+        if not fundamental.empty:
+            fundamental["date"] = pd.to_datetime(fundamental.date, utc=True)
         dr = pd.date_range(date_from, date_to, freq='D')
         fundamental_new = pd.DataFrame(columns=["date", "symbol"])
         fundamental_new.set_index(keys=["date", "symbol"], inplace=True, drop=True)
@@ -101,9 +99,13 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
                     vals_df = pd.DataFrame([
                         vals,
                     ], columns=res_df.columns)
-                    res_df = (res_df.copy() if vals_df.empty else vals_df if res_df.empty
-                    else pd.concat([res_df, vals_df], ignore_index=True)
-                              )
+                    res_df = (
+                        res_df.copy()
+                        if vals_df.empty
+                        else vals_df
+                        if res_df.empty
+                        else pd.concat([res_df, vals_df], ignore_index=True)
+                    )
                     # res_df = pd.concat([pd.DataFrame([
                     #     vals,
                     # ], columns=res_df.columns), res_df], ignore_index=True)
@@ -115,10 +117,17 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
                     vals.append(numpy.nan)
                 if add_value_col in columns:
                     vals.append(numpy.nan)
-
-                res_df = pd.concat([pd.DataFrame([
+                vals_df = pd.DataFrame([
                     vals,
-                ], columns=res_df.columns), res_df], ignore_index=True)
+                ], columns=res_df.columns)
+
+                res_df = (
+                    res_df.copy()
+                    if vals_df.empty
+                    else vals_df
+                    if res_df.empty
+                    else pd.concat([vals_df, res_df], ignore_index=True)
+                )
             res_df.set_index("date", inplace=True, drop=True)
             res_df = res_df.reindex(dr, fill_value=None)
             res_df["symbol"] = symbol

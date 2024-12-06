@@ -139,7 +139,7 @@ def create_equities_bundle(
                 start_session=start_session,
                 end_session=end_session,
                 cols=market_data_fields,
-                validate_sessions=True
+                validate_sessions=False
             )
         else:
             raise Exception("Unsupported period.")

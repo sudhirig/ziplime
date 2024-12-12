@@ -55,6 +55,16 @@ class DataPortalLive(DataPortal):
             data_frequency=data_frequency, ffill=False
         )
 
+        session = self.trading_calendar.minute_to_session(end_dt)
+        days_for_window = self._get_days_for_window(session, bar_count)
+
+
+        latest_date_historical = max(historical_bars.index)
+        latest_trading_date = max(days_for_window)
+
+        if latest_date_historical == latest_trading_date:
+            return historical_bars
+
         realtime_bars = self.market_data_provider.fetch_live_data_table(
             symbols=assets, period=frequency, date_from=end_dt, date_to=end_dt,
             show_progress=False
@@ -63,24 +73,29 @@ class DataPortalLive(DataPortal):
         # Broker.get_realtime_history() returns the asset as level 0 column,
         # open, high, low, close, volume returned as level 1 columns.
         # To filter for field the levels needs to be swapped
-        realtime_bars = realtime_bars.swaplevel(0, 1, axis=1)
+        results = []
+        for df in realtime_bars:
+            realtime_bars = realtime_bars.swaplevel(0, 1, axis=1)
 
-        ohlcv_field = 'close' if field == 'price' else field
+            ohlcv_field = 'close' if field == 'price' else field
 
-        # TODO: end_dt is ignored when historical & realtime bars are merged.
-        # Should not cause issues as end_dt is set to current time in live
-        # trading, but would be more proper if merge would make use of it.
-        combined_bars = historical_bars.combine_first(
-            realtime_bars[ohlcv_field])
+            # TODO: end_dt is ignored when historical & realtime bars are merged.
+            # Should not cause issues as end_dt is set to current time in live
+            # trading, but would be more proper if merge would make use of it.
+            combined_bars = historical_bars.combine_first(
+                realtime_bars[ohlcv_field])
 
-        if ffill and field == 'price':
-            # Simple forward fill is not enough here as the last ingested
-            # value might be outside of the requested time window. That case
-            # the time series starts with NaN and forward filling won't help.
-            # To provide values for such cases we backward fill.
-            # Backward fill as a second operation will have no effect if the
-            # forward-fill was successful.
-            combined_bars.fillna(method='ffill', inplace=True)
-            combined_bars.fillna(method='bfill', inplace=True)
+            if ffill and field == 'price':
+                # Simple forward fill is not enough here as the last ingested
+                # value might be outside of the requested time window. That case
+                # the time series starts with NaN and forward filling won't help.
+                # To provide values for such cases we backward fill.
+                # Backward fill as a second operation will have no effect if the
+                # forward-fill was successful.
+                combined_bars.fillna(method='ffill', inplace=True)
+                combined_bars.fillna(method='bfill', inplace=True)
 
-        return combined_bars[-bar_count:]
+            r = combined_bars[-bar_count:]
+            results.append(r)
+
+        return results

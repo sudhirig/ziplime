@@ -1,5 +1,5 @@
 import datetime
-from os import environ, _Environ
+from os import _Environ
 import logging
 import pandas as pd
 
@@ -7,18 +7,15 @@ from exchange_calendars import ExchangeCalendar
 from lime_trader.models.market import Period
 from zipline.assets import AssetDBWriter
 from zipline.data.adjustments import SQLiteAdjustmentWriter
-from zipline.data.bcolz_daily_bars import BcolzDailyBarWriter
 from zipline.data.bcolz_minute_bars import BcolzMinuteBarWriter
 from zipline.utils.cache import dataframe_cache
 from zipline.utils.calendar_utils import register_calendar_alias
 
-from ziplime.constants.default_columns import OHLCV_COLUMNS
 from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
 from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
-from ziplime.data.bundles import core as bundles, register
+from ziplime.data.bundles import register
 import numpy as np
 
-from ziplime.data.lime_data_provider import LimeDataProvider
 from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 from ziplime.utils.calendar_utils import normalize_daily_start_end_session
@@ -65,8 +62,7 @@ def create_equities_bundle(
             historical_market_data_provider: AbstractHistoricalMarketDataProvider,
             fundamental_data_provider: AbstractFundamentalDataProvider,
             asset_db_writer: AssetDBWriter,
-            minute_bar_writer: BcolzMinuteBarWriter,
-            daily_bar_writer: BcolzDataBundle,
+            data_bundle_writer: BcolzDataBundle,
             fundamental_data_writer: BcolzDataBundle,
             adjustment_writer: SQLiteAdjustmentWriter,
             calendar: ExchangeCalendar,
@@ -127,7 +123,7 @@ def create_equities_bundle(
         )
 
         if period == Period.DAY:
-            daily_bar_writer.write(
+            data_bundle_writer.write(
                 data=parse_pricing_and_vol(data=historical_data, sessions=sessions, symbol_map=symbol_map),
                 show_progress=show_progress,
                 calendar=calendar,

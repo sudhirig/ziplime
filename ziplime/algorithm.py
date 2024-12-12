@@ -942,7 +942,7 @@ class TradingAlgorithm:
         else:
             raise ScheduleFunctionInvalidCalendar(
                 given_calendar=calendar,
-                allowed_calendars=("[calendars.US_EQUITIES, calendars.US_FUTURES]"),
+                allowed_calendars="[calendars.US_EQUITIES, calendars.US_FUTURES]",
             )
 
         self.add_event(

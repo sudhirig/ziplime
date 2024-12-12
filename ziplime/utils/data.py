@@ -1,11 +1,7 @@
-import datetime
 from typing import Any
-from unittest.mock import inplace
 
-import numpy
 import pandas as pd
 from zipline._protocol import BarData
-from zipline.errors import HistoryWindowStartsBeforeData
 
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
@@ -22,25 +18,11 @@ def get_fundamental_data(
 ):
     if frequency != '1q':
         raise Exception("Currently only frequency of 1 quarter is supported for fundamental data")
-    frequency = '1d'
 
     max_days_per_quarter = 92
     end_date = pd.to_datetime(bar_data.current_session)
     start_date = end_date - pd.Timedelta(days=max_days_per_quarter * bar_count)
 
-    total_days = max_days_per_quarter * bar_count
-
-    # try:
-    #     bar_data_history = bar_data.history(
-    #         assets, fields, total_days, frequency
-    #     )
-    # except HistoryWindowStartsBeforeData as e:
-    #     max_bar_count = e.kwargs.get("max_bar_count", total_days)
-    #     bar_data_history = bar_data.history(
-    #         assets, fields,
-    #         total_days - max_bar_count,
-    #         frequency
-    #     )
     fundamental_data_bundle: AbstractDataBundle = context.fundamental_data_bundle
     first_date = fundamental_data_bundle.first_trading_day
 

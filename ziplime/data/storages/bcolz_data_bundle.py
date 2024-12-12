@@ -1,27 +1,11 @@
-# Copyright 2015 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-import datetime
 import warnings
 from dataclasses import asdict
-from functools import partial
 
 import numpy
 from exchange_calendars import ExchangeCalendar
 from numpy import zeros
-from zipline.data._equities import _read_bcolz_data, _compute_row_slices
+from zipline.data._equities import _compute_row_slices
 
-from ziplime.constants.default_columns import DEFAULT_COLUMNS
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 
@@ -35,27 +19,16 @@ import logging
 import pandas as pd
 
 from zipline.data.bar_reader import NoDataAfterDate, NoDataBeforeDate, NoDataOnDate
-from zipline.data.session_bars import CurrencyAwareSessionBarReader
 from zipline.utils.calendar_utils import get_calendar
 from zipline.utils.cli import maybe_show_progress
 from zipline.utils.functional import apply
 from zipline.utils.input_validation import expect_element
 from zipline.utils.memoize import lazyval
-from zipline.utils.numpy_utils import float64_dtype, iNaT, uint32_dtype
+from zipline.utils.numpy_utils import iNaT
 
 logger = logging.getLogger("UsEquityPricing")
 
-# OHLC = frozenset(["open", "high", "low", "close"])
-# US_EQUITY_PRICING_BCOLZ_COLUMNS = (
-#     "open",
-#     "high",
-#     "low",
-#     "close",
-#     "volume",
-#     "day",
-#     "id",
-# )
-#
+
 UINT32_MAX = np.iinfo(np.uint32).max
 
 

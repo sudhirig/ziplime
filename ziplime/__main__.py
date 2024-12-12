@@ -1,7 +1,6 @@
 import datetime
 import logging
 import os
-from functools import partial
 
 import pandas as pd
 from zipline.__main__ import ipython_only
@@ -21,7 +20,6 @@ from ziplime.data import bundles as bundles_module
 from click import DateTime
 from lime_trader.models.market import Period
 from zipline.utils.cli import Timestamp
-from zipline.utils.paths import data_root
 
 from ziplime.config.register_bundles import register_lime_symbol_list_equities_bundle
 
@@ -29,10 +27,8 @@ from zipline import __main__ as zipline__main__
 from zipline.utils.run_algo import load_extensions
 from zipline.extensions import create_args
 
-from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter
-from ziplime.data.bcolz_minute_bars import ZiplimeBcolzMinuteBarWriter
 from ziplime.utils.bundle_utils import register_default_bundles, get_historical_market_data_provider, \
-    get_fundamental_data_provider, get_live_market_data_provider
+    get_fundamental_data_provider, get_live_market_data_provider, get_broker
 
 DEFAULT_BUNDLE = "lime"
 
@@ -200,18 +196,13 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
     # clean up lime only params and set new bundle name
     new_params["bundle"] = bundle_name
 
-    fundamental_data_provider_instance = get_fundamental_data_provider(code=fundamental_data_provider)
-    fundamental_data_column_names = fundamental_data_provider_instance.get_fundamental_data_column_names(
-        fundamental_data_fields=set(fundamental_data_list))
-    fundamental_data_cols = (
-        [
-            col
-            for col in FUNDAMENTAL_DATA_COLUMNS
-            if col.name in fundamental_data_column_names
-        ]
-        if fundamental_data_list is not None
-        else DEFAULT_COLUMNS
-    )
+    fundamental_data_cols = ([
+                                 col
+                                 for col in FUNDAMENTAL_DATA_COLUMNS
+                                 if col.name in set(fundamental_data_list)
+                             ]
+                             if fundamental_data_list is not None
+                             else DEFAULT_COLUMNS)
     bundles_module.ingest(
         name=bundle_name,
         environ=os.environ,
@@ -219,13 +210,11 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         assets_version=assets_version,
         show_progress=show_progress,
         historical_market_data_provider=get_historical_market_data_provider(code=historical_market_data_provider),
-        fundamental_data_provider=fundamental_data_provider_instance,
-        minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
-        daily_bar_writer_class=BcolzDataBundle,
+        fundamental_data_provider=get_fundamental_data_provider(code=fundamental_data_provider),
+        data_bundle_writer_class=BcolzDataBundle,
         fundamental_data_writer_class=BcolzDataBundle,
         market_data_fields=OHLCV_COLUMNS,
         fundamental_data_fields=fundamental_data_cols,
-        minute_bar_writer_cols=fundamental_data_cols,
     )
 
 
@@ -448,7 +437,7 @@ def run(
         local_namespace,
         blotter,
         broker: str | None,
-        live_market_data_provider: str,
+        live_market_data_provider: str | None,
 ):
     """Run a backtest for the given algorithm."""
     # check that the start and end dates are passed correctly
@@ -503,8 +492,9 @@ def run(
         blotter=blotter,
         benchmark_spec=benchmark_spec,
         custom_loader=None,
-        broker=broker,
-        market_data_provider=get_live_market_data_provider(live_market_data_provider)
+        broker=get_broker(broker) if broker is not None else None,
+        market_data_provider=get_live_market_data_provider(
+            live_market_data_provider) if live_market_data_provider is not None else None,
     )
 
 

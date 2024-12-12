@@ -24,12 +24,9 @@ from zipline.utils.input_validation import ensure_timestamp, optionally
 import zipline.utils.paths as pth
 from zipline.utils.preprocess import preprocess
 
-from ziplime.constants.default_columns import DEFAULT_COLUMNS
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
 from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
-from ziplime.data.bcolz_daily_bars import ZiplimeBcolzDailyBarWriter
-from ziplime.data.bcolz_minute_bars import ZiplimeBcolzMinuteBarWriter, ZiplimeBcolzMinuteBarReader
 from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 
@@ -165,8 +162,7 @@ RegisteredBundle = namedtuple(
 class BundleData:
     name: str
     asset_finder: AssetFinder
-    equity_minute_bar_reader: ZiplimeBcolzMinuteBarReader
-    equity_daily_bar_reader: AbstractDataBundle
+    historical_data_reader: AbstractDataBundle
     fundamental_data_reader: AbstractDataBundle
 
     adjustment_reader: SQLiteAdjustmentReader
@@ -174,11 +170,6 @@ class BundleData:
     cached_data: pd.DataFrame = None
 
 
-# BundleData = namedtuple(
-#     "BundleData",
-#     "asset_finder equity_minute_bar_reader equity_daily_bar_reader "
-#     "adjustment_reader",
-# )
 
 BundleCore = namedtuple(
     "BundleCore",
@@ -281,9 +272,7 @@ def _make_bundle_core():
                   The environment this is being run with.
               asset_db_writer : AssetDBWriter
                   The asset db writer to write into.
-              minute_bar_writer : BcolzMinuteBarWriter
-                  The minute bar writer to write into.
-              daily_bar_writer : BcolzDailyBarWriter
+              data_bundle_writer : BcolzDailyBarWriter
                   The daily bar writer to write into.
               adjustment_writer : SQLiteAdjustmentWriter
                   The adjustment db writer to write into.
@@ -378,7 +367,7 @@ def _make_bundle_core():
             name,
             fundamental_data_provider: AbstractFundamentalDataProvider,
             historical_market_data_provider: AbstractHistoricalMarketDataProvider,
-            daily_bar_writer_class: AbstractDataBundle,
+            data_bundle_writer_class: AbstractDataBundle,
             fundamental_data_writer_class: AbstractDataBundle,
             market_data_fields: list[ColumnSpecification],
             fundamental_data_fields: list[ColumnSpecification],
@@ -386,8 +375,6 @@ def _make_bundle_core():
             timestamp=None,
             assets_versions=(),
             show_progress: bool = False,
-            minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
-            minute_bar_writer_cols: list[ColumnSpecification] = DEFAULT_COLUMNS,
             **kwargs,
     ):
         """Ingest data for a given bundle.
@@ -442,7 +429,7 @@ def _make_bundle_core():
                     working_dir(pth.data_path([], environ=environ))
                 )
                 daily_bars_path = wd.ensure_dir(*daily_equity_relative(name, timestr))
-                daily_bar_writer = daily_bar_writer_class(
+                data_bundle_writer = data_bundle_writer_class(
                     daily_bars_path
                 )
 
@@ -455,27 +442,19 @@ def _make_bundle_core():
                 # SQLiteAdjustmentWriter needs to open the daily ctables so
                 # that it can compute the adjustment ratios for the dividends.
 
-                minute_bar_writer = minute_bar_writer_class(
-                    wd.ensure_dir(*minute_equity_relative(name, timestr)),
-                    calendar,
-                    start_session,
-                    end_session,
-                    cols=minute_bar_writer_cols,
-                    minutes_per_day=bundle.minutes_per_day,
-                )
+
                 assets_db_path = wd.getpath(*asset_db_relative(name, timestr))
                 asset_db_writer = AssetDBWriter(assets_db_path)
 
                 adjustment_db_writer = stack.enter_context(
                     SQLiteAdjustmentWriter(
                         wd.getpath(*adjustment_db_relative(name, timestr)),
-                        daily_bar_writer_class(daily_bars_path),
+                        data_bundle_writer_class(daily_bars_path),
                         overwrite=True,
                     )
                 )
             else:
-                daily_bar_writer = None
-                minute_bar_writer = None
+                data_bundle_writer = None
                 asset_db_writer = None
                 adjustment_db_writer = None
                 if assets_versions:
@@ -490,8 +469,7 @@ def _make_bundle_core():
                 historical_market_data_provider=historical_market_data_provider,
                 fundamental_data_provider=fundamental_data_provider,
                 asset_db_writer=asset_db_writer,
-                minute_bar_writer=minute_bar_writer,
-                daily_bar_writer=daily_bar_writer,
+                data_bundle_writer=data_bundle_writer,
                 fundamental_data_writer=fundamental_data_writer,
                 adjustment_writer=adjustment_db_writer,
                 calendar=calendar,
@@ -584,19 +562,12 @@ def _make_bundle_core():
             asset_finder=AssetFinder(
                 asset_db_path(name, timestr, environ=environ),
             ),
-            equity_minute_bar_reader=ZiplimeBcolzMinuteBarReader(
-                minute_equity_path(name, timestr, environ=environ),
-            ),
-            equity_daily_bar_reader=BcolzDataBundle(
+            historical_data_reader=BcolzDataBundle(
                 root_directory=daily_equity_path(name, timestr, environ=environ),
             ),
             fundamental_data_reader=BcolzDataBundle(
                 root_directory=fundamental_data_path(name, timestr, environ=environ),
             ),
-
-            # equity_daily_bar_reader=ZiplimeBcolzDailyBarReader(
-            #     daily_equity_path(name, timestr, environ=environ),
-            # ),
             adjustment_reader=SQLiteAdjustmentReader(
                 adjustment_db_path(name, timestr, environ=environ),
             ),

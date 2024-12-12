@@ -58,24 +58,6 @@ from zipline.errors import HistoryWindowStartsBeforeData
 
 log = logging.getLogger("DataPortal")
 
-# BASE_FIELDS = frozenset(
-#     [
-#         "open",
-#         "high",
-#         "low",
-#         "close",
-#         "volume",
-#         "price",
-#         "contract",
-#         "sid",
-#         "last_traded",
-#     ]
-# )
-#
-# OHLCV_FIELDS = frozenset(["open", "high", "low", "close", "volume"])
-#
-# OHLCVP_FIELDS = frozenset(["open", "high", "low", "close", "volume", "price"])
-
 HISTORY_FREQUENCIES = set(["1m", "1d"])
 
 DEFAULT_MINUTE_HISTORY_PREFETCH = 1560
@@ -100,7 +82,7 @@ class DataPortal:
         The calendar instance used to provide minute->session information.
     first_trading_day : pd.Timestamp
         The first trading day for the simulation.
-    equity_daily_reader : BcolzDailyBarReader, optional
+    historical_data_reader : BcolzDailyBarReader, optional
         The daily bar reader for equities. This will be used to service
         daily data backtests or daily history calls in a minute backetest.
         If a daily bar reader is not provided but a minute bar reader is,
@@ -134,7 +116,7 @@ class DataPortal:
             first_trading_day,
             fields: list[str],
             fundamental_data_reader,
-            equity_daily_reader=None,
+            historical_data_reader=None,
             equity_minute_reader=None,
             future_daily_reader=None,
             future_minute_reader=None,
@@ -167,7 +149,7 @@ class DataPortal:
             # Infer the last session from the provided readers.
             last_sessions = [
                 reader.last_available_dt
-                for reader in [equity_daily_reader, future_daily_reader]
+                for reader in [historical_data_reader, future_daily_reader]
                 if reader is not None
             ]
             if last_sessions:
@@ -190,7 +172,7 @@ class DataPortal:
                 self._last_available_minute = None
 
         aligned_equity_minute_reader = self._ensure_reader_aligned(equity_minute_reader)
-        aligned_equity_session_reader = self._ensure_reader_aligned(equity_daily_reader)
+        aligned_equity_session_reader = self._ensure_reader_aligned(historical_data_reader)
         aligned_future_minute_reader = self._ensure_reader_aligned(future_minute_reader)
         aligned_future_session_reader = self._ensure_reader_aligned(future_daily_reader)
 

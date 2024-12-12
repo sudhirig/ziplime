@@ -53,7 +53,7 @@ def get_benchmark_returns(start, end):
     bundle_data = load('lime')
 
     spx_asset = bundle_data.asset_finder.lookup_symbol('AAPL', as_of_date=None)
-    spx_data = bundle_data.equity_daily_bar_reader.load_raw_arrays(
+    spx_data = bundle_data.historical_data_reader.load_raw_arrays(
         columns=['open', 'close'],
         start_date=start,
         end_date=end,

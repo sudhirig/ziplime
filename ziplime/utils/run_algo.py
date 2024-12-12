@@ -3,6 +3,8 @@ import os
 import sys
 import warnings
 
+from ziplime.gens.brokers.broker import Broker
+from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.data.data_portal_live import DataPortalLive
 from ziplime.utils.bundle_utils import register_default_bundles
 
@@ -87,8 +89,8 @@ def _run(
         blotter,
         custom_loader,
         benchmark_spec,
-        broker: str | None,
-        market_data_provider: str | None
+        broker: Broker,
+        market_data_provider: AbstractLiveMarketDataProvider
 ):
     """Run a backtest for the given algorithm.
 
@@ -163,37 +165,37 @@ def _run(
         else:
             click.echo(algotext)
 
-    first_trading_day = bundle_data.equity_minute_bar_reader.first_trading_day
+    first_trading_day = bundle_data.historical_data_reader.first_trading_day
 
     if broker:
         data = DataPortalLive(
-            bundle_data.asset_finder,
+            asset_finder=bundle_data.asset_finder,
             broker=broker,
             trading_calendar=trading_calendar,
             first_trading_day=first_trading_day,
-            equity_minute_reader=bundle_data.equity_minute_bar_reader,
-            equity_daily_reader=bundle_data.equity_daily_bar_reader,
+            historical_data_reader=bundle_data.historical_data_reader,
             adjustment_reader=bundle_data.adjustment_reader,
-            future_minute_reader=bundle_data.equity_minute_bar_reader,
-            future_daily_reader=bundle_data.equity_daily_bar_reader,
-            fields=bundle_data.equity_daily_bar_reader._table.names + ["price"]
+            future_minute_reader=bundle_data.historical_data_reader,
+            future_daily_reader=bundle_data.historical_data_reader,
+            market_data_provider=market_data_provider,
+            fundamental_data_reader=bundle_data.fundamental_data_reader,
+            fields=bundle_data.historical_data_reader._table.names + ["price"]
         )
     else:
         data = DataPortal(
             bundle_data.asset_finder,
             trading_calendar=trading_calendar,
             first_trading_day=first_trading_day,
-            equity_minute_reader=bundle_data.equity_minute_bar_reader,
-            equity_daily_reader=bundle_data.equity_daily_bar_reader,
+            historical_data_reader=bundle_data.historical_data_reader,
             fundamental_data_reader=bundle_data.fundamental_data_reader,
             adjustment_reader=bundle_data.adjustment_reader,
-            future_minute_reader=bundle_data.equity_minute_bar_reader,
-            future_daily_reader=bundle_data.equity_daily_bar_reader,
-            fields=bundle_data.equity_daily_bar_reader._table.names + ["price"]
+            future_minute_reader=bundle_data.historical_data_reader,
+            future_daily_reader=bundle_data.historical_data_reader,
+            fields=bundle_data.historical_data_reader._table.names + ["price"]
         )
 
     pipeline_loader = USEquityPricingLoader.without_fx(
-        bundle_data.equity_daily_bar_reader,
+        bundle_data.historical_data_reader,
         bundle_data.adjustment_reader,
     )
 
@@ -333,7 +335,7 @@ def run_algorithm(
         before_trading_start=None,
         analyze=None,
         data_frequency: str = "daily",
-        bundle: str = "quantopian-quandl",
+        bundle: str = "lime",
         bundle_timestamp=None,
         trading_calendar=None,
         metrics_set="default",
@@ -347,6 +349,8 @@ def run_algorithm(
         algotext=None,
         algofile=None,
         blotter="default",
+        market_data_provider: AbstractLiveMarketDataProvider = None,
+        broker: Broker = None,
 ):
     """
     Run a trading algorithm.
@@ -445,7 +449,8 @@ def run_algorithm(
         blotter=blotter,
         custom_loader=custom_loader,
         benchmark_spec=benchmark_spec,
-        broker=None
+        broker=broker,
+        market_data_provider=market_data_provider
     )
 
 

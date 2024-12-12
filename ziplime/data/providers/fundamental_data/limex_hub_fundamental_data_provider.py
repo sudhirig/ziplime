@@ -1,21 +1,13 @@
 import datetime
 import logging
-import multiprocessing
-import sys
-from dataclasses import asdict
-from queue import Queue
 
 import limexhub
 import numpy
 import pandas as pd
-from click import progressbar
-from joblib import Parallel, delayed
-from lime_trader import LimeClient
 from lime_trader.models.market import Period
 
 from ziplime.constants.fundamental_data import FundamentalData
 from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
-from ziplime.domain.lime_quote import LimeQuote
 
 
 class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
@@ -71,12 +63,17 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
             value_col = f"{col_name}_value"
             add_value_col = f"{col_name}_add_value"
             columns = ["date", "symbol"]
-            if ttm_col in fundamental_data_list:
+            if col_name in fundamental_data_list:
                 columns.append(ttm_col)
-            if value_col in fundamental_data_list:
                 columns.append(value_col)
-            if add_value_col in fundamental_data_list:
                 columns.append(add_value_col)
+            else:
+                if ttm_col in fundamental_data_list:
+                    columns.append(ttm_col)
+                if value_col in fundamental_data_list:
+                    columns.append(value_col)
+                if add_value_col in fundamental_data_list:
+                    columns.append(add_value_col)
 
             res_df = pd.DataFrame(columns=columns)
             if len(columns) <= 2:
@@ -106,9 +103,6 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
                         if res_df.empty
                         else pd.concat([res_df, vals_df], ignore_index=True)
                     )
-                    # res_df = pd.concat([pd.DataFrame([
-                    #     vals,
-                    # ], columns=res_df.columns), res_df], ignore_index=True)
             else:
                 vals = [date_from, symbol]
                 if ttm_col in columns:

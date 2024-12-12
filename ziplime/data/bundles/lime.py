@@ -44,9 +44,13 @@ def gen_asset_metadata(data: pd.DataFrame, show_progress: bool):
 
 def parse_pricing_and_vol(data: pd.DataFrame, sessions: pd.IndexSlice, symbol_map: pd.Series):
     for asset_id, symbol in symbol_map.items():
+        # try:
         asset_data = (
             data.xs(symbol, level=1).infer_objects(copy=False).fillna(0.0)
         )
+        # except KeyError as e:
+        #     df = pd.DataFrame()
+        #     yield asset_id, df
         yield asset_id, asset_data
 
 
@@ -90,17 +94,12 @@ def create_equities_bundle(
                 f"Data source {type(historical_market_data_provider)} didn't return any data for symbols {symbol_list}")
             return
 
-
-
         asset_metadata = gen_asset_metadata(data=historical_data[["symbol", "date"]], show_progress=show_progress)
-
 
         historical_data.set_index(["date", "symbol"], inplace=True)
 
-
         # historical_data = pd.concat([historical_data, fundamental_data], ignore_index=False, axis=1)
         # final_df = final_df[final_df.date.notnull()]
-
 
         exchanges = pd.DataFrame(
             data=[["LIME", "LIME", "US"]],
@@ -109,12 +108,8 @@ def create_equities_bundle(
 
         asset_db_writer.write(equities=asset_metadata, exchanges=exchanges)
 
-
         symbol_map = asset_metadata.symbol
         sessions = calendar.sessions_in_range(start=start_session, end=end_session)
-
-
-
 
         fundamental_data = fundamental_data_provider.get_fundamental_data(symbols=symbol_list,
                                                                           period=period,
@@ -143,7 +138,6 @@ def create_equities_bundle(
             )
         else:
             raise Exception("Unsupported period.")
-
 
         # Write empty splits and divs - they are not present in API
         divs_splits = {

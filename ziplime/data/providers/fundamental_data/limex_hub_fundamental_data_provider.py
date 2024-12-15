@@ -122,6 +122,7 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
                     if res_df.empty
                     else pd.concat([vals_df, res_df], ignore_index=True)
                 )
+            res_df = res_df.drop_duplicates(subset=['date', 'symbol'], keep='last')
             res_df.set_index("date", inplace=True, drop=True)
             res_df = res_df.reindex(dr, fill_value=None)
             res_df["symbol"] = symbol

@@ -600,6 +600,14 @@ class TradingAlgorithm:
         """
         return self._create_generator(self.sim_params)
 
+    def _calculate_universe(self):
+        # this exists to provide backwards compatibility for older,
+        # deprecated APIs, particularly around the iterability of
+        # BarData (ie, 'for sid in data`).
+
+        # our universe is all the assets passed into `run`.
+        return self.asset_finder.retrieve_all(self.asset_finder.sids)
+
     def run(self, data_portal=None):
         """Run the algorithm."""
         # HACK: I don't think we really want to support passing a data portal

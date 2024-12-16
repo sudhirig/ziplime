@@ -18,7 +18,7 @@ import pickle
 from functools import partial
 
 from zipline.assets import AssetFinder
-from zipline.finance.trading import TradingEnvironment
+from ziplime.finance.trading import TradingEnvironment
 
 # Label for the serialization version field in the state returned by
 # __getstate__.

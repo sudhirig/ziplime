@@ -3,6 +3,9 @@ import os
 import sys
 import warnings
 
+from zipline.utils.paths import data_path
+
+from ziplime.algorithm_live import LiveTradingAlgorithm
 from ziplime.gens.brokers.broker import Broker
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.data.data_portal_live import DataPortalLive
@@ -25,7 +28,7 @@ from ziplime.data import bundles
 from zipline.data.benchmarks import get_benchmark_returns_from_file
 from ziplime.data.data_portal import DataPortal
 from zipline.finance import metrics
-from zipline.finance.trading import SimulationParameters
+from ziplime.finance.trading import SimulationParameters
 from zipline.pipeline.data import USEquityPricing
 from zipline.pipeline.loaders import USEquityPricingLoader
 
@@ -90,7 +93,7 @@ def _run(
         custom_loader,
         benchmark_spec,
         broker: Broker,
-        market_data_provider: AbstractLiveMarketDataProvider
+        market_data_provider: AbstractLiveMarketDataProvider,
 ):
     """Run a backtest for the given algorithm.
 
@@ -167,6 +170,9 @@ def _run(
 
     first_trading_day = bundle_data.historical_data_reader.first_trading_day
 
+    state_filename = None
+    realtime_bar_target = None
+    emission_rate = data_frequency
     if broker:
         data = DataPortalLive(
             asset_finder=bundle_data.asset_finder,
@@ -181,6 +187,13 @@ def _run(
             fundamental_data_reader=bundle_data.fundamental_data_reader,
             fields=bundle_data.historical_data_reader._table.names + ["price"]
         )
+        state_filename = f"{data_path(['state'])}"
+        realtime_bar_target =f"{data_path(['realtime'])}"
+        emission_rate = 'minute'
+        data_frequency='minute'
+        start = pd.Timestamp.utcnow().replace(tzinfo=None)
+        end = start + pd.Timedelta('2 day')
+
     else:
         data = DataPortal(
             bundle_data.asset_finder,
@@ -220,34 +233,69 @@ def _run(
             raise _RunAlgoError(str(e))
 
     try:
-        tr = TradingAlgorithm(
-            namespace=namespace,
-            data_portal=data,
-            get_pipeline_loader=choose_loader,
-            trading_calendar=trading_calendar,
-            sim_params=SimulationParameters(
-                start_session=start,
-                end_session=end,
+        if broker is None:
+            tr = TradingAlgorithm(
+                namespace=namespace,
+                data_portal=data,
+                get_pipeline_loader=choose_loader,
                 trading_calendar=trading_calendar,
-                capital_base=capital_base,
-                data_frequency=data_frequency,
-            ),
-            metrics_set=metrics_set,
-            blotter=blotter,
-            benchmark_returns=benchmark_returns,
-            benchmark_sid=benchmark_sid,
-            **{
-                "initialize": initialize,
-                "handle_data": handle_data,
-                "before_trading_start": before_trading_start,
-                "analyze": analyze,
-            }
-            if algotext is None
-            else {
-                "algo_filename": getattr(algofile, "name", "<algorithm>"),
-                "script": algotext,
-            },
-        )
+                sim_params=SimulationParameters(
+                    start_session=start,
+                    end_session=end,
+                    trading_calendar=trading_calendar,
+                    capital_base=capital_base,
+                    emission_rate=emission_rate,
+                    data_frequency=data_frequency,
+                ),
+                metrics_set=metrics_set,
+                blotter=blotter,
+                benchmark_returns=benchmark_returns,
+                benchmark_sid=benchmark_sid,
+                **{
+                    "initialize": initialize,
+                    "handle_data": handle_data,
+                    "before_trading_start": before_trading_start,
+                    "analyze": analyze,
+                }
+                if algotext is None
+                else {
+                    "algo_filename": getattr(algofile, "name", "<algorithm>"),
+                    "script": algotext,
+                },
+            )
+        else:
+            tr = LiveTradingAlgorithm(
+                broker=broker,
+                state_filename=state_filename,
+                realtime_bar_target=realtime_bar_target,
+                namespace=namespace,
+                data_portal=data,
+                get_pipeline_loader=choose_loader,
+                trading_calendar=trading_calendar,
+                sim_params=SimulationParameters(
+                    start_session=start,
+                    end_session=end,
+                    trading_calendar=trading_calendar,
+                    capital_base=capital_base,
+                    emission_rate=emission_rate,
+                    data_frequency=data_frequency,
+                ),
+                metrics_set=metrics_set,
+                blotter=blotter,
+                benchmark_returns=benchmark_returns,
+                benchmark_sid=benchmark_sid,
+                **{
+                    "initialize": initialize,
+                    "handle_data": handle_data,
+                    "before_trading_start": before_trading_start,
+                    "analyze": analyze,
+                }
+                if algotext is None
+                else {
+                    "algo_filename": getattr(algofile, "name", "<algorithm>"),
+                    "script": algotext,
+                },
+            )
         tr.bundle_data = bundle_data
         tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
         perf = tr.run()
@@ -350,7 +398,7 @@ def run_algorithm(
         algofile=None,
         blotter="default",
         market_data_provider: AbstractLiveMarketDataProvider = None,
-        broker: Broker = None,
+        broker: Broker = None
 ):
     """
     Run a trading algorithm.
@@ -450,7 +498,7 @@ def run_algorithm(
         custom_loader=custom_loader,
         benchmark_spec=benchmark_spec,
         broker=broker,
-        market_data_provider=market_data_provider
+        market_data_provider=market_data_provider,
     )
 
 

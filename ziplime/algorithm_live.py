@@ -14,18 +14,19 @@ import logging
 from datetime import time
 import os.path
 import pandas as pd
+from exchange_calendars.exchange_calendar_xnys import XNYSExchangeCalendar
 
 from ziplime.finance.blotter.blotter_live import BlotterLive
-from zipline.algorithm import TradingAlgorithm
+from ziplime.algorithm import TradingAlgorithm
 from ziplime.gens.realtimeclock import RealtimeClock
-from zipline.gens.tradesimulation import AlgorithmSimulator
+from ziplime.gens.tradesimulation import AlgorithmSimulator
 from ziplime.errors import ScheduleFunctionOutsideTradingStart
-from zipline.utils.api_support import (
+from ziplime.utils.api_support import (
     ZiplineAPI,
     api_method,
     allowed_only_in_before_trading_start)
 
-from zipline.utils.serialization_utils import load_context, store_context
+from ziplime.utils.serialization_utils import load_context, store_context
 
 from ziplime.utils.calendar_utils import days_at_time
 
@@ -84,13 +85,13 @@ class LiveTradingAlgorithm(TradingAlgorithm):
     def _create_clock(self):
         # This method is taken from TradingAlgorithm.
         # The clock has been replaced to use RealtimeClock
-        trading_o_and_c = self.trading_calendar.schedule.ix[
+        trading_o_and_c = self.trading_calendar.schedule.loc[
             self.sim_params.sessions]
         assert self.sim_params.emission_rate == 'minute'
 
         minutely_emission = True
-        market_opens = trading_o_and_c['market_open']
-        market_closes = trading_o_and_c['market_close']
+        market_opens = trading_o_and_c['open']
+        market_closes = trading_o_and_c['close']
 
         # The calendar's execution times are the minutes over which we actually
         # want to run the clock. Typically the execution times simply adhere to
@@ -98,10 +99,11 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         # for example, we only want to simulate over a subset of the full 24
         # hour calendar, so the execution times dictate a market open time of
         # 6:31am US/Eastern and a close of 5:00pm US/Eastern.
-        execution_opens = \
-            self.trading_calendar.execution_time_from_open(market_opens)
-        execution_closes = \
-            self.trading_calendar.execution_time_from_close(market_closes)
+
+
+
+        execution_opens = market_opens
+        execution_closes = market_closes
 
         # FIXME generalize these values
         before_trading_start_minutes = days_at_time(
@@ -131,7 +133,7 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             self._create_clock(),
             self._create_benchmark_source(),
             self.restrictions,
-            universe_func=self._calculate_universe
+            # universe_func=self._calculate_universe
         )
 
         return self.trading_client.transform()
@@ -204,7 +206,7 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             self.realtime_bar_target))
 
         today = str(pd.to_datetime('today').date())
-        subscribed_assets = self.broker.subscribed_assets
+        subscribed_assets = self.broker.subscribed_assets()
         realtime_history = self.broker.get_realtime_bars(subscribed_assets,
                                                          '1m')
 

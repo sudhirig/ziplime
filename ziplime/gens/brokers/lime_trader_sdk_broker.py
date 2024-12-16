@@ -10,10 +10,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
 import logging
 
+import pytz
 import zipline.protocol as zp
 from lime_trader import LimeClient
+from lime_trader.models.market import Period
 from zipline.finance.order import (Order as ZPOrder,
                                    ORDER_STATUS as ZP_ORDER_STATUS)
 from zipline.finance.execution import (MarketOrder,
@@ -114,9 +117,10 @@ class LimeTraderSdkBroker(Broker):
 
     def is_alive(self):
         try:
-            self._api.get_account()
+            # TODO: get accounts
+            # self._lime_sdk_client.account.get_balances()
             return True
-        except BaseException:
+        except Exception as _:
             return False
 
     def _order2zp(self, order):
@@ -213,7 +217,7 @@ class LimeTraderSdkBroker(Broker):
             order = self._api.get_order_by_client_order_id(zp_order_id)
             self._api.cancel_order(order.id)
         except Exception as e:
-            log.error(e)
+            logging.error(e)
             return
 
     def get_last_traded_dt(self, asset):
@@ -266,12 +270,20 @@ class LimeTraderSdkBroker(Broker):
             symbols = [assets.symbol]
         else:
             symbols = [asset.symbol for asset in assets]
-        timeframe = '1D' if is_daily else '1Min'
-
-        bars_list = self._api.list_bars(symbols, timeframe, limit=500)
-        bars_map = {a.symbol: a for a in bars_list}
+        timeframe = Period.DAY if is_daily else Period.MINUTE
+        if not symbols:
+            return []
         dfs = []
+        to_date = datetime.datetime.now(tz=datetime.timezone.utc)
+        from_date = to_date - datetime.timedelta(days=1)
         for asset in assets if not assets_is_scalar else [assets]:
+
+            bars_list = self._lime_sdk_client.market.get_quotes_history(symbol=asset.symbol, period=timeframe,
+                                                                        from_date=from_date,
+                                                                        to_date=to_date
+                                                                        )
+            bars_map = {a.symbol: a for a in bars_list}
+
             symbol = asset.symbol
             df = bars_map[symbol].df.copy()
             if df.index.tz is None:

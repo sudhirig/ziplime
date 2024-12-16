@@ -20,7 +20,6 @@ from sqlalchemy import create_engine
 
 from zipline.assets import AssetDBWriter, AssetFinder
 from zipline.assets.continuous_futures import CHAIN_PREDICATES
-from zipline.data.loader import load_market_data
 from ziplime.utils.calendar_utils import get_calendar
 from zipline.utils.memoize import remember_last
 
@@ -83,17 +82,15 @@ class TradingEnvironment(object):
     ):
 
         self.bm_symbol = bm_symbol
-        if not load:
-            load = partial(load_market_data, environ=environ)
 
         if not trading_calendar:
             trading_calendar = get_calendar("NYSE")
 
-        self.benchmark_returns, self.treasury_curves = load(
-            trading_calendar.day,
-            trading_calendar.schedule.index,
-            self.bm_symbol,
-        )
+        # self.benchmark_returns, self.treasury_curves = load(
+        #     trading_calendar.day,
+        #     trading_calendar.schedule.index,
+        #     self.bm_symbol,
+        # )
 
         self.exchange_tz = exchange_tz
 
@@ -165,7 +162,7 @@ class SimulationParameters:
             # push it forward to the first valid session
             self._start_session = trading_calendar.minute_to_session(
                 self._start_session
-            )
+            ).tz_localize(self._start_session.tz)
 
         if not trading_calendar.is_session(self._end_session.tz_localize(None)):
             # if the end date is not a valid session in this calendar,
@@ -173,7 +170,7 @@ class SimulationParameters:
             # end date.
             self._end_session = trading_calendar.minute_to_session(
                 self._end_session, direction="previous"
-            )
+            ).tz_localize(self._start_session.tz)
 
         self._first_open = trading_calendar.session_first_minute(
             self._start_session.tz_localize(None)

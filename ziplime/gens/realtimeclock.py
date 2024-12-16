@@ -60,7 +60,7 @@ class RealtimeClock(object):
         yield self.sessions[0], SESSION_START
 
         while self.is_broker_alive():
-            current_time = pd.to_datetime('now', utc=True)
+            current_time = pd.to_datetime('now', utc=True) + pd.to_timedelta('1d')
             server_time = (current_time + self.time_skew).floor('1 min')
 
             if (server_time >= self.before_trading_start_minutes[0] and
@@ -68,10 +68,9 @@ class RealtimeClock(object):
                 self._last_emit = server_time
                 self._before_trading_start_bar_yielded = True
                 yield server_time, BEFORE_TRADING_START_BAR
-            elif server_time < self.execution_opens[0].tz_localize('UTC'):
+            elif server_time < self.execution_opens[0]:
                 sleep(1)
-            elif (self.execution_opens[0].tz_localize('UTC') <= server_time <
-                  self.execution_closes[0].tz_localize('UTC')):
+            elif self.execution_opens[0] <= server_time < self.execution_closes[0]:
                 if (self._last_emit is None or
                         server_time - self._last_emit >=
                         pd.Timedelta('1 minute')):
@@ -81,7 +80,7 @@ class RealtimeClock(object):
                         yield server_time, MINUTE_END
                 else:
                     sleep(1)
-            elif server_time == self.execution_closes[0].tz_localize('UTC'):
+            elif server_time == self.execution_closes[0]:
                 self._last_emit = server_time
                 yield server_time, BAR
                 if self.minute_emission:
@@ -89,7 +88,7 @@ class RealtimeClock(object):
                 yield server_time, SESSION_END
 
                 return
-            elif server_time > self.execution_closes[0].tz_localize('UTC'):
+            elif server_time > self.execution_closes[0]:
                 # Return with no yield if the algo is started in after hours
                 return
             else:

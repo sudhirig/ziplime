@@ -87,10 +87,6 @@ class DataPortal:
         daily data backtests or daily history calls in a minute backetest.
         If a daily bar reader is not provided but a minute bar reader is,
         the minutes will be rolled up to serve the daily requests.
-    equity_minute_reader : BcolzMinuteBarReader, optional
-        The minute bar reader for equities. This will be used to service
-        minute data backtests or minute history calls. This can be used
-        to serve daily calls if no daily bar reader is provided.
     future_daily_reader : BcolzDailyBarReader, optional
         The daily bar ready for futures. This will be used to service
         daily data backtests or daily history calls in a minute backetest.
@@ -117,7 +113,6 @@ class DataPortal:
             fields: list[str],
             fundamental_data_reader,
             historical_data_reader=None,
-            equity_minute_reader=None,
             future_daily_reader=None,
             future_minute_reader=None,
             adjustment_reader=None,
@@ -163,7 +158,7 @@ class DataPortal:
             # Infer the last minute from the provided readers.
             last_minutes = [
                 reader.last_available_dt
-                for reader in [equity_minute_reader, future_minute_reader]
+                for reader in [historical_data_reader, future_minute_reader]
                 if reader is not None
             ]
             if last_minutes:
@@ -171,7 +166,7 @@ class DataPortal:
             else:
                 self._last_available_minute = None
 
-        aligned_equity_minute_reader = self._ensure_reader_aligned(equity_minute_reader)
+        aligned_equity_minute_reader = self._ensure_reader_aligned(historical_data_reader)
         aligned_equity_session_reader = self._ensure_reader_aligned(historical_data_reader)
         aligned_future_minute_reader = self._ensure_reader_aligned(future_minute_reader)
         aligned_future_session_reader = self._ensure_reader_aligned(future_daily_reader)

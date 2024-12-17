@@ -643,7 +643,9 @@ class BcolzDataBundle(AbstractDataBundle):
         full_table.attrs["calendar_name"] = calendar.name
         full_table.attrs["start_session_ns"] = start_session.value
         full_table.attrs["end_session_ns"] = end_session.value
-        full_table.attrs["column_specification"] = [asdict(col) for col in cols]
+        full_table.attrs["column_specification"] = [
+            asdict(col) for col in cols
+        ]
         full_table.flush()
         return full_table
 

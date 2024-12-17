@@ -10,7 +10,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
 import logging
+
+from lime_trader.models.market import Period
+from zipline.data.bar_reader import NoDataOnDate
 
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.data.data_portal import DataPortal
@@ -49,24 +53,30 @@ class DataPortalLive(DataPortal):
         # results a wrong behavior: The last available value reported by
         # get_spot_value() will be used to fill the missing data - which is
         # always representing the current spot price presented by Broker.
-
-        historical_bars = super(DataPortalLive, self).get_history_window(
-            assets=assets, end_dt=end_dt, bar_count=bar_count, frequency=frequency, field=field,
-            data_frequency=data_frequency, ffill=False
-        )
-
         session = self.trading_calendar.minute_to_session(end_dt)
         days_for_window = self._get_days_for_window(session, bar_count)
+        if data_frequency == "minute":
+            date_from = end_dt - datetime.timedelta(minutes=bar_count)
+        elif data_frequency == "daily":
+            date_from = end_dt - datetime.timedelta(days=bar_count)
+        else:
+            raise Exception(f"Invalid data_frequency: {data_frequency}")
 
+        try:
+            historical_bars = super(DataPortalLive, self).get_history_window(
+                assets=assets, end_dt=end_dt, bar_count=bar_count, frequency=frequency, field=field,
+                data_frequency=data_frequency, ffill=False
+            )
+            latest_date_historical = max(historical_bars.index)
+            latest_trading_date = max(days_for_window)
+            if latest_date_historical == latest_trading_date:
+                return historical_bars
 
-        latest_date_historical = max(historical_bars.index)
-        latest_trading_date = max(days_for_window)
-
-        if latest_date_historical == latest_trading_date:
-            return historical_bars
+        except NoDataOnDate as e:
+            historical_bars = None
 
         realtime_bars = self.market_data_provider.fetch_live_data_table(
-            symbols=assets, period=frequency, date_from=end_dt, date_to=end_dt,
+            symbols=[a.symbol for a in assets], period=Period(data_frequency), date_from=date_from, date_to=end_dt,
             show_progress=False
         )
 
@@ -75,15 +85,17 @@ class DataPortalLive(DataPortal):
         # To filter for field the levels needs to be swapped
         results = []
         for df in realtime_bars:
-            realtime_bars = realtime_bars.swaplevel(0, 1, axis=1)
-
             ohlcv_field = 'close' if field == 'price' else field
 
             # TODO: end_dt is ignored when historical & realtime bars are merged.
             # Should not cause issues as end_dt is set to current time in live
             # trading, but would be more proper if merge would make use of it.
-            combined_bars = historical_bars.combine_first(
-                realtime_bars[ohlcv_field])
+            if historical_bars:
+                combined_bars = historical_bars.combine_first(
+                    df[ohlcv_field]
+                )
+            else:
+                combined_bars = df[ohlcv_field]
 
             if ffill and field == 'price':
                 # Simple forward fill is not enough here as the last ingested
@@ -92,10 +104,11 @@ class DataPortalLive(DataPortal):
                 # To provide values for such cases we backward fill.
                 # Backward fill as a second operation will have no effect if the
                 # forward-fill was successful.
-                combined_bars.fillna(method='ffill', inplace=True)
-                combined_bars.fillna(method='bfill', inplace=True)
+                combined_bars.ffill(inplace=True)
+                combined_bars.bfill(inplace=True)
 
             r = combined_bars[-bar_count:]
             results.append(r)
-
+        if len(results) == 1:
+            return results[0]
         return results

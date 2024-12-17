@@ -117,8 +117,7 @@ class LimeTraderSdkBroker(Broker):
 
     def is_alive(self):
         try:
-            # TODO: get accounts
-            # self._lime_sdk_client.account.get_balances()
+            self._lime_sdk_client.account.get_balances()
             return True
         except Exception as _:
             return False

@@ -110,7 +110,7 @@ def _run(
         trading_calendar = get_calendar("XNYS")
 
     # date parameter validation
-    if trading_calendar.sessions_distance(start, end) < 1:
+    if not broker and trading_calendar.sessions_distance(start, end) < 1:
         raise _RunAlgoError(
             "There are no trading days between %s and %s"
             % (
@@ -191,8 +191,6 @@ def _run(
         realtime_bar_target =f"{data_path(['realtime'])}"
         emission_rate = 'minute'
         data_frequency='minute'
-        start = pd.Timestamp.utcnow().replace(tzinfo=None)
-        end = start + pd.Timedelta('2 day')
 
     else:
         data = DataPortal(

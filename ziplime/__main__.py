@@ -468,7 +468,9 @@ def run(
         benchmark_symbol=benchmark_symbol,
         benchmark_file=benchmark_file,
     )
-
+    if broker is not None:
+        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None) - pd.Timedelta(days=1)
+        end = start + pd.Timedelta('2 day')
     return _run(
         initialize=None,
         handle_data=None,

@@ -200,13 +200,18 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
     # clean up lime only params and set new bundle name
     new_params["bundle"] = bundle_name
 
-    fundamental_data_cols = ([
-                                 col
-                                 for col in FUNDAMENTAL_DATA_COLUMNS
-                                 if col.name in set(fundamental_data_list)
-                             ]
-                             if fundamental_data_list is not None
-                             else DEFAULT_COLUMNS)
+    fundamental_data_provider_instance = get_fundamental_data_provider(code=fundamental_data_provider)
+    fundamental_data_column_names = fundamental_data_provider_instance.get_fundamental_data_column_names(
+        fundamental_data_fields=set(fundamental_data_list))
+    fundamental_data_cols = (
+        [
+            col
+            for col in FUNDAMENTAL_DATA_COLUMNS
+            if col.name in fundamental_data_column_names
+        ]
+        if fundamental_data_list is not None
+        else DEFAULT_COLUMNS
+    )
     bundles_module.ingest(
         name=bundle_name,
         environ=os.environ,
@@ -214,7 +219,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         assets_version=assets_version,
         show_progress=show_progress,
         historical_market_data_provider=get_historical_market_data_provider(code=historical_market_data_provider),
-        fundamental_data_provider=get_fundamental_data_provider(code=fundamental_data_provider),
+        fundamental_data_provider=fundamental_data_provider_instance,
         minute_bar_writer_class=ZiplimeBcolzMinuteBarWriter,
         daily_bar_writer_class=BcolzDataBundle,
         fundamental_data_writer_class=BcolzDataBundle,

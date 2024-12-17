@@ -31,6 +31,27 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
 
         return data
 
+    def get_fundamental_data_column_names(self, fundamental_data_fields: set[str]) -> set[str]:
+        columns = set()
+        for fund_col in FundamentalData:
+            col_name = fund_col.value
+            ttm_col = f"{col_name}_ttm"
+            value_col = f"{col_name}_value"
+            add_value_col = f"{col_name}_add_value"
+            if col_name in fundamental_data_fields:
+                columns.add(ttm_col)
+                columns.add(value_col)
+                columns.add(add_value_col)
+            else:
+                if ttm_col in fundamental_data_fields:
+                    columns.add(ttm_col)
+                if value_col in fundamental_data_fields:
+                    columns.add(value_col)
+                if add_value_col in fundamental_data_fields:
+                    columns.add(add_value_col)
+
+        return columns
+
     def _get_fundamental_data(self,
                               symbol: str,
                               date_from: datetime.datetime,

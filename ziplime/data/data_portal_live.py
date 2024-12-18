@@ -12,7 +12,7 @@
 # limitations under the License.
 import datetime
 import logging
-
+import pandas as pd
 from lime_trader.models.market import Period
 from zipline.data.bar_reader import NoDataOnDate
 
@@ -36,11 +36,11 @@ class DataPortalLive(DataPortal):
 
     def get_history_window(self,
                            assets,
-                           end_dt,
-                           bar_count,
-                           frequency,
-                           field,
-                           data_frequency,
+                           end_dt: pd.Timestamp,
+                           bar_count: int,
+                           frequency: str,
+                           field: str,
+                           data_frequency: str,
                            ffill: bool = True):
         # This method is responsible for merging the ingested historical data
         # with the real-time collected data through the Broker.
@@ -55,10 +55,12 @@ class DataPortalLive(DataPortal):
         # always representing the current spot price presented by Broker.
         session = self.trading_calendar.minute_to_session(end_dt)
         days_for_window = self._get_days_for_window(session, bar_count)
-        if data_frequency == "minute":
+        if frequency == "1m":
             date_from = end_dt - datetime.timedelta(minutes=bar_count)
-        elif data_frequency == "daily":
+            period = Period.MINUTE
+        elif frequency == "1d":
             date_from = end_dt - datetime.timedelta(days=bar_count)
+            period = Period.DAY
         else:
             raise Exception(f"Invalid data_frequency: {data_frequency}")
 
@@ -72,43 +74,40 @@ class DataPortalLive(DataPortal):
             if latest_date_historical == latest_trading_date:
                 return historical_bars
 
-        except NoDataOnDate as e:
+        except (NoDataOnDate, LookupError) as e:
             historical_bars = None
 
         realtime_bars = self.market_data_provider.fetch_live_data_table(
-            symbols=[a.symbol for a in assets], period=Period(data_frequency), date_from=date_from, date_to=end_dt,
+            symbols=[a.symbol for a in assets], period=period, date_from=date_from, date_to=end_dt,
             show_progress=False
         )
 
         # Broker.get_realtime_history() returns the asset as level 0 column,
         # open, high, low, close, volume returned as level 1 columns.
         # To filter for field the levels needs to be swapped
-        results = []
-        for df in realtime_bars:
+        results = historical_bars or None
+        for asset, df in zip(assets, realtime_bars):
             ohlcv_field = 'close' if field == 'price' else field
 
             # TODO: end_dt is ignored when historical & realtime bars are merged.
             # Should not cause issues as end_dt is set to current time in live
             # trading, but would be more proper if merge would make use of it.
-            if historical_bars:
-                combined_bars = historical_bars.combine_first(
-                    df[ohlcv_field]
-                )
+            new_df = pd.DataFrame(df[ohlcv_field]).rename(columns={ohlcv_field: asset})
+            if results is not None:
+                results = results.combine_first(new_df)
             else:
-                combined_bars = df[ohlcv_field]
+                results = new_df
+        results = results[-bar_count:]
 
-            if ffill and field == 'price':
-                # Simple forward fill is not enough here as the last ingested
-                # value might be outside of the requested time window. That case
-                # the time series starts with NaN and forward filling won't help.
-                # To provide values for such cases we backward fill.
-                # Backward fill as a second operation will have no effect if the
-                # forward-fill was successful.
-                combined_bars.ffill(inplace=True)
-                combined_bars.bfill(inplace=True)
+        # results[0].combine_first(new_df)
 
-            r = combined_bars[-bar_count:]
-            results.append(r)
-        if len(results) == 1:
-            return results[0]
+        if ffill and field == 'price':
+            # Simple forward fill is not enough here as the last ingested
+            # value might be outside of the requested time window. That case
+            # the time series starts with NaN and forward filling won't help.
+            # To provide values for such cases we backward fill.
+            # Backward fill as a second operation will have no effect if the
+            # forward-fill was successful.
+            results.ffill(inplace=True)
+            results.bfill(inplace=True)
         return results

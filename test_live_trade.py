@@ -17,35 +17,36 @@ def initialize(context: TradingAlgorithm):
 
 def handle_data(context: TradingAlgorithm, data: BarData):
     # Skip first 300 days to get full windows
+    print(f"Running handle_data for date {data.current_session}, current time is {data.current_dt}")
     context.i += 1
 
     # Compute averages
     # data.history() has to be called with the same params
     # from above and returns a pandas dataframe.
-    short_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
+    short_mavg = data.history([context.asset, symbol('NFLX')], 'price', bar_count=10, frequency="1d").mean()
     long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
 
     return_on_tangible_equity_mean = get_fundamental_data(
         bar_data=data, context=context, assets=context.asset,
-        fields='return_on_tangible_equity_value', bar_count=32,
+        fields='pe_ratio_value', bar_count=32,
         frequency="1q", fillna=None
     )
-
-    print(return_on_tangible_equity_mean)
-    # Trading logic
-    if short_mavg > long_mavg:
-        # order_target orders as many shares as needed to
-        # achieve the desired number of shares.
-        order_target(context.asset, 100)
-    elif short_mavg < long_mavg:
-        order_target(context.asset, 0)
-
-    # Save values for later inspection
-    record(
-        AAPL=data.current(context.asset, 'price'),
-        short_mavg=short_mavg,
-        long_mavg=long_mavg
-    )
+    order_target(context.asset, 100)
+    # print(return_on_tangible_equity_mean)
+    # # Trading logic
+    # if short_mavg > long_mavg:
+    #     # order_target orders as many shares as needed to
+    #     # achieve the desired number of shares.
+    #     order_target(context.asset, 100)
+    # elif short_mavg < long_mavg:
+    #     order_target(context.asset, 0)
+    #
+    # # Save values for later inspection
+    # record(
+    #     AAPL=data.current(context.asset, 'price'),
+    #     short_mavg=short_mavg,
+    #     long_mavg=long_mavg
+    # )
 
 
 def get_benchmark_returns(start, end):

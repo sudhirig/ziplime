@@ -1,15 +1,16 @@
 import logging
 
-from six import itervalues
-
 from zipline.finance.blotter import Blotter
-from zipline.utils.input_validation import expect_types
 
 from zipline.assets import Asset
+from zipline.finance.order import Order as ZPOrder
+from ziplime.gens.brokers.broker import Broker
 
 
 class BlotterLive(Blotter):
-    def __init__(self, data_frequency, broker):
+
+    def __init__(self, data_frequency: str, broker: Broker):
+        super().__init__()
         self.broker = broker
         self._processed_closed_orders = []
         self._processed_transactions = []
@@ -29,26 +30,23 @@ class BlotterLive(Blotter):
                        new_orders=self.new_orders)
 
     @property
-    def orders(self):
-        return self.broker.orders
+    def orders(self) -> dict[str, ZPOrder]:
+        return self.broker.get_orders()
 
     @property
     def open_orders(self):
-        assets = set([order.asset for order in itervalues(self.orders)
+        assets = set([order.asset for order in self.orders.values()
                       if order.open])
         return {
-            asset: [order for order in itervalues(self.orders)
+            asset: [order for order in self.orders.values()
                     if order.asset == asset and order.open]
             for asset in assets
         }
 
-    @expect_types(asset=Asset)
-    def order(self, asset, amount, style, order_id=None):
+    def order(self, asset: Asset, amount: int, style: str, order_id: str | None = None):
         assert order_id is None
-
         order = self.broker.order(asset, amount, style)
         self.new_orders.append(order)
-
         return order.id
 
     def cancel(self, order_id, relay_status=True):
@@ -72,21 +70,23 @@ class BlotterLive(Blotter):
         def _list_delta(lst_a, lst_b):
             return [elem for elem in lst_a if elem not in set(lst_b)]
 
-        all_transactions = list(self.broker.transactions.values())
-        new_transactions = _list_delta(all_transactions,
-                                       self._processed_transactions)
+        all_orders = self.orders
+        try:
+            all_transactions = list(self.broker.transactions.values())
+        except NotImplementedError as e:
+            # we cannot get all previous orders from broker, use just tracked orders
+            all_transactions = self.broker.get_transactions_by_order_ids(order_ids=list(all_orders.keys()))
+        new_transactions = _list_delta(all_transactions, self._processed_transactions)
+
         self._processed_transactions = all_transactions
 
         new_commissions = [{'asset': tx.asset,
                             'cost': tx.commission,
-                            'order': self.orders[tx.order_id]}
+                            'order': all_orders[tx.order_id]}
                            for tx in new_transactions]
 
-        all_closed_orders = [order
-                             for order in itervalues(self.orders)
-                             if not order.open]
-        new_closed_orders = _list_delta(all_closed_orders,
-                                        self._processed_closed_orders)
+        all_closed_orders = [order for order in all_orders.values() if not order.open]
+        new_closed_orders = _list_delta(all_closed_orders, self._processed_closed_orders)
         self._processed_closed_orders = all_closed_orders
 
         return new_transactions, new_commissions, new_closed_orders
@@ -97,4 +97,7 @@ class BlotterLive(Blotter):
 
     def process_splits(self, splits):
         # Splits are handled at the broker
+        pass
+
+    def cancel_all_orders_for_asset(self, asset, warn=False, relay_status=True):
         pass

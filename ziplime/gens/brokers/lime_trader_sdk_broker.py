@@ -1,28 +1,18 @@
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import datetime
 import logging
 
-import pytz
 import zipline.protocol as zp
 from lime_trader import LimeClient
+from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
+from lime_trader.models.trading import Order, OrderSide, OrderDetails, OrderStatus, OrderType, TimeInForce
+from zipline.assets import Asset
 from zipline.finance.order import (Order as ZPOrder,
                                    ORDER_STATUS as ZP_ORDER_STATUS)
 from zipline.finance.execution import (MarketOrder,
                                        LimitOrder,
                                        StopOrder,
-                                       StopLimitOrder)
+                                       StopLimitOrder, ExecutionStyle)
 from zipline.finance.transaction import Transaction
 from zipline.api import symbol as symbol_lookup
 from zipline.errors import SymbolNotFound
@@ -39,20 +29,12 @@ if sys.version_info > (3,):
 
 
 class LimeTraderSdkBroker(Broker):
-    '''
-    Broker class for Alpaca.
-    The uri parameter is not used. Instead, the API key must be
-    set via environment variables (APCA_API_KEY_ID and APCA_API_SECRET_KEY).
-    Orders are identified by the UUID (v4) generated here and
-    associated in the broker side using client_order_id attribute.
-    Currently this class makes use of REST API only, but websocket
-    streaming can possibly used too.
-    '''
-
     def __init__(self, lime_sdk_credentials_file: str):
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)
         self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
+
+        self._tracked_orders = {}
 
     def subscribe_to_market_data(self, asset):
         '''Do nothing to comply the interface'''
@@ -63,9 +45,10 @@ class LimeTraderSdkBroker(Broker):
         return []
 
     @property
-    def positions(self):
+    def positions(self) -> dict[Asset, zp.Position]:
         z_positions = zp.Positions()
-        positions = self._api.list_positions()
+        positions = self._lime_sdk_client.account.get_positions(account_number=self._get_account_number(),
+                                                                date=None, strategy=None)
         position_map = {}
         symbols = []
         for pos in positions:
@@ -74,15 +57,15 @@ class LimeTraderSdkBroker(Broker):
                 z_position = zp.Position(symbol_lookup(symbol))
             except SymbolNotFound:
                 continue
-            z_position.amount = pos.qty
-            z_position.cost_basis = float(pos.cost_basis)
+            z_position.amount = pos.quantity
+            z_position.cost_basis = float(pos.average_open_price)
             z_position.last_sale_price = None
             z_position.last_sale_date = None
             z_positions[symbol_lookup(symbol)] = z_position
             symbols.append(symbol)
             position_map[symbol] = z_position
 
-        quotes = self._api.list_quotes(symbols)
+        quotes = self._lime_sdk_client.market.get_current_quotes(symbols=symbols)
         for quote in quotes:
             price = quote.last
             dt = quote.last_timestamp
@@ -92,75 +75,95 @@ class LimeTraderSdkBroker(Broker):
         return z_positions
 
     @property
-    def portfolio(self):
-        account = self._api.get_account()
+    def portfolio(self) -> zp.Portfolio:
+        account = self.get_account_balance(account_number=self._get_account_number())
         z_portfolio = zp.Portfolio()
         z_portfolio.cash = float(account.cash)
         z_portfolio.positions = self.positions
-        z_portfolio.positions_value = float(
-            account.portfolio_value) - float(account.cash)
-        z_portfolio.portfolio_value = float(account.portfolio_value)
+        z_portfolio.positions_value = float(account.position_market_value)
+        z_portfolio.portfolio_value = float(account.account_value_total)
         return z_portfolio
 
     @property
-    def account(self):
-        account = self._api.get_account()
+    def account(self) -> zp.Account:
+        account = self.get_account_balance(account_number=self._get_account_number())
         z_account = zp.Account()
         z_account.buying_power = float(account.cash)
-        z_account.total_position_value = float(
-            account.portfolio_value) - float(account.cash)
+        z_account.total_position_value = float(account.position_market_value)
         return z_account
 
+    def get_account_balance(self, account_number: str) -> AccountDetails:
+        acc = next(filter(lambda x: x.account_number == account_number, self._lime_sdk_client.account.get_balances()),
+                   None)
+        if acc is None:
+            raise Exception(f"Invalid account number {account_number}. Not found.")
+        return acc
+
     @property
-    def time_skew(self):
+    def time_skew(self) -> pd.Timedelta:
         return pd.Timedelta('0 sec')  # TODO: use clock API
 
-    def is_alive(self):
+    def is_alive(self) -> bool:
         try:
             self._lime_sdk_client.account.get_balances()
             return True
         except Exception as _:
             return False
 
-    def _order2zp(self, order):
+    def _order2zp(self, order: OrderDetails) -> ZPOrder:
         zp_order = ZPOrder(
             id=order.client_order_id,
             asset=symbol_lookup(order.symbol),
-            amount=int(order.qty) if order.side == 'buy' else -int(order.qty),
-            stop=float(order.stop_price) if order.stop_price else None,
-            limit=float(order.limit_price) if order.limit_price else None,
-            dt=order.submitted_at,
+            amount=int(order.quantity) if order.order_side == OrderSide.BUY else -int(order.quantity),
+            stop=float(order.stop_price) if order.stop_price else None,  # No stop price support
+            limit=float(order.price) if order.price else None,
+            filled=order.executed_quantity,
+            dt=None,
             commission=0,
         )
+
         zp_order.status = ZP_ORDER_STATUS.OPEN
-        if order.canceled_at:
+        if order.order_status == OrderStatus.CANCELED:
             zp_order.status = ZP_ORDER_STATUS.CANCELLED
-        if order.failed_at:
+        elif order.order_status == OrderStatus.REJECTED:
             zp_order.status = ZP_ORDER_STATUS.REJECTED
-        if order.filled_at:
+        elif order.order_status == OrderStatus.SUSPENDED:
+            zp_order.status = ZP_ORDER_STATUS.SUSPENDED
+        # elif order.order_status == OrderStatus.REPLACED:
+        #     zp_order.status = ZP_ORDER_STATUS.REPLACED
+        # elif order.order_status == OrderStatus.PENDING_CANCEL:
+        #     zp_order.status = ZP_ORDER_STATUS.PENDING_CANCEL
+        # elif order.order_status == OrderStatus.DONE_FOR_DAY:
+        #     zp_order.status = ZP_ORDER_STATUS.DONE_FOR_DAY
+        elif order.order_status == OrderStatus.NEW:
+            zp_order.status = ZP_ORDER_STATUS.OPEN
+        elif order.order_status == OrderStatus.PENDING_NEW:
+            zp_order.status = ZP_ORDER_STATUS.OPEN
+        elif order.order_status == OrderStatus.PARTIALLY_FILLED:
+            zp_order.status = ZP_ORDER_STATUS.OPEN
+            zp_order.filled = int(order.executed_quantity)
+        elif order.order_status == OrderStatus.FILLED:
             zp_order.status = ZP_ORDER_STATUS.FILLED
-            zp_order.filled = int(order.filled_qty)
+            zp_order.filled = int(order.executed_quantity)
         return zp_order
 
-    def _new_order_id(self):
+    def _new_order_id(self) -> str:
         return uuid.uuid4().hex
 
-    def order(self, asset, amount, style):
+    def order(self, asset: Asset, amount: int, style: ExecutionStyle):
         symbol = asset.symbol
         qty = amount if amount > 0 else -amount
-        side = 'buy' if amount > 0 else 'sell'
-        order_type = 'market'
-        if isinstance(style, MarketOrder):
-            order_type = 'market'
-        elif isinstance(style, LimitOrder):
-            order_type = 'limit'
-        elif isinstance(style, StopOrder):
-            order_type = 'stop'
-        elif isinstance(style, StopLimitOrder):
-            order_type = 'stop_limit'
+        side = OrderSide.BUY if amount > 0 else OrderSide.SELL
 
-        limit_price = style.get_limit_price(side == 'buy') or None
-        stop_price = style.get_stop_price(side == 'buy') or None
+        if isinstance(style, MarketOrder):
+            order_type = OrderType.MARKET
+        elif isinstance(style, LimitOrder):
+            order_type = OrderType.LIMIT
+        else:
+            raise Exception(f"Unsupported order type: {style}.")
+
+        limit_price = style.get_limit_price(side == OrderSide.BUY) or None
+        stop_price = style.get_stop_price(side == OrderSide.BUY) or None
 
         zp_order_id = self._new_order_id()
         dt = pd.to_datetime('now', utc=True)
@@ -172,49 +175,75 @@ class LimeTraderSdkBroker(Broker):
             limit=limit_price,
             id=zp_order_id,
         )
-
-        order = self._api.submit_order(
+        order = Order(
             symbol=symbol,
-            qty=qty,
+            quantity=qty,
             side=side,
-            type=order_type,
-            time_in_force='day',
-            limit_price=limit_price,
-            stop_price=stop_price,
+            order_type=order_type,
+            time_in_force=TimeInForce.DAY,
+            price=limit_price,
             client_order_id=zp_order.id,
+            account_number=self._get_account_number()
         )
-        zp_order = self._order2zp(order)
+        validated_order = self._lime_sdk_client.trading.validate_order(order=order)
+        submitted_order = self._lime_sdk_client.trading.place_order(order=order)
+        order_details = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=zp_order.id)
+
+        zp_order = self._order2zp(order=order_details)
+
+        self._tracked_orders[order_details.client_order_id] = order_details
         return zp_order
 
-    @property
-    def orders(self):
-        return {
-            o.client_order_id: self._order2zp(o)
-            for o in self._api.list_orders('all')
-        }
+    def _get_account_number(self) -> str:
+        # TODO: add this as param
+        return self._lime_sdk_client.account.get_balances()[0].account_number
+
+    def get_orders(self) -> dict[str, ZPOrder]:
+        current_active_orders = self._lime_sdk_client.trading.get_active_orders(
+            account_number=self._get_account_number())
+
+        for order in current_active_orders:
+            self._tracked_orders[order.client_order_id] = order
+
+        return {o.client_order_id: self._order2zp(order=o) for o in self._tracked_orders}
+
+    def get_orders_by_ids(self, order_ids: list[str]) -> list[OrderDetails]:
+        result = []
+        for order_id in order_ids:
+            order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=order_id)
+            result.append(order)
+        return result
 
     @property
     def transactions(self):
-        orders = self._api.list_orders(status='closed')
+        raise NotImplementedError("Use get_transactions_by_order_ids method.")
+
+    def get_transactions_by_order_ids(self, order_ids: list[str]):
         results = {}
-        for order in orders:
-            if order.filled_at is None:
+
+        for order_id in order_ids:
+            order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=order_id)
+            # self._lime_sdk_client.account.iterate_trades(account_number=self._get_account_number(),
+            #                                          date=
+            #
+            #                                          ):
+            if order.executed_timestamp is None:
                 continue
             tx = Transaction(
                 asset=symbol_lookup(order.symbol),
-                amount=int(order.filled_qty),
-                dt=order.filled_at,
-                price=float(order.filled_avg_price),
+                amount=int(order.executed_quantity),
+                dt=order.executed_timestamp,
+                price=float(order.price),
                 order_id=order.client_order_id,
                 commission=0.0,
             )
             results[order.client_order_id] = tx
         return results
 
-    def cancel_order(self, zp_order_id):
+    def cancel_order(self, zp_order_id: str) -> None:
         try:
-            order = self._api.get_order_by_client_order_id(zp_order_id)
-            self._api.cancel_order(order.id)
+            order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(order_id=zp_order_id)
+            self._lime_sdk_client.trading.cancel_order(order_id=order.order_id)
         except Exception as e:
             logging.error(e)
             return
@@ -225,13 +254,13 @@ class LimeTraderSdkBroker(Broker):
 
     def get_spot_value(self, assets, field, dt, data_frequency):
         assert (field in (
-            'open', 'high', 'low', 'close', 'volume', 'price', 'last_traded'))
+            'open', 'high', 'low', 'close', 'volume', 'price'))
         assets_is_scalar = not isinstance(assets, (list, set, tuple))
         if assets_is_scalar:
             symbols = [assets.symbol]
         else:
             symbols = [asset.symbol for asset in assets]
-        if field in ('price', 'last_traded'):
+        if field in ('price',):
             quotes = self._lime_sdk_client.market.get_current_quotes(symbols=symbols)
             if assets_is_scalar:
                 if field == 'price':
@@ -248,14 +277,16 @@ class LimeTraderSdkBroker(Broker):
                     for quote in quotes
                 ]
 
-        bars_list = self._api.list_bars(symbols, '1Min', limit=1)
+        bars_list = self._lime_sdk_client.market.get_quotes_history(symbol=symbols[0], period=Period.MINUTE,
+                                                                    from_date=dt,
+                                                                    to_date=dt)
         if assets_is_scalar:
             if len(bars_list) == 0:
                 return np.nan
-            return bars_list[0].bars[-1]._raw[field]
+            return getattr(bars_list[0], field)
         bars_map = {a.symbol: a for a in bars_list}
         return [
-            bars_map[symbol].bars[-1]._raw[field]
+            getattr(bars_map[symbol], field)
             for symbol in symbols
         ]
 

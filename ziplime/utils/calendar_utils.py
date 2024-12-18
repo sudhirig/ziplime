@@ -73,3 +73,9 @@ def get_calendar(*args, **kwargs):
         return ec_get_calendar(*args, side="right", start=pd.Timestamp("1990-01-01"))
     return ec_get_calendar(*args, side="right")
 
+
+
+def add_tz_info(d: pd.Timestamp, tzinfo:datetime.tzinfo) -> pd.Timestamp:
+    if d.tzinfo is None:
+        return d.replace(tzinfo=tzinfo)
+    return d

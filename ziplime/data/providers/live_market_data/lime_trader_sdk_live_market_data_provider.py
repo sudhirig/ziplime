@@ -2,7 +2,6 @@ import datetime
 import logging
 import multiprocessing
 from dataclasses import asdict
-from queue import Queue
 
 import pandas as pd
 from joblib import Parallel, delayed
@@ -27,7 +26,6 @@ class LimeTraderSdkLiveMarketDataProvider(AbstractLiveMarketDataProvider):
             date_to: datetime.datetime,
             show_progress: bool):
 
-        live_data_queue = Queue()
 
         def fetch_live(lime_trader_sdk_credentials_file: str, symbol: str):
             lime_client = LimeClient.from_file(lime_trader_sdk_credentials_file, logger=self._logger)
@@ -43,20 +41,18 @@ class LimeTraderSdkLiveMarketDataProvider(AbstractLiveMarketDataProvider):
             except Exception as e:
                 self._logger.error("Error fetching data using lime trader sdk")
                 df = pd.DataFrame()
-            live_data_queue.put(df)
-
-        res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator_unordered", )(
+            return df
+        res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator", )(
             delayed(fetch_live)(self._lime_sdk_credentials_file, symbol) for symbol in symbols)
 
+        result = []
+        for item in res:
+            if item is None:
+                continue
+            result.append(item)
         if show_progress:
             self._logger.info("Downloading live Lime Trader SDK metadata.")
-        processed_symbols = 0
-        while True:
-            if processed_symbols == len(symbols):
-                break
-            item = live_data_queue.get()
-            yield item
-            processed_symbols += 1
+        return result
 
     @staticmethod
     def load_data_table(quotes: list[LimeQuote], show_progress: bool = False):

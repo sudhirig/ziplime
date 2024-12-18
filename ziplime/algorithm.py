@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
 from collections.abc import Iterable
 from collections import namedtuple
 from copy import copy
@@ -125,6 +126,8 @@ from zipline.sources.requests_csv import PandasRequestsCSV
 from zipline.gens.sim_engine import MinuteSimulationClock
 from zipline.sources.benchmark_source import BenchmarkSource
 from zipline.zipline_warnings import ZiplineDeprecationWarning
+
+from ziplime.utils.calendar_utils import add_tz_info
 
 log = logging.getLogger("ZiplineLog")
 
@@ -1201,9 +1204,13 @@ class TradingAlgorithm:
 
         if asset.auto_close_date:
             # TODO FIXME TZ MESS
-            day = self.trading_calendar.minute_to_session(self.get_datetime())
+            day = add_tz_info(self.trading_calendar.minute_to_session(self.get_datetime()), tzinfo=datetime.timezone.utc)
+            asset_end_date = add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc)
+            asset_auto_close_date = add_tz_info(asset.auto_close_date, tzinfo=datetime.timezone.utc)
 
-            if day > min(asset.end_date, asset.auto_close_date):
+
+
+            if day > min(asset_end_date, asset_auto_close_date):
                 # If we are after the asset's end date or auto close date, warn
                 # the user that they can't place an order for this asset, and
                 # return None.
@@ -1211,7 +1218,7 @@ class TradingAlgorithm:
                     "Cannot place order for {0}, as it has de-listed. "
                     "Any existing positions for this asset will be "
                     "liquidated on "
-                    "{1}.".format(asset.symbol, asset.auto_close_date)
+                    "{1}.".format(asset.symbol, asset_auto_close_date)
                 )
 
                 return False

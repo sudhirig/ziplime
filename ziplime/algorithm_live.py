@@ -47,12 +47,6 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         self._context_persistence_excludes = []
         self._logger = logging.getLogger(__name__)
 
-        if 'blotter' not in kwargs:
-            blotter_live = BlotterLive(
-                data_frequency=kwargs['sim_params'].data_frequency,
-                broker=self.broker)
-            kwargs['blotter'] = blotter_live
-
         super(self.__class__, self).__init__(*args, **kwargs)
 
         self._logger.info("initialization done")

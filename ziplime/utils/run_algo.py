@@ -6,6 +6,7 @@ import warnings
 from zipline.utils.paths import data_path
 
 from ziplime.algorithm_live import LiveTradingAlgorithm
+from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.gens.brokers.broker import Broker
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.data.data_portal_live import DataPortalLive
@@ -230,6 +231,14 @@ def _run(
         except ValueError as e:
             raise _RunAlgoError(str(e))
 
+    sim_params = SimulationParameters(
+        start_session=start,
+        end_session=end,
+        trading_calendar=trading_calendar,
+        capital_base=capital_base,
+        emission_rate=emission_rate,
+        data_frequency=data_frequency,
+    )
     try:
         if broker is None:
             tr = TradingAlgorithm(
@@ -237,14 +246,7 @@ def _run(
                 data_portal=data,
                 get_pipeline_loader=choose_loader,
                 trading_calendar=trading_calendar,
-                sim_params=SimulationParameters(
-                    start_session=start,
-                    end_session=end,
-                    trading_calendar=trading_calendar,
-                    capital_base=capital_base,
-                    emission_rate=emission_rate,
-                    data_frequency=data_frequency,
-                ),
+                sim_params=sim_params,
                 metrics_set=metrics_set,
                 blotter=blotter,
                 benchmark_returns=benchmark_returns,
@@ -262,6 +264,10 @@ def _run(
                 },
             )
         else:
+
+            blotter_live = BlotterLive(
+                data_frequency=data_frequency,
+                broker=broker)
             tr = LiveTradingAlgorithm(
                 broker=broker,
                 state_filename=state_filename,
@@ -270,16 +276,9 @@ def _run(
                 data_portal=data,
                 get_pipeline_loader=choose_loader,
                 trading_calendar=trading_calendar,
-                sim_params=SimulationParameters(
-                    start_session=start,
-                    end_session=end,
-                    trading_calendar=trading_calendar,
-                    capital_base=capital_base,
-                    emission_rate=emission_rate,
-                    data_frequency=data_frequency,
-                ),
+                sim_params=sim_params,
                 metrics_set=metrics_set,
-                blotter=blotter,
+                blotter=blotter_live,
                 benchmark_returns=benchmark_returns,
                 benchmark_sid=benchmark_sid,
                 **{

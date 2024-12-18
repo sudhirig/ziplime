@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-
+from zipline.finance.order import  Order as ZPOrder
 
 class Broker(object):
     __metaclass__ = ABCMeta
@@ -40,14 +40,21 @@ class Broker(object):
     def is_alive(self):
         pass
 
-    @property
     @abstractmethod
-    def orders(self):
+    def get_orders(self) -> dict[str, ZPOrder]:
         pass
 
     @property
     @abstractmethod
     def transactions(self):
+        pass
+
+    @abstractmethod
+    def get_orders_by_ids(self, order_ids: list[str]):
+        pass
+
+    @abstractmethod
+    def get_transactions_by_order_ids(self, order_ids: list[str]):
         pass
 
     @abstractmethod

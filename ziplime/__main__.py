@@ -196,13 +196,18 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
     # clean up lime only params and set new bundle name
     new_params["bundle"] = bundle_name
 
-    fundamental_data_cols = ([
-                                 col
-                                 for col in FUNDAMENTAL_DATA_COLUMNS
-                                 if col.name in set(fundamental_data_list)
-                             ]
-                             if fundamental_data_list is not None
-                             else DEFAULT_COLUMNS)
+    fundamental_data_provider_instance = get_fundamental_data_provider(code=fundamental_data_provider)
+    fundamental_data_column_names = fundamental_data_provider_instance.get_fundamental_data_column_names(
+        fundamental_data_fields=set(fundamental_data_list))
+    fundamental_data_cols = (
+        [
+            col
+            for col in FUNDAMENTAL_DATA_COLUMNS
+            if col.name in fundamental_data_column_names
+        ]
+        if fundamental_data_list is not None
+        else DEFAULT_COLUMNS
+    )
     bundles_module.ingest(
         name=bundle_name,
         environ=os.environ,
@@ -210,7 +215,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         assets_version=assets_version,
         show_progress=show_progress,
         historical_market_data_provider=get_historical_market_data_provider(code=historical_market_data_provider),
-        fundamental_data_provider=get_fundamental_data_provider(code=fundamental_data_provider),
+        fundamental_data_provider=fundamental_data_provider_instance,
         data_bundle_writer_class=BcolzDataBundle,
         fundamental_data_writer_class=BcolzDataBundle,
         market_data_fields=OHLCV_COLUMNS,
@@ -469,7 +474,7 @@ def run(
         benchmark_file=benchmark_file,
     )
     if broker is not None:
-        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None) - pd.Timedelta(days=1)
+        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)# - pd.Timedelta(days=1)
         end = start + pd.Timedelta('2 day')
     return _run(
         initialize=None,

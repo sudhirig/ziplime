@@ -34,3 +34,8 @@ Run strategy
 poetry run python -m ziplime run -b lime --start 2024-06-01 --end 2024-07-31 --data-frequency daily --capital-base 100000 --no-benchmark -f test.py
 ```
 
+Run live trade (still in development)
+```Bash
+run -b lime --start 2024-12-01 --end 2024-12-31 --data-frequency daily --capital-base 100000 --no-benchmark --broker lime-trader-sdk -f test_live_trade.py --print-algo
+```
+

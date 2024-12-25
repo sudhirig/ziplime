@@ -24,9 +24,6 @@ import sys
 
 from ziplime.gens.brokers.broker import Broker
 
-if sys.version_info > (3,):
-    long = int
-
 
 class LimeTraderSdkBroker(Broker):
     def __init__(self, lime_sdk_credentials_file: str):
@@ -199,6 +196,7 @@ class LimeTraderSdkBroker(Broker):
         return self._lime_sdk_client.account.get_balances()[0].account_number
 
     def get_orders(self) -> dict[str, ZPOrder]:
+        # return {}
         current_active_orders = self._lime_sdk_client.trading.get_active_orders(
             account_number=self._get_account_number())
 

@@ -1,7 +1,8 @@
 import pandas as pd
 from zipline._protocol import BarData
-from zipline.api import symbol, order_target, record
+from zipline.api import symbol, order_target, order_target_value, record
 from zipline import TradingAlgorithm
+from zipline.finance.execution import MarketOrder, LimitOrder
 
 from ziplime.utils.bundle_utils import register_default_bundles
 from ziplime.utils.data import get_fundamental_data
@@ -19,19 +20,26 @@ def handle_data(context: TradingAlgorithm, data: BarData):
     # Skip first 300 days to get full windows
     print(f"Running handle_data for date {data.current_session}, current time is {data.current_dt}")
     context.i += 1
-
+    if context.i < 50000:
+        return
     # Compute averages
     # data.history() has to be called with the same params
     # from above and returns a pandas dataframe.
-    short_mavg = data.history([context.asset, symbol('NFLX')], 'price', bar_count=10, frequency="1d").mean()
+    short_mavg = data.history([context.asset, symbol('NFLX')], 'price', bar_count=1, frequency="1d").mean()
     long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
-
+    # long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1m")
+    long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d")
     return_on_tangible_equity_mean = get_fundamental_data(
         bar_data=data, context=context, assets=context.asset,
         fields='pe_ratio_value', bar_count=32,
         frequency="1q", fillna=None
     )
-    order_target(context.asset, 100)
+
+    order_target(context.asset, 100, style=MarketOrder())
+    order_target_value(context.asset, target=10, style=LimitOrder(limit_price=100))
+
+    # order_target(context.asset, 100)
+
     # print(return_on_tangible_equity_mean)
     # # Trading logic
     # if short_mavg > long_mavg:

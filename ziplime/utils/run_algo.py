@@ -191,7 +191,7 @@ def _run(
         state_filename = f"{data_path(['state'])}"
         realtime_bar_target =f"{data_path(['realtime'])}"
         emission_rate = 'minute'
-        data_frequency='minute'
+        # data_frequency='minute'
 
     else:
         data = DataPortal(

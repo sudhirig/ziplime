@@ -378,7 +378,7 @@ def bundles(ctx):
 @click.option(
     "--trading-calendar",
     metavar="TRADING-CALENDAR",
-    default="XNYS",
+    default="NYSE",
     help="The calendar you want to use e.g. XLON. XNYS is the default.",
 )
 @click.option(
@@ -474,8 +474,8 @@ def run(
         benchmark_file=benchmark_file,
     )
     if broker is not None:
-        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)# - pd.Timedelta(days=1)
-        end = start + pd.Timedelta('2 day')
+        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)# - pd.Timedelta(days=3)
+        end = start + pd.Timedelta('5 day')
     return _run(
         initialize=None,
         handle_data=None,

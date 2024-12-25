@@ -79,11 +79,48 @@ class LiveTradingAlgorithm(TradingAlgorithm):
     def _create_clock(self):
         # This method is taken from TradingAlgorithm.
         # The clock has been replaced to use RealtimeClock
+        market_closes = self.trading_calendar.schedule.loc[
+            self.sim_params.sessions, "close"
+        ]
+        market_opens = self.trading_calendar.first_minutes.loc[self.sim_params.sessions]
+        minutely_emission = False
+
+        if self.sim_params.data_frequency == "minute":
+            minutely_emission = self.sim_params.emission_rate == "minute"
+
+            # The calendar's execution times are the minutes over which we
+            # actually want to run the clock. Typically the execution times
+            # simply adhere to the market open and close times. In the case of
+            # the futures calendar, for example, we only want to simulate over
+            # a subset of the full 24 hour calendar, so the execution times
+            # dictate a market open time of 6:31am US/Eastern and a close of
+            # 5:00pm US/Eastern.
+            if self.trading_calendar.name == "us_futures":
+                execution_opens = self.trading_calendar.execution_time_from_open(
+                    market_opens
+                )
+                execution_closes = self.trading_calendar.execution_time_from_close(
+                    market_closes
+                )
+            else:
+                execution_opens = market_opens
+                execution_closes = market_closes
+        else:
+            # in daily mode, we want to have one bar per session, timestamped
+            # as the last minute of the session.
+            if self.trading_calendar.name == "us_futures":
+                execution_closes = self.trading_calendar.execution_time_from_close(
+                    market_closes
+                )
+                execution_opens = execution_closes
+            else:
+                execution_closes = market_closes
+                execution_opens = market_closes
+
+
         trading_o_and_c = self.trading_calendar.schedule.loc[
             self.sim_params.sessions]
-        assert self.sim_params.emission_rate == 'minute'
 
-        minutely_emission = True
         market_opens = trading_o_and_c['open']
         market_closes = trading_o_and_c['close']
 
@@ -94,11 +131,8 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         # hour calendar, so the execution times dictate a market open time of
         # 6:31am US/Eastern and a close of 5:00pm US/Eastern.
 
-
-
-        execution_opens = market_opens
-        execution_closes = market_closes
-
+        # execution_opens = market_opens
+        # execution_closes = market_closes
         # FIXME generalize these values
         before_trading_start_minutes = days_at_time(
             self.sim_params.sessions,
@@ -107,13 +141,14 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         )
 
         return RealtimeClock(
-            self.sim_params.sessions,
-            execution_opens,
-            execution_closes,
-            before_trading_start_minutes,
+            sessions=self.sim_params.sessions,
+            execution_opens=market_opens,
+            execution_closes=market_closes,
+            before_trading_start_minutes=before_trading_start_minutes,
             minute_emission=minutely_emission,
             time_skew=self.broker.time_skew,
-            is_broker_alive=self.broker.is_alive
+            is_broker_alive=self.broker.is_alive,
+            frequency=self.data_frequency
         )
 
     def _create_generator(self, sim_params):

@@ -1,7 +1,8 @@
 import datetime
 import logging
+from decimal import Decimal
 
-import zipline.protocol as zp
+from ziplime.protocol import Portfolio as ZpPortfolio, Position as ZpPosition, Account as ZpAccount
 from lime_trader import LimeClient
 from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
@@ -15,12 +16,10 @@ from zipline.finance.execution import (MarketOrder,
                                        StopLimitOrder, ExecutionStyle)
 from zipline.finance.transaction import Transaction
 from zipline.api import symbol as symbol_lookup
-from zipline.errors import SymbolNotFound
 import pandas as pd
 import numpy as np
 import uuid
 
-import sys
 
 from ziplime.gens.brokers.broker import Broker
 
@@ -41,50 +40,48 @@ class LimeTraderSdkBroker(Broker):
         '''Do nothing to comply the interface'''
         return []
 
-    @property
-    def positions(self) -> dict[Asset, zp.Position]:
-        z_positions = zp.Positions()
+    def get_positions(self) -> dict[Asset, ZpPosition]:
+        z_positions = {}
         positions = self._lime_sdk_client.account.get_positions(account_number=self._get_account_number(),
                                                                 date=None, strategy=None)
-        position_map = {}
-        symbols = []
-        for pos in positions:
-            symbol = pos.symbol
-            try:
-                z_position = zp.Position(symbol_lookup(symbol))
-            except SymbolNotFound:
-                continue
-            z_position.amount = pos.quantity
-            z_position.cost_basis = float(pos.average_open_price)
-            z_position.last_sale_price = None
-            z_position.last_sale_date = None
-            z_positions[symbol_lookup(symbol)] = z_position
-            symbols.append(symbol)
-            position_map[symbol] = z_position
+        quotes = {
+            quote.symbol: quote
+            for quote in
+            self._lime_sdk_client.market.get_current_quotes(symbols=[pos.symbol for pos in positions])
+        }
 
-        quotes = self._lime_sdk_client.market.get_current_quotes(symbols=symbols)
-        for quote in quotes:
-            price = quote.last
-            dt = quote.last_timestamp
-            z_position = position_map[quote.symbol]
-            z_position.last_sale_price = float(price)
-            z_position.last_sale_date = dt
+        for pos in positions:
+            asset = symbol_lookup(pos.symbol)
+            try:
+                quote = quotes[pos.symbol]
+                z_position = ZpPosition(asset=asset, cost_basis=float(pos.average_open_price),
+                                        last_sale_date=quote.date, last_sale_price=quote.last,
+                                        amount=pos.quantity,
+                                        )
+                z_positions[asset] = z_position
+
+            except Exception as e:
+                self._logger.exception(f"Exception fetching position for symbol: {pos.symbol}")
+                continue
         return z_positions
 
-    @property
-    def portfolio(self) -> zp.Portfolio:
+    def get_portfolio(self) -> ZpPortfolio:
         account = self.get_account_balance(account_number=self._get_account_number())
-        z_portfolio = zp.Portfolio()
-        z_portfolio.cash = float(account.cash)
-        z_portfolio.positions = self.positions
-        z_portfolio.positions_value = float(account.position_market_value)
-        z_portfolio.portfolio_value = float(account.account_value_total)
+        z_portfolio = ZpPortfolio(portfolio_value=float(account.account_value_total),
+                                  positions=self.get_positions(),
+                                  positions_value=float(account.position_market_value),
+                                  cash=float(account.cash),
+                                  start_date=None,
+                                  returns=0.0,
+                                  starting_cash=0.0,
+                                  capital_used=0.0,
+                                  pnl=0.0
+                                  )
         return z_portfolio
 
-    @property
-    def account(self) -> zp.Account:
+    def get_account(self) -> ZpAccount:
         account = self.get_account_balance(account_number=self._get_account_number())
-        z_account = zp.Account()
+        z_account = ZpAccount()
         z_account.buying_power = float(account.cash)
         z_account.total_position_value = float(account.position_market_value)
         return z_account
@@ -96,8 +93,7 @@ class LimeTraderSdkBroker(Broker):
             raise Exception(f"Invalid account number {account_number}. Not found.")
         return acc
 
-    @property
-    def time_skew(self) -> pd.Timedelta:
+    def get_time_skew(self) -> pd.Timedelta:
         return pd.Timedelta('0 sec')  # TODO: use clock API
 
     def is_alive(self) -> bool:
@@ -174,7 +170,7 @@ class LimeTraderSdkBroker(Broker):
         )
         order = Order(
             symbol=symbol,
-            quantity=qty,
+            quantity=Decimal(qty),
             side=side,
             order_type=order_type,
             time_in_force=TimeInForce.DAY,
@@ -212,8 +208,7 @@ class LimeTraderSdkBroker(Broker):
             result.append(order)
         return result
 
-    @property
-    def transactions(self):
+    def get_transactions(self):
         raise NotImplementedError("Use get_transactions_by_order_ids method.")
 
     def get_transactions_by_order_ids(self, order_ids: list[str]):
@@ -246,9 +241,9 @@ class LimeTraderSdkBroker(Broker):
             logging.error(e)
             return
 
-    def get_last_traded_dt(self, asset):
-        quote = self._api.get_quote(asset.symbol)
-        return pd.Timestamp(quote.last_timestamp)
+    def get_last_traded_dt(self, asset) -> pd.Timestamp:
+        quote = self._lime_sdk_client.market.get_current_quote(asset.symbol)
+        return pd.Timestamp(quote.date)
 
     def get_spot_value(self, assets, field, dt, data_frequency):
         assert (field in (

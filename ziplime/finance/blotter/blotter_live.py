@@ -19,27 +19,27 @@ class BlotterLive(Blotter):
         self._logger = logging.getLogger(__name__)
 
     def __repr__(self):
-        return """
-    {class_name}(
-        open_orders={open_orders},
-        orders={orders},
-        new_orders={new_orders},
-    """.strip().format(class_name=self.__class__.__name__,
-                       open_orders=self.open_orders,
-                       orders=self.orders,
-                       new_orders=self.new_orders)
+        return f"""{self.__class__.__name__}(
+        open_orders={self.open_orders},
+        orders={self.get_orders()},
+        new_orders={self.new_orders}
+        )"""
 
-    @property
-    def orders(self) -> dict[str, ZPOrder]:
+    def get_orders(self) -> dict[str, ZPOrder]:
         return self.broker.get_orders()
 
     @property
     def open_orders(self):
-        assets = set([order.asset for order in self.orders.values()
-                      if order.open])
+        assets = set([
+            order.asset
+            for order in self.get_orders().values()
+            if order.open
+        ])
         return {
-            asset: [order for order in self.orders.values()
-                    if order.asset == asset and order.open]
+            asset: [
+                order for order in self.get_orders().values()
+                if order.asset == asset and order.open
+            ]
             for asset in assets
         }
 
@@ -57,12 +57,10 @@ class BlotterLive(Blotter):
         pass
 
     def reject(self, order_id, reason=''):
-        self._logger.warning("Unexpected reject request for {}: '{}'".format(
-            order_id, reason))
+        self._logger.warning(f"Unexpected reject request for {order_id}: '{reason}'")
 
     def hold(self, order_id, reason=''):
-        self._logger.warning("Unexpected hold request for {}: '{}'".format(
-            order_id, reason))
+        self._logger.warning(f"Unexpected hold request for {order_id}: '{reason}'")
 
     def get_transactions(self, bar_data):
         # All returned values from this function are delta between
@@ -70,9 +68,9 @@ class BlotterLive(Blotter):
         def _list_delta(lst_a, lst_b):
             return [elem for elem in lst_a if elem not in set(lst_b)]
 
-        all_orders = self.orders
+        all_orders = self.get_orders()
         try:
-            all_transactions = list(self.broker.transactions.values())
+            all_transactions = list(self.broker.get_transactions().values())
         except NotImplementedError as e:
             # we cannot get all previous orders from broker, use just tracked orders
             all_transactions = self.broker.get_transactions_by_order_ids(order_ids=list(all_orders.keys()))

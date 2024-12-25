@@ -14,9 +14,6 @@ import logging
 from datetime import time
 import os.path
 import pandas as pd
-from exchange_calendars.exchange_calendar_xnys import XNYSExchangeCalendar
-
-from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.gens.realtimeclock import RealtimeClock
 from ziplime.gens.tradesimulation import AlgorithmSimulator
@@ -117,7 +114,6 @@ class LiveTradingAlgorithm(TradingAlgorithm):
                 execution_closes = market_closes
                 execution_opens = market_closes
 
-
         trading_o_and_c = self.trading_calendar.schedule.loc[
             self.sim_params.sessions]
 
@@ -146,7 +142,7 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             execution_closes=market_closes,
             before_trading_start_minutes=before_trading_start_minutes,
             minute_emission=minutely_emission,
-            time_skew=self.broker.time_skew,
+            time_skew=self.broker.get_time_skew(),
             is_broker_alive=self.broker.is_alive,
             frequency=self.data_frequency
         )
@@ -168,10 +164,10 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         return self.trading_client.transform()
 
     def updated_portfolio(self):
-        return self.broker.portfolio
+        return self.broker.get_portfolio()
 
     def updated_account(self):
-        return self.broker.account
+        return self.broker.get_account()
 
     @api_method
     @allowed_only_in_before_trading_start(
@@ -235,9 +231,8 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             self.realtime_bar_target))
 
         today = str(pd.to_datetime('today').date())
-        subscribed_assets = self.broker.subscribed_assets()
-        realtime_history = self.broker.get_realtime_bars(subscribed_assets,
-                                                         '1m')
+        subscribed_assets = self.broker.get_subscribed_assets()
+        realtime_history = self.broker.get_realtime_bars(subscribed_assets, '1m')
 
         if not os.path.exists(self.realtime_bar_target):
             os.mkdir(self.realtime_bar_target)

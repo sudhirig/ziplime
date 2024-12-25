@@ -4,6 +4,7 @@ from zipline.api import symbol, order_target, order_target_value, record
 from zipline import TradingAlgorithm
 from zipline.finance.execution import MarketOrder, LimitOrder
 
+from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.utils.bundle_utils import register_default_bundles
 from ziplime.utils.data import get_fundamental_data
 
@@ -19,6 +20,17 @@ def initialize(context: TradingAlgorithm):
 def handle_data(context: TradingAlgorithm, data: BarData):
     # Skip first 300 days to get full windows
     print(f"Running handle_data for date {data.current_session}, current time is {data.current_dt}")
+    #
+    blotter: BlotterLive = context.blotter
+    if hasattr(blotter, "broker"):
+        # Example for fetching portfolio in live trading
+        # TODO: make this work with simulation also
+        portfolio = blotter.broker.get_portfolio()
+        account = blotter.broker.get_account()
+        positions = blotter.broker.get_positions()
+        print(f"Portfolio: {portfolio}")
+        print(f"Positions: {positions}")
+        print(f"Account: {account}")
     context.i += 1
     if context.i < 50000:
         return

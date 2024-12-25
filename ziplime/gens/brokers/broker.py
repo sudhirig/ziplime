@@ -1,36 +1,34 @@
 from abc import ABCMeta, abstractmethod
-from zipline.finance.order import  Order as ZPOrder
 
-class Broker(object):
-    __metaclass__ = ABCMeta
+from zipline.assets import Asset
+from zipline.finance.order import Order as ZPOrder
 
+from ziplime.protocol import Position, Portfolio, Account
+
+
+class Broker:
     @abstractmethod
     def subscribe_to_market_data(self, asset):
         pass
 
-    @property
     @abstractmethod
-    def subscribed_assets(self):
+    def get_subscribed_assets(self):
         pass
 
-    @property
     @abstractmethod
-    def positions(self):
+    def get_positions(self) -> dict[Asset, Position]:
         pass
 
-    @property
     @abstractmethod
-    def portfolio(self):
+    def get_portfolio(self) -> Portfolio:
         pass
 
-    @property
     @abstractmethod
-    def account(self):
+    def get_account(self) -> Account:
         pass
 
-    @property
     @abstractmethod
-    def time_skew(self):
+    def get_time_skew(self):
         pass
 
     @abstractmethod
@@ -44,9 +42,8 @@ class Broker(object):
     def get_orders(self) -> dict[str, ZPOrder]:
         pass
 
-    @property
     @abstractmethod
-    def transactions(self):
+    def get_transactions(self):
         pass
 
     @abstractmethod

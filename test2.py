@@ -3,7 +3,7 @@ from zipline._protocol import BarData
 from ziplime.constants.fundamental_data import FundamentalData, FundamentalDataValueType
 from ziplime.utils.run_algo import run_algorithm
 from ziplime.data.bundles import load
-from ziplime.utils.bundle_utils import register_default_bundles
+from ziplime.utils.bundle_utils import register_default_bundles, get_broker, get_live_market_data_provider
 
 from zipline.api import symbol, order_target, record, order, set_benchmark, order_target
 from zipline import TradingAlgorithm
@@ -62,7 +62,10 @@ def handler(event, context):
                                capital_base=param_capital,
                                data_frequency=param_frequency,
                                bundle=param_bundle,
-                               benchmark_returns=benchmark_returns)
+                               benchmark_returns=benchmark_returns,
+                               broker=get_broker('lime-trader-sdk'),
+                               market_data_provider=get_live_market_data_provider("lime-trader-sdk")
+                               )
         respose = {"period_open": result.period_open.to_json(orient='values'),
                    "period_close": result.period_close.to_json(orient='values'),
                    "portfolio_value": result.portfolio_value.to_json(orient='values'),
@@ -94,7 +97,6 @@ def handler(event, context):
         return {
             "error": str(e),
         }
-
 
 
 class MyStrategyV1Config:
@@ -135,7 +137,6 @@ response = handler(event, context)
 print(response)
 print(json.dumps(response, indent=4))
 
-
 # 1. Missing fundamental data - 2023-09-30 for AAPL # FIXED
 # 2. Values are not denormalized # FIXED
 # 3. Remove FutureWarning: The behavior of DataFrame concatenation with empty or all NA entries # FIXED
@@ -149,4 +150,3 @@ print(json.dumps(response, indent=4))
 # --period day --start-date 2004-11-01 --end-date 2024-11-26
 # --symbols SPX,TTWO,ABNB,IDXX,BKNG,JNJ,BALL,CPB,BRK.B,NFLX,DIS,SYY,DD,AMT,ORLY,MRO,UPS,ENPH,ABT,TJX,CARR,TAP,SCHW,JKHY,ANET,UDR,TMO,HLT,DLTR,LYB,CSGP,K --fundamental-data return_on_tangible_equity_value,return_on_tangible_equity_ttm
 #
-

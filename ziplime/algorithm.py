@@ -64,7 +64,7 @@ from zipline.finance.execution import (
     LimitOrder,
     MarketOrder,
     StopLimitOrder,
-    StopOrder,
+    StopOrder, ExecutionStyle,
 )
 from zipline.finance.asset_restrictions import Restrictions
 from zipline.finance.cancel_policy import NeverCancel, CancelPolicy
@@ -211,31 +211,31 @@ class TradingAlgorithm:
     """
 
     def __init__(
-        self,
-        sim_params,
-        data_portal=None,
-        asset_finder=None,
-        # Algorithm API
-        namespace=None,
-        script=None,
-        algo_filename=None,
-        initialize=None,
-        handle_data=None,
-        before_trading_start=None,
-        analyze=None,
-        #
-        trading_calendar=None,
-        metrics_set=None,
-        blotter=None,
-        blotter_class=None,
-        cancel_policy=None,
-        benchmark_sid=None,
-        benchmark_returns=None,
-        platform="zipline",
-        capital_changes=None,
-        get_pipeline_loader=None,
-        create_event_context=None,
-        **initialize_kwargs,
+            self,
+            sim_params,
+            data_portal=None,
+            asset_finder=None,
+            # Algorithm API
+            namespace=None,
+            script=None,
+            algo_filename=None,
+            initialize=None,
+            handle_data=None,
+            before_trading_start=None,
+            analyze=None,
+            #
+            trading_calendar=None,
+            metrics_set=None,
+            blotter=None,
+            blotter_class=None,
+            cancel_policy=None,
+            benchmark_sid=None,
+            benchmark_returns=None,
+            platform="zipline",
+            capital_changes=None,
+            get_pipeline_loader=None,
+            create_event_context=None,
+            **initialize_kwargs,
     ):
         # List of trading controls to be used to validate orders.
         self.trading_controls = []
@@ -266,8 +266,8 @@ class TradingAlgorithm:
             # Raise an error if we were passed two different asset finders.
             # There's no world where that's a good idea.
             if (
-                asset_finder is not None
-                and asset_finder is not data_portal.asset_finder
+                    asset_finder is not None
+                    and asset_finder is not data_portal.asset_finder
             ):
                 raise ValueError("Inconsistent asset_finders in TradingAlgorithm()")
             self.asset_finder = data_portal.asset_finder
@@ -405,6 +405,8 @@ class TradingAlgorithm:
 
         self.restrictions = NoRestrictions()
 
+        self._logger = logging.getLogger(__name__)
+
     def init_engine(self, get_loader):
         """Construct and store a PipelineEngine from loader.
 
@@ -435,7 +437,7 @@ class TradingAlgorithm:
         self._in_before_trading_start = True
 
         with handle_non_market_minutes(
-            data
+                data
         ) if self.data_frequency == "minute" else ExitStack():
             self._before_trading_start(self, data)
 
@@ -459,25 +461,16 @@ class TradingAlgorithm:
         However, it is getting close, and provides some value as something
         that can be inspected interactively.
         """
-        return """
-{class_name}(
-    capital_base={capital_base}
-    sim_params={sim_params},
-    initialized={initialized},
-    slippage_models={slippage_models},
-    commission_models={commission_models},
-    blotter={blotter},
-    recorded_vars={recorded_vars})
-""".strip().format(
-            class_name=self.__class__.__name__,
-            capital_base=self.sim_params.capital_base,
-            sim_params=repr(self.sim_params),
-            initialized=self.initialized,
-            slippage_models=repr(self.blotter.slippage_models),
-            commission_models=repr(self.blotter.commission_models),
-            blotter=repr(self.blotter),
-            recorded_vars=repr(self.recorded_vars),
-        )
+        return f"""
+{self.__class__.__name__}(
+    capital_base={self.sim_params.capital_base}
+    sim_params={repr(self.sim_params)},
+    initialized={self.initialized},
+    slippage_models={repr(self.blotter.slippage_models)},
+    commission_models={repr(self.blotter.commission_models)},
+    blotter={repr(self.blotter)},
+    recorded_vars={repr(self.recorded_vars)})
+""".strip()
 
     def _create_clock(self):
         """If the clock property is not set, then create one based on frequency."""
@@ -613,6 +606,7 @@ class TradingAlgorithm:
 
     def run(self, data_portal=None):
         """Run the algorithm."""
+        self._logger.info("Running algorithm")
         # HACK: I don't think we really want to support passing a data portal
         # this late in the long term, but this is needed for now for backwards
         # compat downstream.
@@ -626,7 +620,7 @@ class TradingAlgorithm:
             )
         else:
             assert (
-                self.asset_finder is not None
+                    self.asset_finder is not None
             ), "Have data portal without asset_finder."
 
         # Create zipline and loop through simulated_trading.
@@ -666,7 +660,7 @@ class TradingAlgorithm:
         return daily_stats
 
     def calculate_capital_changes(
-        self, dt, emission_rate, is_interday, portfolio_value_adjustment=0.0
+            self, dt, emission_rate, is_interday, portfolio_value_adjustment=0.0
     ):
         """If there is a capital change for a given dt, this means the the change
         occurs before `handle_data` on the given dt. In the case of the
@@ -689,7 +683,7 @@ class TradingAlgorithm:
         if capital_change["type"] == "target":
             target = capital_change["value"]
             capital_change_amount = target - (
-                self.portfolio.portfolio_value - portfolio_value_adjustment
+                    self.portfolio.portfolio_value - portfolio_value_adjustment
             )
 
             log.info(
@@ -783,19 +777,19 @@ class TradingAlgorithm:
 
     @api_method
     def fetch_csv(
-        self,
-        url,
-        pre_func=None,
-        post_func=None,
-        date_column="date",
-        date_format=None,
-        timezone=str(timezone.utc),
-        symbol=None,
-        mask=True,
-        symbol_column=None,
-        special_params_checker=None,
-        country_code=None,
-        **kwargs,
+            self,
+            url,
+            pre_func=None,
+            post_func=None,
+            date_column="date",
+            date_format=None,
+            timezone=str(timezone.utc),
+            symbol=None,
+            mask=True,
+            symbol_column=None,
+            special_params_checker=None,
+            country_code=None,
+            **kwargs,
     ):
         """Fetch a csv from a remote url and register the data so that it is
         queryable from the ``data`` object.
@@ -888,12 +882,12 @@ class TradingAlgorithm:
 
     @api_method
     def schedule_function(
-        self,
-        func,
-        date_rule=None,
-        time_rule=None,
-        half_days=True,
-        calendar=None,
+            self,
+            func,
+            date_rule=None,
+            time_rule=None,
+            half_days=True,
+            calendar=None,
     ):
         """Schedule a function to be called repeatedly in the future.
 
@@ -1009,7 +1003,7 @@ class TradingAlgorithm:
     @api_method
     @preprocess(root_symbol_str=ensure_upper_case)
     def continuous_future(
-        self, root_symbol_str, offset=0, roll="volume", adjustment="mul"
+            self, root_symbol_str, offset=0, roll="volume", adjustment="mul"
     ):
         """Create a specifier for a continuous contract.
 
@@ -1163,29 +1157,30 @@ class TradingAlgorithm:
         # Make sure the asset exists, and that there is a last price for it.
         # FIXME: we should use BarData's can_trade logic here, but I haven't
         # yet found a good way to do that.
-        normalized_date = self.trading_calendar.minute_to_session(self.datetime)
+        normalized_date = add_tz_info(self.trading_calendar.minute_to_session(self.datetime),
+                                      tzinfo=datetime.timezone.utc)
 
-        if normalized_date < asset.start_date:
+        if normalized_date < add_tz_info(asset.start_date, tzinfo=datetime.timezone.utc):
             raise CannotOrderDelistedAsset(
                 msg="Cannot order {0}, as it started trading on"
-                " {1}.".format(asset.symbol, asset.start_date)
+                    " {1}.".format(asset.symbol, asset.start_date)
             )
-        elif normalized_date > asset.end_date:
+        elif normalized_date > add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc):
             raise CannotOrderDelistedAsset(
                 msg="Cannot order {0}, as it stopped trading on"
-                " {1}.".format(asset.symbol, asset.end_date)
+                    " {1}.".format(asset.symbol, asset.end_date)
             )
         else:
-            last_price = self.trading_client.current_data.current(asset, "price")
+            last_price = float(self.trading_client.current_data.current(asset, "price"))
 
             if np.isnan(last_price):
                 raise CannotOrderDelistedAsset(
-                    msg="Cannot order {0} on {1} as there is no last "
-                    "price for the security.".format(asset.symbol, self.datetime)
+                    msg=f"Cannot order {asset.symbol} on {self.datetime} as there is no last "
+                        "price for the security."
                 )
 
         if tolerant_equals(last_price, 0):
-            zero_message = "Price of 0 for {psid}; can't infer value".format(psid=asset)
+            zero_message = f"Price of 0 for {asset}; can't infer value"
             if self.logger:
                 self.logger.debug(zero_message)
             # Don't place any order
@@ -1199,16 +1194,15 @@ class TradingAlgorithm:
         if not isinstance(asset, Asset):
             raise UnsupportedOrderParameters(
                 msg="Passing non-Asset argument to 'order()' is not supported."
-                " Use 'sid()' or 'symbol()' methods to look up an Asset."
+                    " Use 'sid()' or 'symbol()' methods to look up an Asset."
             )
 
         if asset.auto_close_date:
             # TODO FIXME TZ MESS
-            day = add_tz_info(self.trading_calendar.minute_to_session(self.get_datetime()), tzinfo=datetime.timezone.utc)
+            day = add_tz_info(self.trading_calendar.minute_to_session(self.get_datetime()),
+                              tzinfo=datetime.timezone.utc)
             asset_end_date = add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc)
             asset_auto_close_date = add_tz_info(asset.auto_close_date, tzinfo=datetime.timezone.utc)
-
-
 
             if day > min(asset_end_date, asset_auto_close_date):
                 # If we are after the asset's end date or auto close date, warn
@@ -1276,7 +1270,7 @@ class TradingAlgorithm:
         return self.blotter.order(asset, amount, style)
 
     def _calculate_order(
-        self, asset, amount, limit_price=None, stop_price=None, style=None
+            self, asset, amount, limit_price=None, stop_price=None, style=None
     ):
         amount = self.round_order(amount)
 
@@ -1624,7 +1618,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_percent(
-        self, asset, percent, limit_price=None, stop_price=None, style=None
+            self, asset, percent, limit_price=None, stop_price=None, style=None
     ):
         """Place an order in the specified asset corresponding to the given
         percent of the current portfolio value.
@@ -1678,7 +1672,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_target(
-        self, asset, target, limit_price=None, stop_price=None, style=None
+            self, asset, target, limit_price=None, stop_price=None, style=None
     ):
         """Place an order to adjust a position to a target number of shares. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1751,7 +1745,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_target_value(
-        self, asset, target, limit_price=None, stop_price=None, style=None
+            self, asset, target, limit_price=None, stop_price=None, style=None
     ):
         """Place an order to adjust a position to a target value. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1819,7 +1813,9 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_target_percent(
-        self, asset, target, limit_price=None, stop_price=None, style=None
+            self, asset: Asset, target: float, limit_price: float | None = None,
+            stop_price: float | None = None,
+            style: ExecutionStyle | None = None
     ):
         """Place an order to adjust a position to a target percent of the
         current portfolio value. If the position doesn't already exist, this is
@@ -1911,7 +1907,7 @@ class TradingAlgorithm:
 
     @error_keywords(
         sid="Keyword argument `sid` is no longer supported for "
-        "get_open_orders. Use `asset` instead."
+            "get_open_orders. Use `asset` instead."
     )
     @api_method
     def get_open_orders(self, asset=None):
@@ -2038,7 +2034,7 @@ class TradingAlgorithm:
 
     @api_method
     def set_max_position_size(
-        self, asset=None, max_shares=None, max_notional=None, on_error="fail"
+            self, asset=None, max_shares=None, max_notional=None, on_error="fail"
     ):
         """Set a limit on the number of shares and/or dollar value held for the
         given sid. Limits are treated as absolute values and are enforced at
@@ -2071,7 +2067,7 @@ class TradingAlgorithm:
 
     @api_method
     def set_max_order_size(
-        self, asset=None, max_shares=None, max_notional=None, on_error="fail"
+            self, asset=None, max_shares=None, max_notional=None, on_error="fail"
     ):
         """Set a limit on the number of shares and/or dollar value of any single
         order placed for sid.  Limits are treated as absolute values and are

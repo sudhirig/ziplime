@@ -96,18 +96,8 @@ class BcolzDataBundle(AbstractDataBundle):
 
     Parameters
     ----------
-    filename : str
+    root_directory : str
         The location at which we should write our output.
-    calendar : zipline.utils.calendar.trading_calendar
-        Calendar to use to compute asset calendar offsets.
-    start_session: pd.Timestamp
-        Midnight UTC session label.
-    end_session: pd.Timestamp
-        Midnight UTC session label.
-
-    See Also
-    --------
-    zipline.data.bcolz_daily_bars.BcolzDailyBarReader
     """
 
     def __init__(self, root_directory: str):

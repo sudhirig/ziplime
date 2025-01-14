@@ -19,13 +19,11 @@ from zipline.data.bar_reader import NoDataOnDate
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.data.data_portal import DataPortal
 
-log = logging.Logger('DataPortalLive')
-
-
 class DataPortalLive(DataPortal):
     def __init__(self, broker, market_data_provider: AbstractLiveMarketDataProvider, *args, **kwargs):
         self.broker = broker
         self.market_data_provider = market_data_provider
+        self._logger = logging.getLogger(__name__)
         super(DataPortalLive, self).__init__(*args, **kwargs)
 
     def get_last_traded_dt(self, asset, dt, data_frequency):

@@ -27,7 +27,7 @@ from zipline.utils.memoize import remember_last
 DEFAULT_CAPITAL_BASE = 1e5
 
 
-class TradingEnvironment(object):
+class TradingEnvironment:
     """
     The financial simulations in zipline depend on information
     about the benchmark index and the risk free rates of return.

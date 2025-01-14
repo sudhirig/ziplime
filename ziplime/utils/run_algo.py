@@ -90,7 +90,7 @@ def _run(
         metrics_set,
         local_namespace,
         environ,
-        blotter,
+        blotter: str,
         custom_loader,
         benchmark_spec,
         broker: Broker,
@@ -189,10 +189,8 @@ def _run(
             fields=bundle_data.historical_data_reader._table.names + ["price"]
         )
         state_filename = f"{data_path(['state'])}"
-        realtime_bar_target =f"{data_path(['realtime'])}"
+        realtime_bar_target = f"{data_path(['realtime'])}"
         emission_rate = 'minute'
-        # data_frequency='minute'
-
     else:
         data = DataPortal(
             bundle_data.asset_finder,
@@ -225,11 +223,10 @@ def _run(
         except ValueError as e:
             raise _RunAlgoError(str(e))
 
-    if isinstance(blotter, str):
-        try:
-            blotter = load(Blotter, blotter)
-        except ValueError as e:
-            raise _RunAlgoError(str(e))
+    try:
+        blotter = load(Blotter, blotter)
+    except ValueError as e:
+        raise _RunAlgoError(str(e))
 
     sim_params = SimulationParameters(
         start_session=start,
@@ -265,9 +262,7 @@ def _run(
             )
         else:
 
-            blotter_live = BlotterLive(
-                data_frequency=data_frequency,
-                broker=broker)
+            blotter_live = BlotterLive(data_frequency=data_frequency, broker=broker)
             tr = LiveTradingAlgorithm(
                 broker=broker,
                 state_filename=state_filename,

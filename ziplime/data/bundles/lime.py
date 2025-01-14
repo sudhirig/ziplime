@@ -7,7 +7,6 @@ from exchange_calendars import ExchangeCalendar
 from lime_trader.models.market import Period
 from zipline.assets import AssetDBWriter
 from zipline.data.adjustments import SQLiteAdjustmentWriter
-from zipline.data.bcolz_minute_bars import BcolzMinuteBarWriter
 from zipline.utils.cache import dataframe_cache
 from zipline.utils.calendar_utils import register_calendar_alias
 
@@ -188,5 +187,3 @@ def register_lime_equities_bundle(
 
 
 register_calendar_alias("LIME", "NYSE")
-
-# zipline.data.bcolz_daily_bars.BcolzDailyBarWriter = CustomClass

@@ -1,6 +1,6 @@
 import pandas as pd
 from zipline._protocol import BarData
-from zipline.api import symbol, order_target, order_target_value, record
+from zipline.api import symbol, order_target, order_target_value, record, order_target_percent
 from zipline import TradingAlgorithm
 from zipline.finance.execution import MarketOrder, LimitOrder
 
@@ -15,13 +15,17 @@ from ziplime.utils.paths import data_path
 def initialize(context: TradingAlgorithm):
     context.asset = symbol('AAPL')
     context.i = 0
+    # context.set_benchmark(get_benchmark_returns)
 
 
 def handle_data(context: TradingAlgorithm, data: BarData):
     # Skip first 300 days to get full windows
     print(f"Running handle_data for date {data.current_session}, current time is {data.current_dt}")
     #
+    order_target_percent(context.asset, target=10, style=LimitOrder(limit_price=100))
+
     blotter: BlotterLive = context.blotter
+    transactions, commissions, closed_orders = blotter.get_transactions(bar_data=data)
     if hasattr(blotter, "broker"):
         # Example for fetching portfolio in live trading
         # TODO: make this work with simulation also

@@ -19,7 +19,6 @@ import pandas as pd
 from attr import dataclass
 
 from zipline.assets import Asset
-from zipline.utils.input_validation import expect_types
 from zipline._protocol import BarData  # noqa
 
 # Datasource type should completely determine the other fields of a

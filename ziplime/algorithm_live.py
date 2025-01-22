@@ -184,3 +184,17 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             realtime_history[asset].to_csv(path, mode='a',
                                            index_label='datetime',
                                            header=not os.path.exists(path))
+
+    @property
+    def portfolio(self):
+        portfolio = self.broker.get_portfolio()
+        return portfolio
+        # self._sync_last_sale_prices()
+        # return self.metrics_tracker.portfolio
+
+    @property
+    def account(self):
+        account = self.broker.get_account()
+        return account
+        # self._sync_last_sale_prices()
+        # return self.metrics_tracker.account

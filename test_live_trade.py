@@ -3,6 +3,7 @@ from zipline._protocol import BarData
 from zipline.api import symbol, order_target, order_target_value, record, order_target_percent
 from zipline import TradingAlgorithm
 from zipline.finance.execution import MarketOrder, LimitOrder
+from zipline.finance.ledger import Ledger
 
 from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.utils.bundle_utils import register_default_bundles
@@ -22,37 +23,38 @@ def handle_data(context: TradingAlgorithm, data: BarData):
     # Skip first 300 days to get full windows
     print(f"Running handle_data for date {data.current_session}, current time is {data.current_dt}")
     #
-    order_target_percent(context.asset, target=10, style=LimitOrder(limit_price=100))
-
+    order_target_percent(context.asset, target=0.78, )
+    print(context.portfolio)
     blotter: BlotterLive = context.blotter
-    transactions, commissions, closed_orders = blotter.get_transactions(bar_data=data)
-    if hasattr(blotter, "broker"):
-        # Example for fetching portfolio in live trading
-        # TODO: make this work with simulation also
-        portfolio = blotter.broker.get_portfolio()
-        account = blotter.broker.get_account()
-        positions = blotter.broker.get_positions()
-        print(f"Portfolio: {portfolio}")
-        print(f"Positions: {positions}")
-        print(f"Account: {account}")
+
+
+    # if hasattr(blotter, "broker"):
+    #     # Example for fetching portfolio in live trading
+    #     # TODO: make this work with simulation also
+    #     portfolio = blotter.broker.get_portfolio()
+    #     account = blotter.broker.get_account()
+    #     positions = blotter.broker.get_positions()
+    #     print(f"Portfolio: {portfolio}")
+    #     print(f"Positions: {positions}")
+    #     print(f"Account: {account}")
     context.i += 1
-    if context.i < 50000:
-        return
+    # if context.i < 50000:
+    #     return
     # Compute averages
     # data.history() has to be called with the same params
     # from above and returns a pandas dataframe.
-    short_mavg = data.history([context.asset, symbol('NFLX')], 'price', bar_count=1, frequency="1d").mean()
-    long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
-    # long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1m")
-    long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d")
-    return_on_tangible_equity_mean = get_fundamental_data(
-        bar_data=data, context=context, assets=context.asset,
-        fields='pe_ratio_value', bar_count=32,
-        frequency="1q", fillna=None
-    )
+    # short_mavg = data.history([context.asset, symbol('NFLX')], 'price', bar_count=1, frequency="1d").mean()
+    # long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d").mean()
+    # # long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1m")
+    # long_mavg = data.history(context.asset, 'price', bar_count=1, frequency="1d")
+    # return_on_tangible_equity_mean = get_fundamental_data(
+    #     bar_data=data, context=context, assets=context.asset,
+    #     fields='pe_ratio_value', bar_count=32,
+    #     frequency="1q", fillna=None
+    # )
 
-    order_target(context.asset, 100, style=MarketOrder())
-    order_target_value(context.asset, target=10, style=LimitOrder(limit_price=100))
+    # order_target(context.asset, 100, style=MarketOrder())
+    # order_target_value(context.asset, target=10, style=LimitOrder(limit_price=100))
 
     # order_target(context.asset, 100)
 

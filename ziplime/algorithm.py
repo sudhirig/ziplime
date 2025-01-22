@@ -74,7 +74,7 @@ from zipline.finance.asset_restrictions import (
     SecurityListRestrictions,
 )
 from zipline.assets import Asset, Equity, Future
-from zipline.gens.tradesimulation import AlgorithmSimulator
+from ziplime.gens.tradesimulation import AlgorithmSimulator
 from zipline.finance.metrics import MetricsTracker, load as load_metrics_set
 from zipline.pipeline import Pipeline
 import zipline.pipeline.domain as domain
@@ -1267,6 +1267,7 @@ class TradingAlgorithm:
         amount, style = self._calculate_order(
             asset, amount, limit_price, stop_price, style
         )
+        # print(f"amount={amount}, style={style}")
         return self.blotter.order(asset, amount, style)
 
     def _calculate_order(

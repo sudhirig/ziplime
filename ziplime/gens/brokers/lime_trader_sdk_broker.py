@@ -14,7 +14,7 @@ from zipline.finance.execution import (MarketOrder,
                                        LimitOrder,
                                        StopOrder,
                                        StopLimitOrder, ExecutionStyle)
-from zipline.finance.transaction import Transaction
+from ziplime.finance.transaction import Transaction
 from zipline.api import symbol as symbol_lookup
 import pandas as pd
 import numpy as np
@@ -199,7 +199,7 @@ class LimeTraderSdkBroker(Broker):
         for order in current_active_orders:
             self._tracked_orders[order.client_order_id] = order
 
-        return {o.client_order_id: self._order2zp(order=o) for o in self._tracked_orders}
+        return {o.client_order_id: self._order2zp(order=o) for o in self._tracked_orders.values()}
 
     def get_orders_by_ids(self, order_ids: list[str]) -> list[OrderDetails]:
         result = []

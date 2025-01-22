@@ -45,6 +45,9 @@ class BlotterLive(Blotter):
 
     def order(self, asset: Asset, amount: int, style: str, order_id: str | None = None):
         assert order_id is None
+        if amount == 0:
+            # Don't bother placing orders for 0 shares.
+            return None
         order = self.broker.order(asset, amount, style)
         self.new_orders.append(order)
         return order.id

@@ -109,6 +109,7 @@ class AlgorithmSimulator:
                 current_data=self.current_data,
                 handle_data=algo.event_manager.handle_data,
         ):
+            # print(f"dt_to_use: in every_bar: {dt_to_use}")
             for capital_change in calculate_minute_capital_changes(dt_to_use):
                 yield capital_change
 
@@ -120,12 +121,13 @@ class AlgorithmSimulator:
 
             # handle any transactions and commissions coming out new orders
             # placed in the last bar
+
             (
                 new_transactions,
                 new_commissions,
                 closed_orders,
             ) = blotter.get_transactions(current_data)
-
+            # print(f"getting transactions for {current_data.current_dt}, new transactions: {len(new_transactions)}, new commissions: {len(new_commissions)}, closed orders: {len(closed_orders)}" )
             blotter.prune_orders(closed_orders)
 
             for transaction in new_transactions:

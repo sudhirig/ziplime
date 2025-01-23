@@ -25,6 +25,11 @@ class BlotterLive(Blotter):
         new_orders={self.new_orders}
         )"""
 
+    @property
+    def orders(self) -> dict[str, ZPOrder]:
+        return self.broker.get_orders()
+
+
     def get_orders(self) -> dict[str, ZPOrder]:
         return self.broker.get_orders()
 
@@ -76,7 +81,7 @@ class BlotterLive(Blotter):
             all_transactions = list(self.broker.get_transactions().values())
         except NotImplementedError as e:
             # we cannot get all previous orders from broker, use just tracked orders
-            all_transactions = self.broker.get_transactions_by_order_ids(order_ids=list(all_orders.keys()))
+            all_transactions = list(self.broker.get_transactions_by_order_ids(order_ids=list(all_orders.keys())).values())
         new_transactions = _list_delta(all_transactions, self._processed_transactions)
 
         self._processed_transactions = all_transactions

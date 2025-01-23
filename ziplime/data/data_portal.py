@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
 from operator import mul
 
 import logging
@@ -55,6 +56,8 @@ from zipline.data.bar_reader import NoDataOnDate
 
 from zipline.utils.memoize import remember_last
 from zipline.errors import HistoryWindowStartsBeforeData
+
+from ziplime.utils.calendar_utils import add_tz_info
 
 log = logging.getLogger("DataPortal")
 
@@ -399,8 +402,8 @@ class DataPortal:
 
         if (
                 dt < asset.start_date.tz_localize(dt.tzinfo)
-                or (data_frequency == "daily" and session_label > asset.end_date)
-                or (data_frequency == "minute" and session_label > asset.end_date)
+                or (data_frequency == "daily" and add_tz_info(session_label, tzinfo=datetime.timezone.utc)  > add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc))
+                or (data_frequency == "minute" and add_tz_info(session_label, tzinfo=datetime.timezone.utc) > add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc))
         ):
             if field == "volume":
                 return 0

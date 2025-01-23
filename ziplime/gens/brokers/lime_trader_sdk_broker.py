@@ -54,9 +54,11 @@ class LimeTraderSdkBroker(Broker):
             asset = symbol_lookup(pos.symbol)
             try:
                 quote = quotes[pos.symbol]
-                z_position = ZpPosition(asset=asset, cost_basis=float(pos.average_open_price),
-                                        last_sale_date=quote.date, last_sale_price=quote.last,
-                                        amount=pos.quantity,
+                z_position = ZpPosition(asset=asset,
+                                        cost_basis=float(pos.average_open_price),
+                                        last_sale_date=quote.date,
+                                        last_sale_price=float(quote.last) if quote.last is not None else None,
+                                        amount=int(pos.quantity),
                                         )
                 z_positions[asset] = z_position
 
@@ -108,11 +110,11 @@ class LimeTraderSdkBroker(Broker):
             id=order.client_order_id,
             asset=symbol_lookup(order.symbol),
             amount=int(order.quantity) if order.order_side == OrderSide.BUY else -int(order.quantity),
-            stop=float(order.stop_price) if order.stop_price else None,  # No stop price support
-            limit=float(order.price) if order.price else None,
-            filled=order.executed_quantity,
+            stop=float(order.stop_price) if order.stop_price is not None else None,  # No stop price support
+            limit=float(order.price) if order.price is not None else None,
+            filled=int(order.executed_quantity),
             dt=None,
-            commission=0,
+            commission=0.0,
         )
 
         zp_order.status = ZP_ORDER_STATUS.OPEN
@@ -184,7 +186,7 @@ class LimeTraderSdkBroker(Broker):
 
         zp_order = self._order2zp(order=order_details)
 
-        self._tracked_orders[order_details.client_order_id] = order_details
+        self._tracked_orders[order_details.client_order_id] = zp_order
         return zp_order
 
     def _get_account_number(self) -> str:
@@ -259,14 +261,14 @@ class LimeTraderSdkBroker(Broker):
                 if field == 'price':
                     if len(quotes) == 0:
                         return np.nan
-                    return quotes[-1].last
+                    return float(quotes[-1].last)
                 else:
                     if len(quotes) == 0:
                         return pd.NaT
                     return quotes[-1].last_timestamp
             else:
                 return [
-                    quote.last if field == 'price' else quote.last_timestamp
+                    float(quote.last) if field == 'price' else quote.last_timestamp
                     for quote in quotes
                 ]
 

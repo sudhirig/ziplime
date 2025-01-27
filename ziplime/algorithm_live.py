@@ -40,24 +40,24 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         self._context_persistence_excludes = (list(self.__dict__.keys()) +
                                               ['trading_client'])
 
-        if os.path.isfile(self.state_filename):
-            self._logger.info("Loading state from {}".format(self.state_filename))
-            load_context(self.state_filename, context=self, checksum=self.algo_filename)
-            return
+        # if os.path.isfile(self.state_filename):
+        #     self._logger.info("Loading state from {}".format(self.state_filename))
+        #     load_context(self.state_filename, context=self, checksum=self.algo_filename)
+        #     return
 
         with ZiplineAPI(self):
             super(self.__class__, self).initialize(*args, **kwargs)
             store_context(self.state_filename,
                           context=self,
                           checksum=self.algo_filename,
-                          exclude_list=self._context_persistence_excludes)
+                          include_list=[])
 
     def handle_data(self, data):
         super(self.__class__, self).handle_data(data)
         store_context(self.state_filename,
                       context=self,
                       checksum=self.algo_filename,
-                      exclude_list=self._context_persistence_excludes)
+                      include_list=[])
 
     def _create_clock(self):
         minutely_emission = False
@@ -151,7 +151,6 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         #    which is called once and persisted at live trading. 10,000 days
         #    enables 27+ years of trading, which is more than enough.
         # 2) Tool - 10,000 Days is brilliant!
-
         asset = super(self.__class__, self).symbol(symbol_str)
         tradeable_asset = asset.to_dict()
         tradeable_asset['end_date'] = (pd.Timestamp('now', tz='UTC') +

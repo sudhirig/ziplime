@@ -4,6 +4,7 @@ CHECKSUM_KEY = '__state_checksum'
 
 
 def load_context(state_file_path, context, checksum):
+    return
     with open(state_file_path, 'rb') as f:
         try:
             loaded_state = pickle.load(f)
@@ -22,13 +23,15 @@ def load_context(state_file_path, context, checksum):
                 setattr(context, k, v)
 
 
-def store_context(state_file_path, context, checksum, exclude_list):
+def store_context(state_file_path, context, checksum, include_list):
+    return
     state = {}
-    fields_to_store = list(set(context.__dict__.keys()) -
-                           set(exclude_list))
 
-    for field in fields_to_store:
-        state[field] = getattr(context, field)
+    for field in include_list:
+        try:
+            state[field] = getattr(context, field)
+        except Exception as e:
+            continue
 
     state[CHECKSUM_KEY] = checksum
 

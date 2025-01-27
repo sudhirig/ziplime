@@ -2,6 +2,8 @@ import datetime
 import logging
 from decimal import Decimal
 
+from zipline.errors import SymbolNotFound
+
 from ziplime.protocol import Portfolio as ZpPortfolio, Position as ZpPosition, Account as ZpAccount
 from lime_trader import LimeClient
 from lime_trader.models.accounts import AccountDetails
@@ -51,7 +53,10 @@ class LimeTraderSdkBroker(Broker):
         }
 
         for pos in positions:
-            asset = symbol_lookup(pos.symbol)
+            try:
+                asset = symbol_lookup(pos.symbol)
+            except SymbolNotFound:
+                continue
             try:
                 quote = quotes[pos.symbol]
                 z_position = ZpPosition(asset=asset,
@@ -105,10 +110,16 @@ class LimeTraderSdkBroker(Broker):
         except Exception as _:
             return False
 
-    def _order2zp(self, order: OrderDetails) -> ZPOrder:
+    def _order2zp(self, order: OrderDetails) -> ZPOrder | None:
+
+        try:
+            asset = symbol_lookup(order.symbol)
+        except SymbolNotFound:
+            return None
+
         zp_order = ZPOrder(
             id=order.client_order_id,
-            asset=symbol_lookup(order.symbol),
+            asset=asset,
             amount=int(order.quantity) if order.order_side == OrderSide.BUY else -int(order.quantity),
             stop=float(order.stop_price) if order.stop_price is not None else None,  # No stop price support
             limit=float(order.price) if order.price is not None else None,
@@ -186,7 +197,7 @@ class LimeTraderSdkBroker(Broker):
 
         zp_order = self._order2zp(order=order_details)
 
-        self._tracked_orders[order_details.client_order_id] = zp_order
+        self._tracked_orders[order_details.client_order_id] = order_details
         return zp_order
 
     def _get_account_number(self) -> str:
@@ -201,7 +212,14 @@ class LimeTraderSdkBroker(Broker):
         for order in current_active_orders:
             self._tracked_orders[order.client_order_id] = order
 
-        return {o.client_order_id: self._order2zp(order=o) for o in self._tracked_orders.values()}
+        result = {}
+        for o in self._tracked_orders.values():
+            zipline_order = self._order2zp(order=o)
+            if zipline_order is None:
+                continue
+            result[o.client_order_id] = zipline_order
+
+        return result
 
     def get_orders_by_ids(self, order_ids: list[str]) -> list[OrderDetails]:
         result = []
@@ -224,8 +242,12 @@ class LimeTraderSdkBroker(Broker):
             #                                          ):
             if order.executed_timestamp is None:
                 continue
+            try:
+                asset = symbol_lookup(order.symbol)
+            except SymbolNotFound:
+                continue
             tx = Transaction(
-                asset=symbol_lookup(order.symbol),
+                asset=asset,
                 amount=int(order.executed_quantity),
                 dt=order.executed_timestamp,
                 price=float(order.price),

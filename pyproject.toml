@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ziplime"
-version = "0.1.17"
+version = "0.1.18"
 description = ""
 authors = ["Ziplime"]
 readme = "README.md"
@@ -17,7 +17,7 @@ joblib = "^1.4.2"
 pygments = "^2.18.0"
 
 [tool.poetry.scripts]
-ziplime = "ziplime.cli:cli"
+ziplime = "ziplime.__main__:main"
 
 [build-system]
 requires = ["poetry-core"]

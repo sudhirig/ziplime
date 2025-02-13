@@ -30,8 +30,8 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
     elif period == Period.QUARTER:
         timeframe = 6
     df = limex_client.candles(symbol=symbol,
-                              from_date=date_from,
-                              to_date=date_to,
+                              from_date=date_from.strftime("%Y-%m-%d"),
+                              to_date=date_to.strftime("%Y-%m-%d"),
                               timeframe=timeframe)
     if len(df) > 0:
         df = df.reset_index()

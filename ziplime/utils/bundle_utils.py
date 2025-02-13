@@ -3,6 +3,8 @@ import os
 from lime_trader.models.market import Period
 from zipline.utils.paths import data_root
 
+from ziplime.data.providers.historical_market_data.lime_trader_sdk_historical_market_data_provider import \
+    LimeTraderSdkHistoricalMarketDataProvider
 from ziplime.gens.brokers.lime_trader_sdk_broker import LimeTraderSdkBroker
 from ziplime.config.register_bundles import register_lime_symbol_list_equities_bundle
 from ziplime.constants.bundles import DEFAULT_BUNDLE
@@ -39,6 +41,12 @@ def get_historical_market_data_provider(code: str):
         if limex_hub_key is None:
             raise ValueError("Missing LIMEX_API_KEY environment variable.")
         return LimexHubHistoricalMarketDataProvider(limex_api_key=limex_hub_key)
+    if code == "lime-trader-sdk":
+        lime_trader_sdk_credentials = os.environ.get("LIME_SDK_CREDENTIALS_FILE", None)
+        if lime_trader_sdk_credentials is None:
+            raise ValueError("Missing LIME_SDK_CREDENTIALS_FILE environment variable.")
+        return LimeTraderSdkHistoricalMarketDataProvider(lime_sdk_credentials_file=lime_trader_sdk_credentials)
+
     raise Exception("Unsupported historical market data provider!")
 
 

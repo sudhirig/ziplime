@@ -28,8 +28,10 @@ def gen_asset_metadata(data: pd.DataFrame, show_progress: bool):
 
     data = data.groupby(by="symbol").agg({"date": ["min", "max"]})
     data.reset_index(inplace=True)
-    data["start_date"] = data.date[np.min.__name__]
-    data["end_date"] = data.date[np.max.__name__]
+    start_date = data.date[np.min.__name__].iloc[0].replace(minute=0, second=0, microsecond=0, hour=0)
+    end_date = data.date[np.max.__name__].iloc[0].replace(minute=0, second=0, microsecond=0, hour=0)
+    data["start_date"] = start_date
+    data["end_date"] = end_date
     del data["date"]
     data.columns = data.columns.get_level_values(0)
 
@@ -121,7 +123,7 @@ def create_equities_bundle(
             validate_sessions=False
         )
 
-        if period == Period.DAY:
+        if period in(Period.DAY, Period.MINUTE):
             data_bundle_writer.write(
                 data=parse_pricing_and_vol(data=historical_data, sessions=sessions, symbol_map=symbol_map),
                 show_progress=show_progress,

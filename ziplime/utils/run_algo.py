@@ -3,6 +3,7 @@ import os
 import sys
 import warnings
 
+from lime_trader.models.market import Period
 from zipline.utils.paths import data_path
 
 from ziplime.algorithm_live import LiveTradingAlgorithm
@@ -102,9 +103,10 @@ def _run(
     """
 
     bundle_data = bundles.load(
-        bundle,
-        environ,
-        bundle_timestamp,
+        name=bundle,
+        environ=environ,
+        timestamp=bundle_timestamp,
+        period=Period.MINUTE if data_frequency == "minute" else Period.DAY,
     )
 
     if trading_calendar is None:
@@ -186,7 +188,7 @@ def _run(
             future_daily_reader=bundle_data.historical_data_reader,
             market_data_provider=market_data_provider,
             fundamental_data_reader=bundle_data.fundamental_data_reader,
-            fields=bundle_data.historical_data_reader._table.names + ["price"]
+            fields=bundle_data.historical_data_reader.get_fields()
         )
         state_filename = f"{data_path(['state'])}"
         realtime_bar_target = f"{data_path(['realtime'])}"
@@ -201,7 +203,7 @@ def _run(
             adjustment_reader=bundle_data.adjustment_reader,
             future_minute_reader=bundle_data.historical_data_reader,
             future_daily_reader=bundle_data.historical_data_reader,
-            fields=bundle_data.historical_data_reader._table.names + ["price"]
+            fields=bundle_data.historical_data_reader.get_fields()
         )
 
     pipeline_loader = USEquityPricingLoader.without_fx(

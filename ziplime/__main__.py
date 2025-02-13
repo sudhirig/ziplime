@@ -162,15 +162,26 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     help="Fundamental data provider",
     show_default=True,
 )
+@click.option(
+    "--skip-fundamental-data",
+    default=False,
+    is_flag=True,
+    help="If passed, fundamental data won't be ingested.",
+)
 @click.pass_context
 def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, fundamental_data, show_progress,
            assets_version, calendar,
            historical_market_data_provider,
-           fundamental_data_provider
+           fundamental_data_provider,
+           skip_fundamental_data
            ):
     """Top level ziplime entry point."""
     symbols_parsed = symbols.split(',') if symbols else None
-    fundamental_data_list = fundamental_data.split(",") if fundamental_data else None
+    if skip_fundamental_data:
+        fundamental_data_list = set()
+    else:
+        fundamental_data_list = fundamental_data.split(",") if fundamental_data else None
+
     if new_bundle_name:
         bundle_name = f"{DEFAULT_BUNDLE}-{new_bundle_name}"
         ctx.args = ['-b', new_bundle_name] + ctx.args
@@ -188,7 +199,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         fundamental_data_list=fundamental_data_list if fundamental_data_list is not None else [
             col.name for col in
             FUNDAMENTAL_DATA_COLUMNS
-        ]
+        ],
     )
 
     new_params = dict(**ctx.params)
@@ -220,6 +231,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         fundamental_data_writer_class=BcolzDataBundle,
         market_data_fields=OHLCV_COLUMNS,
         fundamental_data_fields=fundamental_data_cols,
+        period=Period(period)
     )
 
 

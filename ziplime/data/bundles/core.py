@@ -8,6 +8,7 @@ import click
 import logging
 import pandas as pd
 from attr import dataclass
+from lime_trader.models.market import Period
 from zipline.data.adjustments import SQLiteAdjustmentReader, SQLiteAdjustmentWriter
 from zipline.utils.calendar_utils import get_calendar
 from toolz import curry, complement, take
@@ -28,6 +29,7 @@ from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
 from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
 from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
+from ziplime.data.storages.bcolz_data_minute_bundle import BcolzDataMinuteBundle, BcolzMinuteBarReader
 from ziplime.domain.column_specification import ColumnSpecification
 
 log = logging.getLogger(__name__)
@@ -371,6 +373,7 @@ def _make_bundle_core():
             fundamental_data_writer_class: AbstractDataBundle,
             market_data_fields: list[ColumnSpecification],
             fundamental_data_fields: list[ColumnSpecification],
+            period: Period = None,
             environ=os.environ,
             timestamp=None,
             assets_versions=(),
@@ -428,10 +431,22 @@ def _make_bundle_core():
                 wd = stack.enter_context(
                     working_dir(pth.data_path([], environ=environ))
                 )
-                daily_bars_path = wd.ensure_dir(*daily_equity_relative(name, timestr))
-                data_bundle_writer = data_bundle_writer_class(
-                    daily_bars_path
-                )
+                if period == Period.DAY:
+                    bars_path = wd.ensure_dir(*daily_equity_relative(name, timestr))
+                    data_bundle_writer = data_bundle_writer_class(
+                        bars_path
+                    )
+                elif period == Period.MINUTE:
+                    bars_path = wd.ensure_dir(*minute_equity_relative(name, timestr))
+                    data_bundle_writer = BcolzDataMinuteBundle(
+                        rootdir=bars_path,
+                        calendar=calendar,
+                        start_session=start_session,
+                        end_session=end_session,
+                        minutes_per_day=bundle.minutes_per_day,
+                    )
+                else:
+                    raise Exception("Unsupported period.")
 
                 fundamental_data_path = wd.ensure_dir(*fundamental_data_relative(name, timestr))
                 fundamental_data_writer = fundamental_data_writer_class(
@@ -442,14 +457,14 @@ def _make_bundle_core():
                 # SQLiteAdjustmentWriter needs to open the daily ctables so
                 # that it can compute the adjustment ratios for the dividends.
 
-
                 assets_db_path = wd.getpath(*asset_db_relative(name, timestr))
                 asset_db_writer = AssetDBWriter(assets_db_path)
 
                 adjustment_db_writer = stack.enter_context(
                     SQLiteAdjustmentWriter(
                         wd.getpath(*adjustment_db_relative(name, timestr)),
-                        data_bundle_writer_class(daily_bars_path),
+                        data_bundle_writer,
+                        #data_bundle_writer_class(daily_bars_path),
                         overwrite=True,
                     )
                 )
@@ -536,7 +551,7 @@ def _make_bundle_core():
                 ),
             )
 
-    def load(name, environ=os.environ, timestamp=None):
+    def load(name,  period: Period, environ=os.environ, timestamp=None):
         """Loads a previously ingested bundle.
 
         Parameters
@@ -557,14 +572,22 @@ def _make_bundle_core():
         if timestamp is None:
             timestamp = pd.Timestamp.utcnow()
         timestr = most_recent_data(name, timestamp, environ=environ)
+        if period == Period.DAY:
+            historical_root_directory = daily_equity_path(name, timestr, environ=environ)
+            historical_data_reader = BcolzDataBundle(
+                root_directory=historical_root_directory,
+            )
+        else:
+            historical_root_directory = minute_equity_path(name, timestr, environ=environ)
+            historical_data_reader = BcolzMinuteBarReader(
+                rootdir=historical_root_directory,
+            )
         return BundleData(
             name=name,
             asset_finder=AssetFinder(
                 asset_db_path(name, timestr, environ=environ),
             ),
-            historical_data_reader=BcolzDataBundle(
-                root_directory=daily_equity_path(name, timestr, environ=environ),
-            ),
+            historical_data_reader=historical_data_reader,
             fundamental_data_reader=BcolzDataBundle(
                 root_directory=fundamental_data_path(name, timestr, environ=environ),
             ),

@@ -73,7 +73,7 @@ from zipline.finance.asset_restrictions import (
     StaticRestrictions,
     SecurityListRestrictions,
 )
-from zipline.assets import Asset, Equity, Future
+from zipline.assets import Asset, Equity, Future, AssetDBWriter
 from ziplime.gens.tradesimulation import AlgorithmSimulator
 from zipline.finance.metrics import MetricsTracker, load as load_metrics_set
 from zipline.pipeline import Pipeline
@@ -1162,32 +1162,27 @@ class TradingAlgorithm:
 
         if normalized_date < add_tz_info(asset.start_date, tzinfo=datetime.timezone.utc):
             raise CannotOrderDelistedAsset(
-                msg="Cannot order {0}, as it started trading on"
-                    " {1}.".format(asset.symbol, asset.start_date)
+                msg=f"Cannot order {asset.symbol}, as it started trading on {asset.start_date}"
             )
         elif normalized_date > add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc):
             raise CannotOrderDelistedAsset(
-                msg="Cannot order {0}, as it stopped trading on"
-                    " {1}.".format(asset.symbol, asset.end_date)
+                msg=f"Cannot order {asset.symbol}, as it stopped trading on {asset.end_date}."
             )
         else:
             last_price = float(self.trading_client.current_data.current(asset, "price"))
 
             if np.isnan(last_price):
                 raise CannotOrderDelistedAsset(
-                    msg=f"Cannot order {asset.symbol} on {self.datetime} as there is no last "
-                        "price for the security."
+                    msg=f"Cannot order {asset.symbol} on {self.datetime} as there is no last price for the security."
                 )
 
         if tolerant_equals(last_price, 0):
-            zero_message = f"Price of 0 for {asset}; can't infer value"
             if self.logger:
-                self.logger.debug(zero_message)
+                self.logger.debug(f"Price of 0 for {asset}; can't infer value")
             # Don't place any order
             return 0
 
         value_multiplier = asset.price_multiplier
-
         return value / (last_price * value_multiplier)
 
     def _can_order_asset(self, asset):
@@ -1198,7 +1193,6 @@ class TradingAlgorithm:
             )
 
         if asset.auto_close_date:
-            # TODO FIXME TZ MESS
             day = add_tz_info(self.trading_calendar.minute_to_session(self.get_datetime()),
                               tzinfo=datetime.timezone.utc)
             asset_end_date = add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc)

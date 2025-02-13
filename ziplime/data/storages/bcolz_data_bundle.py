@@ -5,6 +5,7 @@ import numpy
 from exchange_calendars import ExchangeCalendar
 from numpy import zeros
 from zipline.data._equities import _compute_row_slices
+from zipline.data._minute_bar_internal import find_position_of_minute
 
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
@@ -15,7 +16,7 @@ with warnings.catch_warnings():  # noqa
     import numpy as np
 
 import logging
-
+import datetime
 import pandas as pd
 
 from zipline.data.bar_reader import NoDataAfterDate, NoDataBeforeDate, NoDataOnDate
@@ -27,7 +28,6 @@ from zipline.utils.memoize import lazyval
 from zipline.utils.numpy_utils import iNaT
 
 logger = logging.getLogger("UsEquityPricing")
-
 
 UINT32_MAX = np.iinfo(np.uint32).max
 
@@ -247,6 +247,7 @@ class BcolzDataBundle(AbstractDataBundle):
             offsets,
             read_all,
         )
+
     def load_raw_arrays_full_range(self, columns, start_date, end_date, assets, frequency):
         # start_idx = self._load_raw_arrays_date_to_index(start_date)
         # end_idx = self._load_raw_arrays_date_to_index(end_date)
@@ -378,6 +379,29 @@ class BcolzDataBundle(AbstractDataBundle):
             Returns -1 if the day is within the date range, but the price is
             0.
         """
+
+        try:
+            minute_pos = self._find_position_of_minute(dt)
+        except ValueError as exc:
+            raise NoDataOnDate() from exc
+
+        self._last_get_value_dt_value = dt.value
+        self._last_get_value_dt_position = minute_pos
+
+        try:
+            value = self._open_minute_file(field, sid)[minute_pos]
+        except IndexError:
+            value = 0
+        if value == 0:
+            if field == "volume":
+                return 0
+            else:
+                return np.nan
+
+        if field != "volume":
+            value *= self._ohlc_ratio_inverse_for_sid(sid)
+        return value
+
         ix = self.sid_day_index(sid, dt)
         price = self._spot_col(field)[ix]
         if field != "volume":
@@ -387,6 +411,32 @@ class BcolzDataBundle(AbstractDataBundle):
                 return price * 0.001
         else:
             return price
+
+    def _find_position_of_minute(self, minute_dt):
+        """Internal method that returns the position of the given minute in the
+        list of every trading minute since market open of the first trading
+        day. Adjusts non market minutes to the last close.
+
+        ex. this method would return 1 for 2002-01-02 9:32 AM Eastern, if
+        2002-01-02 is the first trading day of the dataset.
+
+        Parameters
+        ----------
+        minute_dt: pd.Timestamp
+            The minute whose position should be calculated.
+
+        Returns
+        -------
+        int: The position of the given minute in the list of all trading
+        minutes since market open on the first trading day.
+        """
+        return find_position_of_minute(
+            self._market_open_values,
+            self._market_close_values,
+            minute_dt.value / NANOS_IN_MINUTE,
+            self._minutes_per_day,
+            False,
+        )
 
     def currency_codes(self, sids):
         # XXX: This is pretty inefficient. This reader doesn't really support
@@ -624,7 +674,9 @@ class BcolzDataBundle(AbstractDataBundle):
         )
 
         full_table.attrs["first_trading_day"] = (
-            earliest_date if earliest_date is not None else iNaT
+            int(datetime.datetime.fromtimestamp(earliest_date, tz=datetime.timezone.utc)
+                .replace(hour=0, minute=0, microsecond=0).timestamp())
+            if earliest_date is not None else iNaT
         )
 
         full_table.attrs["first_row"] = first_row
@@ -653,3 +705,6 @@ class BcolzDataBundle(AbstractDataBundle):
         check_uint32_safe(dates.max().view(np.int64), "day")
         data["day"] = dates.astype("uint32")
         return ctable.fromdataframe(data)
+
+    def get_fields(self) -> list[str]:
+        return self._table.names + ["price"]

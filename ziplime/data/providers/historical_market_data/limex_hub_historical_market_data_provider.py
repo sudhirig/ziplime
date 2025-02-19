@@ -38,6 +38,8 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
         df = df.rename(
             columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "Date": "date"})
         df["date"] = pd.to_datetime(df.date, utc=True)
+        df = df[(df["date"]>=date_from) & (df["date"]<date_to+datetime.timedelta(days=1))]
+
         df = df.set_index('date', drop=False)
         df['dividend'] = 0
         df['split'] = 0

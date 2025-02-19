@@ -152,12 +152,14 @@ def main(ctx, extension, strict_extensions, default_extension, x):
 )
 @click.option(
     "--historical-market-data-provider",
+    type=click.Choice(['limex-hub','lime-trader-sdk']),
     default="limex-hub",
     help="Market data provider for historical data",
     show_default=True,
 )
 @click.option(
     "--fundamental-data-provider",
+    type=click.Choice(['limex-hub',]),
     default="limex-hub",
     help="Fundamental data provider",
     show_default=True,
@@ -414,11 +416,13 @@ def bundles(ctx):
 @click.option(
     "--broker",
     default=None,
+    type=click.Choice(['lime-trader-sdk']),
     help="The broker to use for live trading.",
     show_default=True,
 )
 @click.option(
     "--live-market-data-provider",
+    type=click.Choice(['lime-trader-sdk']),
     default="lime-trader-sdk",
     help="Market data provider for live trading",
     show_default=True,

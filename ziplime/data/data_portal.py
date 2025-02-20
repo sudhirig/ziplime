@@ -819,7 +819,7 @@ class DataPortal:
         try:
             minutes_for_window = self.trading_calendar.minutes_window(
                 end_dt, -bar_count
-            )
+            ).tz_convert(self.trading_calendar.tz)
         except KeyError:
             self._handle_minute_history_out_of_bounds(bar_count)
 

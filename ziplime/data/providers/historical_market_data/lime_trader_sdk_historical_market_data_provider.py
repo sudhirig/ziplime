@@ -6,6 +6,7 @@ from dataclasses import asdict
 
 import pandas as pd
 from click import progressbar
+from exchange_calendars import ExchangeCalendar
 from joblib import Parallel, delayed
 from lime_trader import LimeClient
 from lime_trader.models.market import Period
@@ -25,6 +26,7 @@ class LimeTraderSdkHistoricalMarketDataProvider(AbstractHistoricalMarketDataProv
                                   date_from: datetime.datetime,
                                   date_to: datetime.datetime,
                                   show_progress: bool,
+                                  exchange_calendar: ExchangeCalendar,
                                   ):
 
         def fetch_historical(lime_trader_sdk_credentials_file: str, symbol: str):

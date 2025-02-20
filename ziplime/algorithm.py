@@ -1470,9 +1470,10 @@ class TradingAlgorithm:
             assert (
                     dt.tzinfo == timezone.utc
             ), f"Algorithm should have a timezone.utc datetime, {dt.tzinfo}"
-
         if tz is not None:
             dt = dt.astimezone(tz)
+        else:
+            dt = dt.astimezone(self.trading_calendar.tz)
         return dt
 
     @api_method

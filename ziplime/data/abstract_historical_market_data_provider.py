@@ -1,5 +1,7 @@
 import datetime
 from abc import abstractmethod
+
+from exchange_calendars import ExchangeCalendar
 from lime_trader.models.market import Period
 
 
@@ -11,5 +13,6 @@ class AbstractHistoricalMarketDataProvider:
                                   date_from: datetime.datetime,
                                   date_to: datetime.datetime,
                                   show_progress: bool,
+                                  exchange_calendar: ExchangeCalendar,
                                   ):
         pass

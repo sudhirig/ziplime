@@ -6,6 +6,7 @@ import sys
 import limexhub
 import pandas as pd
 from click import progressbar
+from exchange_calendars import ExchangeCalendar
 from joblib import Parallel, delayed
 from lime_trader.models.market import Period
 
@@ -14,6 +15,7 @@ from ziplime.data.abstract_historical_market_data_provider import AbstractHistor
 
 def fetch_historical_limex_data_task(date_from: datetime.datetime,
                                      date_to: datetime.datetime,
+                                     exchange_calendar: ExchangeCalendar,
                                      limex_api_key: str, symbol: str, period: Period):
     limex_client = limexhub.RestAPI(token=limex_api_key)
     timeframe = 3
@@ -37,7 +39,10 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
         df = df.reset_index()
         df = df.rename(
             columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "Date": "date"})
-        df["date"] = pd.to_datetime(df.date, utc=True)
+        df["date"] = pd.to_datetime(df.date)
+        df["date"] = df.date.dt.tz_localize(exchange_calendar.tz)
+        df["date"] = df.date.dt.tz_convert(datetime.timezone.utc)
+
         df = df[(df["date"]>=date_from) & (df["date"]<date_to+datetime.timedelta(days=1))]
 
         df = df.set_index('date', drop=False)
@@ -61,11 +66,13 @@ class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider)
                                   date_from: datetime.datetime,
                                   date_to: datetime.datetime,
                                   show_progress: bool,
+                                  exchange_calendar: ExchangeCalendar
                                   ):
 
         def fetch_historical(limex_api_key: str, symbol: str):
             try:
                 result = fetch_historical_limex_data_task(date_from=date_from, date_to=date_to,
+                                                          exchange_calendar=exchange_calendar,
                                                           limex_api_key=limex_api_key, symbol=symbol, period=period)
                 return result
             except Exception as e:

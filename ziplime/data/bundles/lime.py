@@ -84,7 +84,8 @@ def create_equities_bundle(
             period=period,
             date_from=date_from,
             date_to=date_to,
-            show_progress=show_progress)
+            show_progress=show_progress,
+            exchange_calendar=calendar)
 
         if len(historical_data) == 0:
             logger.warning(
@@ -123,7 +124,7 @@ def create_equities_bundle(
             validate_sessions=False
         )
 
-        if period in(Period.DAY, Period.MINUTE):
+        if period in (Period.DAY, Period.MINUTE):
             data_bundle_writer.write(
                 data=parse_pricing_and_vol(data=historical_data, sessions=sessions, symbol_map=symbol_map),
                 show_progress=show_progress,

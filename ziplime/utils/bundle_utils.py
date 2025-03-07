@@ -38,9 +38,10 @@ def register_default_bundles(calendar_name: str = "NYSE",
 def get_historical_market_data_provider(code: str):
     if code == "limex-hub":
         limex_hub_key = os.environ.get("LIMEX_API_KEY", None)
+        maximum_threads = os.environ.get("LIMEX_MAXIMUM_THREADS", None)
         if limex_hub_key is None:
             raise ValueError("Missing LIMEX_API_KEY environment variable.")
-        return LimexHubHistoricalMarketDataProvider(limex_api_key=limex_hub_key)
+        return LimexHubHistoricalMarketDataProvider(limex_api_key=limex_hub_key, maximum_threads=int(maximum_threads) if maximum_threads is not None else None)
     if code == "lime-trader-sdk":
         lime_trader_sdk_credentials = os.environ.get("LIME_SDK_CREDENTIALS_FILE", None)
         if lime_trader_sdk_credentials is None:
@@ -62,10 +63,12 @@ def get_live_market_data_provider(code: str):
 def get_fundamental_data_provider(code: str):
     if code == "limex-hub":
         limex_hub_key = os.environ.get("LIMEX_API_KEY", None)
+        maximum_threads = os.environ.get("LIMEX_MAXIMUM_THREADS", None)
         if limex_hub_key is None:
             raise ValueError("Missing LIMEX_API_KEY environment variable.")
-        return LimexHubFundamentalDataProvider(limex_api_key=limex_hub_key)
+        return LimexHubFundamentalDataProvider(limex_api_key=limex_hub_key, maximum_threads=int(maximum_threads) if maximum_threads is not None else None)
     raise Exception("Unsupported fundamental data provider!")
+
 
 def get_broker(code: str):
     if code == "lime-trader-sdk":

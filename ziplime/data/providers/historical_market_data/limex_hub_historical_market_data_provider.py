@@ -56,10 +56,14 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
 
 
 class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider):
-    def __init__(self, limex_api_key: str):
+    def __init__(self, limex_api_key: str, maximum_threads: int | None = None):
         self._limex_api_key = limex_api_key
         self._logger = logging.getLogger(__name__)
         self._limex_client = limexhub.RestAPI(token=limex_api_key)
+        if maximum_threads is not None:
+            self._maximum_threads = min(multiprocessing.cpu_count() * 2, maximum_threads)
+        else:
+            self._maximum_threads = multiprocessing.cpu_count() * 2
 
     def get_historical_data_table(self, symbols: list[str],
                                   period: Period,
@@ -87,7 +91,7 @@ class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider)
         if show_progress:
             with progressbar(length=len(symbols) * total_days, label="Downloading historical data from LimexHub",
                              file=sys.stdout) as pbar:
-                res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads",
+                res = Parallel(n_jobs=self._maximum_threads, prefer="threads",
                                return_as="generator_unordered")(
                     delayed(fetch_historical)(self._limex_api_key, symbol) for symbol in symbols)
                 for item in res:
@@ -96,7 +100,7 @@ class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider)
                         continue
                     final = pd.concat([final, item])
         else:
-            res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator_unordered")(
+            res = Parallel(n_jobs=self._maximum_threads, prefer="threads", return_as="generator_unordered")(
                 delayed(fetch_historical)(self._limex_api_key, symbol) for symbol in symbols)
             for item in res:
                 if item is None:

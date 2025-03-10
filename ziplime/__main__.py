@@ -1,4 +1,5 @@
 import datetime
+import errno
 import logging
 import os
 
@@ -286,8 +287,22 @@ def clean(ctx, bundle, before, after, keep_last):
 @click.pass_context
 def bundles(ctx):
     """Top level ziplime entry point."""
-    func = getattr(zipline__main__, "bundles")
-    ctx.forward(func)
+    for bundle in sorted(bundles_module.bundles.keys()):
+        if bundle.startswith("."):
+            # hide the test data
+            continue
+        try:
+            ingestions = list(map(str, bundles_module.ingestions_for_bundle(bundle)))
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
+            ingestions = []
+
+        # If we got no ingestions, either because the directory didn't exist or
+        # because there were no entries, print a single message indicating that
+        # no ingestions have yet been made.
+        for timestamp in ingestions or ["<no ingestions>"]:
+            click.echo("%s %s" % (bundle, timestamp))
 
 
 @main.command()
@@ -423,9 +438,9 @@ def bundles(ctx):
 @click.option(
     "--live-market-data-provider",
     type=click.Choice(['lime-trader-sdk']),
-    default="lime-trader-sdk",
+    default=None,
     help="Market data provider for live trading",
-    show_default=True,
+    # show_default=True,
 )
 @ipython_only(
     click.option(

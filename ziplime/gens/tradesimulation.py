@@ -15,7 +15,10 @@
 from copy import copy
 import logging
 from zipline.finance.order import ORDER_STATUS
-from zipline.protocol import BarData
+
+from ziplime.data.data_portal import DataPortal
+from ziplime.finance.trading import SimulationParameters
+from ziplime.protocol import BarData
 from zipline.utils.api_support import ZiplineAPI
 from zipline.utils.compat import ExitStack
 
@@ -36,8 +39,8 @@ class AlgorithmSimulator:
     def __init__(
             self,
             algo,
-            sim_params,
-            data_portal,
+            sim_params: SimulationParameters,
+            data_portal: DataPortal,
             clock,
             benchmark_source,
             restrictions,

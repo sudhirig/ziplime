@@ -7,15 +7,15 @@ import pandas as pd
 from zipline.__main__ import ipython_only
 
 from zipline.utils.calendar_utils import get_calendar
-from zipline.utils.cli import Date
 
-from ziplime.constants.default_columns import DEFAULT_COLUMNS, OHLCV_COLUMNS
+from ziplime.constants.default_columns import OHLCV_COLUMNS_POLARS, DEFAULT_COLUMNS_POLARS
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
 from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
+from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
+from ziplime.domain.data_frequency import DataFrequency
 from ziplime.utils.run_algo import _run, BenchmarkSpec
 
 import click
-import zipline
 from ziplime.data import bundles as bundles_module
 
 from click import DateTime
@@ -25,8 +25,6 @@ from zipline.utils.cli import Timestamp
 from ziplime.config.register_bundles import register_lime_symbol_list_equities_bundle
 
 from zipline import __main__ as zipline__main__
-from zipline.utils.run_algo import load_extensions
-from zipline.extensions import create_args
 
 from ziplime.utils.bundle_utils import register_default_bundles, get_historical_market_data_provider, \
     get_fundamental_data_provider, get_live_market_data_provider, get_broker
@@ -44,33 +42,8 @@ def validate_date_range(date_min: datetime.datetime, date_max: datetime.datetime
 
 
 @click.group()
-@click.option(
-    "-e",
-    "--extension",
-    multiple=True,
-    help="File or module path to a zipline extension to load.",
-)
-@click.option(
-    "--strict-extensions/--non-strict-extensions",
-    is_flag=True,
-    help="If --strict-extensions is passed then zipline will not "
-         "run if it cannot load all of the specified extensions. "
-         "If this is not passed or --non-strict-extensions is passed "
-         "then the failure will be logged but execution will continue.",
-)
-@click.option(
-    "--default-extension/--no-default-extension",
-    is_flag=True,
-    default=True,
-    help="Don't load the default zipline extension.py file in $ZIPLINE_HOME.",
-)
-@click.option(
-    "-x",
-    multiple=True,
-    help="Any custom command line arguments to define, in key=value form.",
-)
 @click.pass_context
-def main(ctx, extension, strict_extensions, default_extension, x):
+def main(ctx):
     """Top level ziplime entry point."""
     # install a logging handler before performing any other operations
 
@@ -81,14 +54,6 @@ def main(ctx, extension, strict_extensions, default_extension, x):
     )
 
     register_default_bundles()
-
-    create_args(x, zipline.extension_args)
-    load_extensions(
-        default_extension,
-        extension,
-        strict_extensions,
-        os.environ,
-    )
 
 
 @main.command(context_settings=dict(
@@ -220,7 +185,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
             if col.name in fundamental_data_column_names
         ]
         if fundamental_data_list is not None
-        else DEFAULT_COLUMNS
+        else DEFAULT_COLUMNS_POLARS
     )
     bundles_module.ingest(
         name=bundle_name,
@@ -230,9 +195,9 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         show_progress=show_progress,
         historical_market_data_provider=get_historical_market_data_provider(code=historical_market_data_provider),
         fundamental_data_provider=fundamental_data_provider_instance,
-        data_bundle_writer_class=BcolzDataBundle,
+        data_bundle_writer_class=PolarsDataBundle,
         fundamental_data_writer_class=BcolzDataBundle,
-        market_data_fields=OHLCV_COLUMNS,
+        market_data_fields=OHLCV_COLUMNS_POLARS,
         fundamental_data_fields=fundamental_data_cols,
         period=Period(period)
     )
@@ -319,15 +284,6 @@ def bundles(ctx):
     help="The algorithm script to run.",
 )
 @click.option(
-    "-D",
-    "--define",
-    multiple=True,
-    help="Define a name to be bound in the namespace before executing"
-         " the algotext. For example '-Dname=value'. The value may be any "
-         "python expression. These are evaluated in order so they may refer "
-         "to previously defined names.",
-)
-@click.option(
     "--data-frequency",
     type=click.Choice({"daily", "minute"}),
     default="daily",
@@ -337,8 +293,6 @@ def bundles(ctx):
 @click.option(
     "--capital-base",
     type=float,
-    default=10e6,
-    show_default=True,
     help="The starting capital for the simulation.",
 )
 @click.option(
@@ -386,13 +340,13 @@ def bundles(ctx):
 @click.option(
     "-s",
     "--start",
-    type=Date(as_timestamp=True),
+    type=click.DateTime(formats=["%Y-%m-%d"]),
     help="The start date of the simulation.",
 )
 @click.option(
     "-e",
     "--end",
-    type=Date(as_timestamp=True),
+    type=click.DateTime(formats=["%Y-%m-%d"]),
     help="The end date of the simulation.",
 )
 @click.option(
@@ -423,12 +377,6 @@ def bundles(ctx):
          " extension.py.",
 )
 @click.option(
-    "--blotter",
-    default="default",
-    help="The blotter to use.",
-    show_default=True,
-)
-@click.option(
     "--broker",
     default=None,
     type=click.Choice(['lime-trader-sdk']),
@@ -455,7 +403,6 @@ def run(
         ctx,
         algofile,
         algotext,
-        define,
         data_frequency,
         capital_base,
         bundle,
@@ -471,24 +418,10 @@ def run(
         print_algo,
         metrics_set,
         local_namespace,
-        blotter,
         broker: str | None,
         live_market_data_provider: str | None,
 ):
     """Run a backtest for the given algorithm."""
-    # check that the start and end dates are passed correctly
-    if start is None and end is None:
-        # check both at the same time to avoid the case where a user
-        # does not pass either of these and then passes the first only
-        # to be told they need to pass the second argument also
-        ctx.fail(
-            "must specify dates with '-s' / '--start' and '-e' / '--end'",
-        )
-    if start is None:
-        ctx.fail("must specify a start date with '-s' / '--start'")
-    if end is None:
-        ctx.fail("must specify an end date with '-e' / '--end'")
-
     if (algotext is not None) == (algofile is not None):
         ctx.fail(
             "must specify exactly one of '-f' / "
@@ -514,8 +447,7 @@ def run(
         analyze=None,
         algofile=algofile,
         algotext=algotext,
-        defines=define,
-        data_frequency=data_frequency,
+        data_frequency=DataFrequency.MINUTE if data_frequency == "minute" else DataFrequency.DAY,
         capital_base=capital_base,
         bundle=bundle,
         bundle_timestamp=bundle_timestamp,
@@ -527,7 +459,6 @@ def run(
         metrics_set=metrics_set,
         local_namespace=local_namespace,
         environ=os.environ,
-        blotter=blotter,
         benchmark_spec=benchmark_spec,
         custom_loader=None,
         broker=get_broker(broker) if broker is not None else None,

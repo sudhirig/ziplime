@@ -1,6 +1,6 @@
 from abc import abstractmethod
 
-from zipline.assets import Asset
+from ziplime.assets import Asset
 from zipline.finance.order import Order as ZPOrder
 
 from ziplime.protocol import Position, Portfolio, Account

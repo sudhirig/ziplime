@@ -9,7 +9,7 @@ from lime_trader import LimeClient
 from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order, OrderSide, OrderDetails, OrderStatus, OrderType, TimeInForce
-from zipline.assets import Asset
+from ziplime.assets import Asset
 from zipline.finance.order import (Order as ZPOrder,
                                    ORDER_STATUS as ZP_ORDER_STATUS)
 from zipline.finance.execution import (MarketOrder,

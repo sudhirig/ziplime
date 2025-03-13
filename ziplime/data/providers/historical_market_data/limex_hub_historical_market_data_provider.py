@@ -91,7 +91,7 @@ class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider)
         if show_progress:
             with progressbar(length=len(symbols) * total_days, label="Downloading historical data from LimexHub",
                              file=sys.stdout) as pbar:
-                res = Parallel(n_jobs=self._maximum_threads, prefer="threads",
+                res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads",
                                return_as="generator_unordered")(
                     delayed(fetch_historical)(self._limex_api_key, symbol) for symbol in symbols)
                 for item in res:
@@ -100,7 +100,7 @@ class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider)
                         continue
                     final = pd.concat([final, item])
         else:
-            res = Parallel(n_jobs=self._maximum_threads, prefer="threads", return_as="generator_unordered")(
+            res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator_unordered")(
                 delayed(fetch_historical)(self._limex_api_key, symbol) for symbol in symbols)
             for item in res:
                 if item is None:

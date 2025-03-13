@@ -2,14 +2,16 @@ import logging
 
 from zipline.finance.blotter import Blotter
 
-from zipline.assets import Asset
+from ziplime.assets import Asset
 from zipline.finance.order import Order as ZPOrder
+
+from ziplime.domain.data_frequency import DataFrequency
 from ziplime.gens.brokers.broker import Broker
 
 
 class BlotterLive(Blotter):
 
-    def __init__(self, data_frequency: str, broker: Broker):
+    def __init__(self, data_frequency: DataFrequency, broker: Broker):
         super().__init__()
         self.broker = broker
         self._processed_closed_orders = []
@@ -17,13 +19,6 @@ class BlotterLive(Blotter):
         self.data_frequency = data_frequency
         self.new_orders = []
         self._logger = logging.getLogger(__name__)
-
-    def __repr__(self):
-        return f"""{self.__class__.__name__}(
-        open_orders={self.open_orders},
-        orders={self.get_orders()},
-        new_orders={self.new_orders}
-        )"""
 
     @property
     def orders(self) -> dict[str, ZPOrder]:

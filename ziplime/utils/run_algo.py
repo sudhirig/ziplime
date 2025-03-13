@@ -1,12 +1,16 @@
+import datetime
+
 import click
 import os
 import sys
 import warnings
 
+from exchange_calendars import ExchangeCalendar
 from lime_trader.models.market import Period
 from zipline.utils.paths import data_path
 
 from ziplime.algorithm_live import LiveTradingAlgorithm
+from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.gens.brokers.broker import Broker
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
@@ -76,22 +80,20 @@ def _run(
         initialize,
         before_trading_start,
         analyze,
-        algofile,
+        algofile: str,
         algotext,
-        defines,
-        data_frequency,
-        capital_base,
-        bundle,
+        data_frequency: DataFrequency,
+        capital_base: float,
+        bundle: str,
         bundle_timestamp,
-        start,
-        end,
+        start: datetime.datetime,
+        end: datetime.datetime,
         output,
-        trading_calendar,
-        print_algo,
-        metrics_set,
+        trading_calendar: ExchangeCalendar,
+        print_algo: bool,
+        metrics_set: str,
         local_namespace,
         environ,
-        blotter: str,
         custom_loader,
         benchmark_spec,
         broker: Broker,
@@ -106,11 +108,8 @@ def _run(
         name=bundle,
         environ=environ,
         timestamp=bundle_timestamp,
-        period=Period.MINUTE if data_frequency == "minute" else Period.DAY,
+        period=data_frequency,
     )
-
-    if trading_calendar is None:
-        trading_calendar = get_calendar("XNYS")
 
     # date parameter validation
     if not broker and trading_calendar.sessions_distance(start, end) < 1:
@@ -134,27 +133,6 @@ def _run(
             namespace = ip.user_ns
         else:
             namespace = {}
-
-        for assign in defines:
-            try:
-                name, value = assign.split("=", 2)
-            except ValueError:
-                raise ValueError(
-                    "invalid define %r, should be of the form name=value" % assign,
-                )
-            try:
-                # evaluate in the same namespace so names may refer to
-                # eachother
-                namespace[name] = eval(value, namespace)
-            except Exception as e:
-                raise ValueError(
-                    "failed to execute definition for name %r: %s" % (name, e),
-                )
-    elif defines:
-        raise _RunAlgoError(
-            "cannot pass define without `algotext`",
-            "cannot pass '-D' / '--define' without '-t' / '--algotext'",
-        )
     else:
         namespace = {}
         if algofile is not None:
@@ -175,7 +153,7 @@ def _run(
 
     state_filename = None
     realtime_bar_target = None
-    emission_rate = data_frequency
+    # emission_rate = data_frequency
     if broker:
         data = DataPortalLive(
             asset_finder=bundle_data.asset_finder,
@@ -192,7 +170,7 @@ def _run(
         )
         state_filename = f"{data_path(['state'])}"
         realtime_bar_target = f"{data_path(['realtime'])}"
-        emission_rate = 'minute'
+        # emission_rate = 'minute'
     else:
         data = DataPortal(
             bundle_data.asset_finder,
@@ -219,25 +197,19 @@ def _run(
         except KeyError:
             raise ValueError("No PipelineLoader registered for column %s." % column)
 
-    if isinstance(metrics_set, str):
-        try:
-            metrics_set = metrics.load(metrics_set)
-        except ValueError as e:
-            raise _RunAlgoError(str(e))
+    metrics_set = metrics.load(metrics_set)
 
-    try:
-        blotter = load(Blotter, blotter)
-    except ValueError as e:
-        raise _RunAlgoError(str(e))
+    blotter = load(Blotter, "default")
 
     sim_params = SimulationParameters(
         start_session=start,
         end_session=end,
         trading_calendar=trading_calendar,
         capital_base=capital_base,
-        emission_rate=emission_rate,
-        data_frequency=data_frequency,
+        emission_rate=data_frequency,
+        # data_frequency=data_frequency,
     )
+
     try:
         if broker is None:
             tr = TradingAlgorithm(
@@ -315,82 +287,25 @@ def _run(
     return perf
 
 
-# All of the loaded extensions. We don't want to load an extension twice.
-_loaded_extensions = set()
-
-
-def load_extensions(default, extensions, strict, environ, reload=False):
-    """Load all of the given extensions. This should be called by run_algo
-    or the cli.
-
-    Parameters
-    ----------
-    default : bool
-        Load the default exension (~/.zipline/extension.py)?
-    extension : iterable[str]
-        The paths to the extensions to load. If the path ends in ``.py`` it is
-        treated as a script and executed. If it does not end in ``.py`` it is
-        treated as a module to be imported.
-    strict : bool
-        Should failure to load an extension raise. If this is false it will
-        still warn.
-    environ : mapping
-        The environment to use to find the default extension path.
-    reload : bool, optional
-        Reload any extensions that have already been loaded.
-    """
-    if default:
-        register_default_bundles()
-        default_extension_path = pth.default_extension(environ=environ)
-        pth.ensure_file(default_extension_path)
-        # put the default extension first so other extensions can depend on
-        # the order they are loaded
-        extensions = concatv([default_extension_path], extensions)
-
-    for ext in extensions:
-        if ext in _loaded_extensions and not reload:
-            continue
-        try:
-            # load all of the zipline extensionss
-            if ext.endswith(".py"):
-                with open(ext) as f:
-                    ns = {}
-                    exec(compile(f.read(), ext, "exec"), ns, ns)
-            else:
-                __import__(ext)
-        except Exception as e:
-            if strict:
-                # if `strict` we should raise the actual exception and fail
-                raise
-            # without `strict` we should just log the failure
-            warnings.warn("Failed to load extension: %r\n%s" % (ext, e), stacklevel=2)
-        else:
-            _loaded_extensions.add(ext)
-
-
 def run_algorithm(
-        start,
-        end,
+        start: datetime.datetime,
+        end: datetime.datetime,
         initialize,
         capital_base,
+        data_frequency: DataFrequency,
         handle_data=None,
         before_trading_start=None,
         analyze=None,
-        data_frequency: str = "daily",
         bundle: str = "lime",
         bundle_timestamp=None,
         trading_calendar=None,
         metrics_set="default",
         benchmark_returns=None,
-        default_extension=True,
-        extensions=(),
-        strict_extensions=True,
         environ=os.environ,
         custom_loader=None,
         print_algo: bool = False,
         algotext=None,
         algofile=None,
-        blotter="default",
         market_data_provider: AbstractLiveMarketDataProvider = None,
         broker: Broker = None
 ):
@@ -435,25 +350,9 @@ def run_algorithm(
         resolve the set with :func:`zipline.finance.metrics.load`.
     benchmark_returns : pd.Series, optional
         Series of returns to use as the benchmark.
-    default_extension : bool, optional
-        Should the default zipline extension be loaded. This is found at
-        ``$ZIPLINE_ROOT/extension.py``
-    extensions : iterable[str], optional
-        The names of any other extensions to load. Each element may either be
-        a dotted module path like ``a.b.c`` or a path to a python file ending
-        in ``.py`` like ``a/b/c.py``.
-    strict_extensions : bool, optional
-        Should the run fail if any extensions fail to load. If this is false,
-        a warning will be raised instead.
     environ : mapping[str -> str], optional
         The os environment to use. Many extensions use this to get parameters.
         This defaults to ``os.environ``.
-    blotter : str or zipline.finance.blotter.Blotter, optional
-        Blotter to use with this algorithm. If passed as a string, we look for
-        a blotter construction function registered with
-        ``zipline.extensions.register`` and call it with no parameters.
-        Default is a :class:`zipline.finance.blotter.SimulationBlotter` that
-        never cancels orders.
 
     Returns
     -------
@@ -464,7 +363,6 @@ def run_algorithm(
     --------
     zipline.data.bundles.bundles : The available data bundles.
     """
-    load_extensions(default_extension, extensions, strict_extensions, environ)
 
     benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
 
@@ -475,7 +373,6 @@ def run_algorithm(
         analyze=analyze,
         algofile=algofile,
         algotext=algotext,
-        defines=(),
         data_frequency=data_frequency,
         capital_base=capital_base,
         bundle=bundle,
@@ -488,7 +385,6 @@ def run_algorithm(
         metrics_set=metrics_set,
         local_namespace=False,
         environ=environ,
-        blotter=blotter,
         custom_loader=custom_loader,
         benchmark_spec=benchmark_spec,
         broker=broker,

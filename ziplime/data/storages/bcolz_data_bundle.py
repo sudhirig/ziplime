@@ -260,6 +260,7 @@ class BcolzDataBundle(AbstractDataBundle):
             assets,
         )
         read_all = True
+        print(f"start_idx={start_idx}, end_idx={end_idx}, first_rows={first_rows}, last_rows={last_rows}, offsets={offsets}")
         return self._read_bcolz_data(
             self._table,
             (end_idx - start_idx + 1, len(assets)),

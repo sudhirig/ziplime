@@ -13,7 +13,9 @@ from zipline.data.adjustments import SQLiteAdjustmentReader, SQLiteAdjustmentWri
 from zipline.utils.calendar_utils import get_calendar
 from toolz import curry, complement, take
 
-from zipline.assets import AssetDBWriter, AssetFinder, ASSET_DB_VERSION, Asset
+from ziplime.assets import  AssetFinder, Asset
+from zipline.assets import AssetDBWriter,  ASSET_DB_VERSION
+
 from zipline.assets.asset_db_migrations import downgrade
 from zipline.utils.cache import (
     dataframe_cache,
@@ -30,6 +32,7 @@ from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalD
 from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
 from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
 from ziplime.data.storages.bcolz_data_minute_bundle import BcolzDataMinuteBundle, BcolzMinuteBarReader
+from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 
 log = logging.getLogger(__name__)
@@ -438,13 +441,17 @@ def _make_bundle_core():
                     )
                 elif period == Period.MINUTE:
                     bars_path = wd.ensure_dir(*minute_equity_relative(name, timestr))
-                    data_bundle_writer = BcolzDataMinuteBundle(
-                        rootdir=bars_path,
-                        calendar=calendar,
-                        start_session=start_session,
-                        end_session=end_session,
-                        minutes_per_day=bundle.minutes_per_day,
+                    data_bundle_writer = data_bundle_writer_class(
+                        bars_path
                     )
+
+                    # data_bundle_writer = BcolzDataMinuteBundle(
+                    #     rootdir=bars_path,
+                    #     calendar=calendar,
+                    #     start_session=start_session,
+                    #     end_session=end_session,
+                    #     minutes_per_day=bundle.minutes_per_day,
+                    # )
                 else:
                     raise Exception("Unsupported period.")
 
@@ -574,13 +581,13 @@ def _make_bundle_core():
         timestr = most_recent_data(name, timestamp, environ=environ)
         if period == Period.DAY:
             historical_root_directory = daily_equity_path(name, timestr, environ=environ)
-            historical_data_reader = BcolzDataBundle(
+            historical_data_reader = PolarsDataBundle(
                 root_directory=historical_root_directory,
             )
         else:
             historical_root_directory = minute_equity_path(name, timestr, environ=environ)
-            historical_data_reader = BcolzMinuteBarReader(
-                rootdir=historical_root_directory,
+            historical_data_reader = PolarsDataBundle(
+                root_directory=historical_root_directory,
             )
         return BundleData(
             name=name,

@@ -73,9 +73,11 @@ from zipline.finance.asset_restrictions import (
     StaticRestrictions,
     SecurityListRestrictions,
 )
-from zipline.assets import Asset, Equity, Future, AssetDBWriter
+from ziplime.assets import Asset, Equity, Future
+from ziplime.data.data_portal import DataPortal
+from ziplime.finance.trading import SimulationParameters
 from ziplime.gens.tradesimulation import AlgorithmSimulator
-from zipline.finance.metrics import MetricsTracker, load as load_metrics_set
+from ziplime.finance.metrics import MetricsTracker, load as load_metrics_set
 from zipline.pipeline import Pipeline
 import zipline.pipeline.domain as domain
 from zipline.pipeline.engine import (
@@ -123,7 +125,7 @@ from zipline.utils.security_list import SecurityList
 import zipline.protocol
 from zipline.sources.requests_csv import PandasRequestsCSV
 
-from zipline.gens.sim_engine import MinuteSimulationClock
+from ziplime.gens.sim_engine import MinuteSimulationClock
 from zipline.sources.benchmark_source import BenchmarkSource
 from zipline.zipline_warnings import ZiplineDeprecationWarning
 
@@ -201,20 +203,14 @@ class TradingAlgorithm:
         return the actual context manager that will be entered.
     history_container_class : type, optional
         The type of history container to use. default: HistoryContainer
-    platform : str, optional
-        The platform the simulation is running on. This can be queried for
-        in the simulation with ``get_environment``. This allows algorithms
-        to conditionally execute code based on platform it is running on.
-        default: 'zipline'
     adjustment_reader : AdjustmentReader
         The interface to the adjustments.
     """
 
     def __init__(
             self,
-            sim_params,
-            data_portal=None,
-            asset_finder=None,
+            sim_params: SimulationParameters,
+            data_portal: DataPortal,
             # Algorithm API
             namespace=None,
             script=None,
@@ -223,15 +219,10 @@ class TradingAlgorithm:
             handle_data=None,
             before_trading_start=None,
             analyze=None,
-            #
-            trading_calendar=None,
             metrics_set=None,
             blotter=None,
-            blotter_class=None,
-            cancel_policy=None,
             benchmark_sid=None,
             benchmark_returns=None,
-            platform="zipline",
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
@@ -246,7 +237,6 @@ class TradingAlgorithm:
         self._recorded_vars = {}
         self.namespace = namespace or {}
 
-        self._platform = platform
         self.logger = None
 
         # XXX: This is kind of a mess.
@@ -254,23 +244,7 @@ class TradingAlgorithm:
         # finder earlier than that to look up assets for things like
         # set_benchmark.
         self.data_portal = data_portal
-
-        if self.data_portal is None:
-            if asset_finder is None:
-                raise ValueError(
-                    "Must pass either data_portal or asset_finder "
-                    "to TradingAlgorithm()"
-                )
-            self.asset_finder = asset_finder
-        else:
-            # Raise an error if we were passed two different asset finders.
-            # There's no world where that's a good idea.
-            if (
-                    asset_finder is not None
-                    and asset_finder is not data_portal.asset_finder
-            ):
-                raise ValueError("Inconsistent asset_finders in TradingAlgorithm()")
-            self.asset_finder = data_portal.asset_finder
+        self.asset_finder = data_portal.asset_finder
 
         self.benchmark_returns = benchmark_returns
 
@@ -283,18 +257,7 @@ class TradingAlgorithm:
         # it matches their sim_params. Otherwise, just use what's in their
         # sim_params.
         self.sim_params = sim_params
-        if trading_calendar is None:
-            self.trading_calendar = sim_params.trading_calendar
-        elif trading_calendar.name == sim_params.trading_calendar.name:
-            self.trading_calendar = sim_params.trading_calendar
-        else:
-            raise ValueError(
-                "Conflicting calendars: trading_calendar={}, but "
-                "sim_params.trading_calendar={}".format(
-                    trading_calendar.name,
-                    self.sim_params.trading_calendar.name,
-                )
-            )
+        self.trading_calendar = sim_params.trading_calendar
 
         self.metrics_tracker = None
         self._last_sync_time = pd.NaT
@@ -310,12 +273,7 @@ class TradingAlgorithm:
         # data is requested.
         self._pipeline_cache = ExpiringCache()
 
-        if blotter is not None:
-            self.blotter = blotter
-        else:
-            cancel_policy = cancel_policy or NeverCancel()
-            blotter_class = blotter_class or SimulationBlotter
-            self.blotter = blotter_class(cancel_policy=cancel_policy)
+        self.blotter = blotter
 
         # The symbol lookup date specifies the date to use when resolving
         # symbols to sids, and can be set using set_symbol_lookup_date()
@@ -454,30 +412,12 @@ class TradingAlgorithm:
         with ZiplineAPI(self):
             self._analyze(self, perf)
 
-    def __repr__(self):
-        """N.B. this does not yet represent a string that can be used
-        to instantiate an exact copy of an algorithm.
-
-        However, it is getting close, and provides some value as something
-        that can be inspected interactively.
-        """
-        return f"""
-{self.__class__.__name__}(
-    capital_base={self.sim_params.capital_base}
-    sim_params={repr(self.sim_params)},
-    initialized={self.initialized},
-    slippage_models={repr(self.blotter.slippage_models)},
-    commission_models={repr(self.blotter.commission_models)},
-    blotter={repr(self.blotter)},
-    recorded_vars={repr(self.recorded_vars)})
-""".strip()
-
     def _create_clock(self):
         """If the clock property is not set, then create one based on frequency."""
-        market_closes = self.trading_calendar.schedule.loc[
-            self.sim_params.sessions, "close"
-        ]
-        market_opens = self.trading_calendar.first_minutes.loc[self.sim_params.sessions]
+        market_closes = self.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
+            self.trading_calendar.tz)
+        market_opens = self.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
+            self.trading_calendar.tz)
         minutely_emission = False
 
         if self.sim_params.data_frequency == "minute":
@@ -513,18 +453,19 @@ class TradingAlgorithm:
                 execution_opens = market_closes
 
         # FIXME generalize these values
-        before_trading_start_minutes = days_at_time(
-            self.sim_params.sessions,
-            time(8, 45),
-            "US/Eastern",
-            day_offset=0,
-        )
+        # before_trading_start_minutes = days_at_time(
+        #     self.sim_params.sessions,
+        #     time(8, 45),
+        #     "US/Eastern",
+        #     day_offset=0,
+        # )
+        before_trading_start_minutes = market_opens.map(lambda x: x - pd.Timedelta(minutes=46))
 
         return MinuteSimulationClock(
-            self.sim_params.sessions,
-            execution_opens,
-            execution_closes,
-            before_trading_start_minutes,
+            sessions=self.sim_params.sessions,
+            market_opens=execution_opens,
+            market_closes=execution_closes,
+            before_trading_start_minutes=before_trading_start_minutes,
             minute_emission=minutely_emission,
         )
 
@@ -544,8 +485,9 @@ class TradingAlgorithm:
             emission_rate=self.sim_params.emission_rate,
         )
 
-    def _create_metrics_tracker(self):
-        return MetricsTracker(
+
+    def _create_generator(self):
+        self.metrics_tracker = MetricsTracker(
             trading_calendar=self.trading_calendar,
             first_session=self.sim_params.start_session,
             last_session=self.sim_params.end_session,
@@ -555,12 +497,6 @@ class TradingAlgorithm:
             asset_finder=self.asset_finder,
             metrics=self._metrics_set,
         )
-
-    def _create_generator(self, sim_params):
-        if sim_params is not None:
-            self.sim_params = sim_params
-
-        self.metrics_tracker = metrics_tracker = self._create_metrics_tracker()
 
         # Set the dt initially to the period start by forcing it to change.
         self.on_dt_changed(self.sim_params.start_session)
@@ -572,15 +508,15 @@ class TradingAlgorithm:
         benchmark_source = self._create_benchmark_source()
 
         self.trading_client = AlgorithmSimulator(
-            self,
-            sim_params,
-            self.data_portal,
-            self._create_clock(),
-            benchmark_source,
-            self.restrictions,
+            algo=self,
+            sim_params=self.sim_params,
+            data_portal=self.data_portal,
+            clock=self._create_clock(),
+            benchmark_source=benchmark_source,
+            restrictions=self.restrictions,
         )
 
-        metrics_tracker.handle_start_of_simulation(benchmark_source)
+        self.metrics_tracker.handle_start_of_simulation(benchmark_source)
         return self.trading_client.transform()
 
     def compute_eager_pipelines(self):
@@ -594,7 +530,7 @@ class TradingAlgorithm:
         of the generator. Overrides can use the _create_generator
         method to get a standard construction generator.
         """
-        return self._create_generator(self.sim_params)
+        return self._create_generator()
 
     def _calculate_universe(self):
         # this exists to provide backwards compatibility for older,
@@ -715,156 +651,6 @@ class TradingAlgorithm:
                 "delta": capital_change_amount,
             }
         }
-
-    @api_method
-    def get_environment(self, field="platform"):
-        """Query the execution environment.
-
-        Parameters
-        ----------
-        field : {'platform', 'arena', 'data_frequency', 'start', 'end',
-        'capital_base', 'platform', '*'}
-
-        The field to query. The options have the following meanings:
-
-        - arena : str
-          The arena from the simulation parameters. This will normally
-          be ``'backtest'`` but some systems may use this distinguish
-          live trading from backtesting.
-        - data_frequency : {'daily', 'minute'}
-          data_frequency tells the algorithm if it is running with
-          daily data or minute data.
-        - start : datetime
-          The start date for the simulation.
-        - end : datetime
-          The end date for the simulation.
-        - capital_base : float
-          The starting capital for the simulation.
-        -platform : str
-          The platform that the code is running on. By default, this
-          will be the string 'zipline'. This can allow algorithms to
-          know if they are running on the Quantopian platform instead.
-        - * : dict[str -> any]
-          Returns all the fields in a dictionary.
-
-        Returns
-        -------
-        val : any
-            The value for the field queried. See above for more information.
-
-        Raises
-        ------
-        ValueError
-            Raised when ``field`` is not a valid option.
-        """
-        env = {
-            "arena": self.sim_params.arena,
-            "data_frequency": self.sim_params.data_frequency,
-            "start": self.sim_params.first_open,
-            "end": self.sim_params.last_close,
-            "capital_base": self.sim_params.capital_base,
-            "platform": self._platform,
-        }
-        if field == "*":
-            return env
-        else:
-            try:
-                return env[field]
-            except KeyError as exc:
-                raise ValueError(
-                    "%r is not a valid field for get_environment" % field,
-                ) from exc
-
-    @api_method
-    def fetch_csv(
-            self,
-            url,
-            pre_func=None,
-            post_func=None,
-            date_column="date",
-            date_format=None,
-            timezone=str(timezone.utc),
-            symbol=None,
-            mask=True,
-            symbol_column=None,
-            special_params_checker=None,
-            country_code=None,
-            **kwargs,
-    ):
-        """Fetch a csv from a remote url and register the data so that it is
-        queryable from the ``data`` object.
-
-        Parameters
-        ----------
-        url : str
-            The url of the csv file to load.
-        pre_func : callable[pd.DataFrame -> pd.DataFrame], optional
-            A callback to allow preprocessing the raw data returned from
-            fetch_csv before dates are paresed or symbols are mapped.
-        post_func : callable[pd.DataFrame -> pd.DataFrame], optional
-            A callback to allow postprocessing of the data after dates and
-            symbols have been mapped.
-        date_column : str, optional
-            The name of the column in the preprocessed dataframe containing
-            datetime information to map the data.
-        date_format : str, optional
-            The format of the dates in the ``date_column``. If not provided
-            ``fetch_csv`` will attempt to infer the format. For information
-            about the format of this string, see :func:`pandas.read_csv`.
-        timezone : tzinfo or str, optional
-            The timezone for the datetime in the ``date_column``.
-        symbol : str, optional
-            If the data is about a new asset or index then this string will
-            be the name used to identify the values in ``data``. For example,
-            one may use ``fetch_csv`` to load data for VIX, then this field
-            could be the string ``'VIX'``.
-        mask : bool, optional
-            Drop any rows which cannot be symbol mapped.
-        symbol_column : str
-            If the data is attaching some new attribute to each asset then this
-            argument is the name of the column in the preprocessed dataframe
-            containing the symbols. This will be used along with the date
-            information to map the sids in the asset finder.
-        country_code : str, optional
-            Country code to use to disambiguate symbol lookups.
-        **kwargs
-            Forwarded to :func:`pandas.read_csv`.
-
-        Returns
-        -------
-        csv_data_source : zipline.sources.requests_csv.PandasRequestsCSV
-            A requests source that will pull data from the url specified.
-        """
-        if country_code is None:
-            country_code = self.default_fetch_csv_country_code(
-                self.trading_calendar,
-            )
-
-        # Show all the logs every time fetcher is used.
-        csv_data_source = PandasRequestsCSV(
-            url,
-            pre_func,
-            post_func,
-            self.asset_finder,
-            self.trading_calendar.day,
-            self.sim_params.start_session,
-            self.sim_params.end_session,
-            date_column,
-            date_format,
-            timezone,
-            symbol,
-            mask,
-            symbol_column,
-            data_frequency=self.data_frequency,
-            country_code=country_code,
-            special_params_checker=special_params_checker,
-            **kwargs,
-        )
-
-        # ingest this into dataportal
-        self.data_portal.handle_extra_source(csv_data_source.df, self.sim_params)
-
-        return csv_data_source
 
     def add_event(self, rule, callback):
         """Adds an event to the algorithm's EventManager.

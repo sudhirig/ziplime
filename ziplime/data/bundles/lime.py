@@ -125,6 +125,7 @@ def create_equities_bundle(
         )
 
         if period in (Period.DAY, Period.MINUTE):
+
             data_bundle_writer.write(
                 data=parse_pricing_and_vol(data=historical_data, sessions=sessions, symbol_map=symbol_map),
                 show_progress=show_progress,

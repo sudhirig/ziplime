@@ -12,7 +12,7 @@ class SimulationParameters:
             trading_calendar: ExchangeCalendar,
             capital_base: float,
             emission_rate: DataFrequency,
-            # data_frequency: str = "daily",
+            data_frequency: DataFrequency,
             arena: str = "backtest",
     ):
 
@@ -31,7 +31,7 @@ class SimulationParameters:
         self.capital_base = capital_base
 
         self.emission_rate = emission_rate
-        # self.data_frequency = data_frequency
+        self.data_frequency = data_frequency
 
         # copied to algorithm's environment for runtime access
         self.arena = arena

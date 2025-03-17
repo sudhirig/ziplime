@@ -1,5 +1,5 @@
 import pandas as pd
-from zipline._protocol import BarData
+from ziplime.protocol import BarData
 from zipline.api import symbol, order_target, order_target_value, record, order_target_percent
 from zipline import TradingAlgorithm
 from zipline.finance.execution import MarketOrder, LimitOrder
@@ -7,7 +7,6 @@ from zipline.finance.ledger import Ledger
 
 from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.utils.bundle_utils import register_default_bundles
-from ziplime.utils.data import get_fundamental_data
 
 from ziplime.data.bundles import load
 from ziplime.utils.paths import data_path
@@ -79,7 +78,7 @@ def get_benchmark_returns(start, end):
     register_default_bundles()
     bundle_data = load('lime')
 
-    spx_asset = bundle_data.asset_finder.lookup_symbol('AAPL', as_of_date=None)
+    spx_asset = bundle_data.asset_repository.lookup_symbol('AAPL', as_of_date=None)
     spx_data = bundle_data.historical_data_reader.load_raw_arrays(
         columns=['open', 'close'],
         start_date=start,

@@ -24,6 +24,8 @@ import pandas as pd
 from zipline.utils.exploding_object import NamedExplodingObject
 from zipline.finance._finance_ext import minute_annual_volatility
 
+from ziplime.domain.data_frequency import DataFrequency
+
 
 class SimpleLedgerField:
     """Emit the current value of a ledger field every bar or every session.
@@ -108,7 +110,7 @@ class StartOfPeriodLedgerField:
             self._packet_field = packet_field
 
     def start_of_simulation(
-        self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
     ):
         self._start_of_simulation = self._get_ledger_field(ledger)
 
@@ -147,7 +149,7 @@ class BenchmarkReturnsAndVolatility:
     """
 
     def start_of_simulation(
-        self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
     ):
         daily_returns_series = benchmark_source.daily_returns(
             sessions[0],
@@ -156,10 +158,10 @@ class BenchmarkReturnsAndVolatility:
         self._daily_returns = daily_returns_array = daily_returns_series.values
         self._daily_cumulative_returns = np.cumprod(1 + daily_returns_array) - 1
         self._daily_annual_volatility = (
-            daily_returns_series.expanding(2).std(ddof=1) * np.sqrt(252)
+                daily_returns_series.expanding(2).std(ddof=1) * np.sqrt(252)
         ).values
 
-        if emission_rate == "daily":
+        if emission_rate == DataFrequency.DAY:
             self._minute_cumulative_returns = NamedExplodingObject(
                 "self._minute_cumulative_returns",
                 "does not exist in daily emission rate",
@@ -209,7 +211,7 @@ class PNL:
     """Tracks daily and cumulative PNL."""
 
     def start_of_simulation(
-        self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
     ):
         self._previous_pnl = 0.0
 
@@ -237,7 +239,7 @@ class CashFlow:
     """
 
     def start_of_simulation(
-        self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
     ):
         self._previous_cash_flow = 0.0
 
@@ -316,7 +318,7 @@ class AlphaBeta:
     """End of simulation alpha and beta to the benchmark."""
 
     def start_of_simulation(
-        self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
     ):
         self._daily_returns_array = benchmark_source.daily_returns(
             sessions[0],
@@ -344,7 +346,7 @@ class AlphaBeta:
 class MaxLeverage:
     """Tracks the maximum account leverage."""
 
-    def start_of_simulation(self, *args):
+    def start_of_simulation(self, ledger, emission_rate, trading_calendar, sessions, benchmark_source):
         self._max_leverage = 0.0
 
     def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
@@ -357,10 +359,10 @@ class MaxLeverage:
 class NumTradingDays:
     """Report the number of trading days."""
 
-    def start_of_simulation(self, *args):
+    def start_of_simulation(self, ledger, emission_rate, trading_calendar, sessions, benchmark_source):
         self._num_trading_days = 0
 
-    def start_of_session(self, *args):
+    def start_of_session(self, ledger, session, data_portal):
         self._num_trading_days += 1
 
     def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
@@ -405,7 +407,7 @@ class _ClassicRiskMetrics:
     """Produces original risk packet."""
 
     def start_of_simulation(
-        self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
     ):
         self._leverages = np.full_like(sessions, np.nan, dtype="float64")
 
@@ -414,12 +416,12 @@ class _ClassicRiskMetrics:
 
     @classmethod
     def risk_metric_period(
-        cls,
-        start_session,
-        end_session,
-        algorithm_returns,
-        benchmark_returns,
-        algorithm_leverages,
+            cls,
+            start_session,
+            end_session,
+            algorithm_returns,
+            benchmark_returns,
+            algorithm_leverages,
     ):
         """
         Creates a dictionary representing the state of the risk report.
@@ -463,17 +465,17 @@ class _ClassicRiskMetrics:
         algorithm_returns = algorithm_returns[
             (algorithm_returns.index >= start_session)
             & (algorithm_returns.index <= end_session)
-        ]
+            ]
 
         # Benchmark needs to be masked to the same dates as the algo returns
         benchmark_ret_tzinfo = benchmark_returns.index.tzinfo
         benchmark_returns = benchmark_returns[
             (benchmark_returns.index >= start_session.tz_localize(benchmark_ret_tzinfo))
             & (
-                benchmark_returns.index
-                <= algorithm_returns.index[-1].tz_localize(benchmark_ret_tzinfo)
+                    benchmark_returns.index
+                    <= algorithm_returns.index[-1].tz_localize(benchmark_ret_tzinfo)
             )
-        ]
+            ]
         benchmark_period_returns = ep.cum_returns(benchmark_returns).iloc[-1]
         algorithm_period_returns = ep.cum_returns(algorithm_returns).iloc[-1]
 
@@ -526,14 +528,14 @@ class _ClassicRiskMetrics:
 
     @classmethod
     def _periods_in_range(
-        cls,
-        months,
-        end_session,
-        end_date,
-        algorithm_returns,
-        benchmark_returns,
-        algorithm_leverages,
-        months_per,
+            cls,
+            months,
+            end_session,
+            end_date,
+            algorithm_returns,
+            benchmark_returns,
+            algorithm_leverages,
+            months_per,
     ):
         if months.size < months_per:
             return
@@ -587,7 +589,7 @@ class _ClassicRiskMetrics:
         }
 
     def end_of_simulation(
-        self, packet, ledger, trading_calendar, sessions, data_portal, benchmark_source
+            self, packet, ledger, trading_calendar, sessions, data_portal, benchmark_source
     ):
         packet.update(
             self.risk_report(

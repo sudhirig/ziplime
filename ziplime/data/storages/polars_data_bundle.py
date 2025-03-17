@@ -8,7 +8,7 @@ from exchange_calendars import ExchangeCalendar
 from zipline.data._minute_bar_internal import find_position_of_minute
 import polars as pl
 
-from ziplime.assets import Asset
+from ziplime.assets.domain.asset import Asset
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 

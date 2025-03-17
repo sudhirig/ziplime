@@ -18,6 +18,8 @@ from zipline.data.bar_reader import NoDataOnDate
 
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.data.data_portal import DataPortal
+from ziplime.domain.data_frequency import DataFrequency
+
 
 class DataPortalLive(DataPortal):
     def __init__(self, broker, market_data_provider: AbstractLiveMarketDataProvider, *args, **kwargs):
@@ -38,7 +40,7 @@ class DataPortalLive(DataPortal):
                            bar_count: int,
                            frequency: str,
                            field: str,
-                           data_frequency: str,
+                           data_frequency: DataFrequency,
                            ffill: bool = True):
         # This method is responsible for merging the ingested historical data
         # with the real-time collected data through the Broker.

@@ -12,8 +12,9 @@ from ziplime.constants.default_columns import OHLCV_COLUMNS_POLARS, DEFAULT_COLU
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
 from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
 from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
+from ziplime.domain.benchmark_spec import BenchmarkSpec
 from ziplime.domain.data_frequency import DataFrequency
-from ziplime.utils.run_algo import _run, BenchmarkSpec
+from ziplime.utils.run_algo import run_algorithm
 
 import click
 from ziplime.data import bundles as bundles_module
@@ -118,14 +119,14 @@ def main(ctx):
 )
 @click.option(
     "--historical-market-data-provider",
-    type=click.Choice(['limex-hub','lime-trader-sdk']),
+    type=click.Choice(['limex-hub', 'lime-trader-sdk']),
     default="limex-hub",
     help="Market data provider for historical data",
     show_default=True,
 )
 @click.option(
     "--fundamental-data-provider",
-    type=click.Choice(['limex-hub',]),
+    type=click.Choice(['limex-hub', ]),
     default="limex-hub",
     help="Fundamental data provider",
     show_default=True,
@@ -189,7 +190,6 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
     )
     bundles_module.ingest(
         name=bundle_name,
-        environ=os.environ,
         timestamp=pd.Timestamp.utcnow(),
         assets_version=assets_version,
         show_progress=show_progress,
@@ -277,11 +277,6 @@ def bundles(ctx):
     default=None,
     type=click.File("r"),
     help="The file that contains the algorithm to run.",
-)
-@click.option(
-    "-t",
-    "--algotext",
-    help="The algorithm script to run.",
 )
 @click.option(
     "--data-frequency",
@@ -402,7 +397,6 @@ def bundles(ctx):
 def run(
         ctx,
         algofile,
-        algotext,
         data_frequency,
         capital_base,
         bundle,
@@ -422,31 +416,21 @@ def run(
         live_market_data_provider: str | None,
 ):
     """Run a backtest for the given algorithm."""
-    if (algotext is not None) == (algofile is not None):
-        ctx.fail(
-            "must specify exactly one of '-f' / "
-            "'--algofile' or"
-            " '-t' / '--algotext'",
-        )
-
     trading_calendar = get_calendar(trading_calendar)
 
-    benchmark_spec = BenchmarkSpec.from_cli_params(
-        no_benchmark=no_benchmark,
+    benchmark_spec = BenchmarkSpec(
+        benchmark_returns=None,
         benchmark_sid=benchmark_sid,
         benchmark_symbol=benchmark_symbol,
         benchmark_file=benchmark_file,
+        no_benchmark=no_benchmark,
     )
     if broker is not None:
-        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)# - pd.Timedelta(days=3)
+        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)  # - pd.Timedelta(days=3)
         end = start + pd.Timedelta('5 day')
-    return _run(
-        initialize=None,
-        handle_data=None,
-        before_trading_start=None,
-        analyze=None,
+    return run_algorithm(
         algofile=algofile,
-        algotext=algotext,
+        algotext=None,
         data_frequency=DataFrequency.MINUTE if data_frequency == "minute" else DataFrequency.DAY,
         capital_base=capital_base,
         bundle=bundle,
@@ -457,8 +441,6 @@ def run(
         trading_calendar=trading_calendar,
         print_algo=print_algo,
         metrics_set=metrics_set,
-        local_namespace=local_namespace,
-        environ=os.environ,
         benchmark_spec=benchmark_spec,
         custom_loader=None,
         broker=get_broker(broker) if broker is not None else None,

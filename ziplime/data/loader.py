@@ -27,20 +27,20 @@ logger = logging.getLogger(__name__)
 ONE_HOUR = pd.Timedelta(hours=1)
 
 
-def last_modified_time(path):
+def last_modified_time(path: str) -> pd.Timestamp:
     """
     Get the last modified time of path as a Timestamp.
     """
     return pd.Timestamp(os.path.getmtime(path), unit='s', tz='UTC')
 
 
-def get_data_filepath(name, environ=None):
+def get_data_filepath(name: str) -> str:
     """
     Returns a handle to data file.
 
     Creates containing directory, if needed.
     """
-    dr = data_root(environ)
+    dr = data_root()
 
     if not os.path.exists(dr):
         os.makedirs(dr)
@@ -48,7 +48,7 @@ def get_data_filepath(name, environ=None):
     return os.path.join(dr, name)
 
 
-def get_cache_filepath(name):
+def get_cache_filepath(name: str) -> str:
     cr = cache_root()
     if not os.path.exists(cr):
         os.makedirs(cr)
@@ -56,7 +56,7 @@ def get_cache_filepath(name):
     return os.path.join(cr, name)
 
 
-def get_benchmark_filename(symbol):
+def get_benchmark_filename(symbol: str) -> str:
     return "%s_benchmark.csv" % symbol
 
 
@@ -72,15 +72,14 @@ def has_data_for_dates(series_or_df, first_date, last_date):
     return (first <= first_date) and (last >= last_date)
 
 
-def _load_cached_data(filename, first_date, last_date, now, resource_name,
-                      environ=None):
+def _load_cached_data(filename:str, first_date, last_date, now, resource_name):
     if resource_name == 'benchmark':
         from_csv = pd.Series.from_csv
     else:
         from_csv = pd.DataFrame.from_csv
 
     # Path for the cache.
-    path = get_data_filepath(filename, environ)
+    path = get_data_filepath(filename)
 
     # If the path does not exist, it means the first download has not happened
     # yet, so don't try to read from 'path'.
@@ -120,14 +119,14 @@ def _load_cached_data(filename, first_date, last_date, now, resource_name,
     return None
 
 
-def load_prices_from_csv(filepath, identifier_col, tz='UTC'):
+def load_prices_from_csv(filepath:str, identifier_col, tz='UTC'):
     data = pd.read_csv(filepath, index_col=identifier_col)
     data.index = pd.DatetimeIndex(data.index, tz=tz)
     data.sort_index(inplace=True)
     return data
 
 
-def load_prices_from_csv_folder(folderpath, identifier_col, tz='UTC'):
+def load_prices_from_csv_folder(folderpath:str, identifier_col, tz='UTC'):
     data = None
     for file in os.listdir(folderpath):
         if '.csv' not in file:

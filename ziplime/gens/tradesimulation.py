@@ -13,24 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from copy import copy
-import logging
+
+import pandas as pd
+import structlog
 from zipline.finance.order import ORDER_STATUS
 
+from ziplime.assets.domain.asset import Asset
 from ziplime.data.data_portal import DataPortal
-from ziplime.finance.trading import SimulationParameters
-from ziplime.protocol import BarData
+from ziplime.domain.data_frequency import DataFrequency
+from ziplime.finance.domain.simulation_paremeters import SimulationParameters
+from ziplime.finance.metrics import MetricsTracker
+from ziplime.domain.bar_data import BarData
 from zipline.utils.api_support import ZiplineAPI
 from zipline.utils.compat import ExitStack
 
-from zipline.gens.sim_engine import (
+from ziplime.gens.sim_engine import (
     BAR,
     SESSION_START,
     SESSION_END,
     MINUTE_END,
     BEFORE_TRADING_START_BAR,
 )
-
-log = logging.getLogger("Trade Simulation")
 
 
 class AlgorithmSimulator:
@@ -59,13 +62,21 @@ class AlgorithmSimulator:
         # ==============
         self.algo = algo
 
+        self._logger = structlog.get_logger(__name__)
+
         # ==============
         # Snapshot Setup
         # ==============
 
         # This object is the way that user algorithms interact with OHLCV data,
         # fetcher data, and some API methods like `data.can_trade`.
-        self.current_data = self._create_bar_data()
+        self.current_data = BarData(
+            data_portal=self.data_portal,
+            simulation_dt_func=self.get_simulation_dt,
+            data_frequency=self.sim_params.data_frequency,
+            trading_calendar=self.algo.trading_calendar,
+            restrictions=self.restrictions,
+        )
 
         # We don't have a datetime for the current snapshot until we
         # receive a message.
@@ -85,17 +96,8 @@ class AlgorithmSimulator:
         # TODO CHECK: Disabled the old logbook mechanism,
         # didn't replace with an equivalent `logging` approach.
 
-    def get_simulation_dt(self):
+    def get_simulation_dt(self) -> pd.Timestamp:
         return self.simulation_dt
-
-    def _create_bar_data(self):
-        return BarData(
-            data_portal=self.data_portal,
-            simulation_dt_func=self.get_simulation_dt,
-            data_frequency=self.sim_params.data_frequency,
-            trading_calendar=self.algo.trading_calendar,
-            restrictions=self.restrictions,
-        )
 
     # TODO: simplify
     # flake8: noqa: C901
@@ -108,7 +110,7 @@ class AlgorithmSimulator:
         emission_rate = metrics_tracker.emission_rate
 
         def every_bar(
-                dt_to_use,
+                dt_to_use: pd.Timestamp,
                 current_data=self.current_data,
                 handle_data=algo.event_manager.handle_data,
         ):
@@ -118,7 +120,7 @@ class AlgorithmSimulator:
 
             self.simulation_dt = dt_to_use
             # called every tick (minute or day).
-            algo.on_dt_changed(dt_to_use)
+            algo.on_dt_changed(dt=dt_to_use)
 
             blotter = algo.blotter
 
@@ -129,9 +131,9 @@ class AlgorithmSimulator:
                 new_transactions,
                 new_commissions,
                 closed_orders,
-            ) = blotter.get_transactions(current_data)
+            ) = blotter.get_transactions(bar_data=current_data)
             # print(f"getting transactions for {current_data.current_dt}, new transactions: {len(new_transactions)}, new commissions: {len(new_commissions)}, closed orders: {len(closed_orders)}" )
-            blotter.prune_orders(closed_orders)
+            blotter.prune_orders(closed_orders=closed_orders)
 
             for transaction in new_transactions:
                 metrics_tracker.process_transaction(transaction)
@@ -195,26 +197,26 @@ class AlgorithmSimulator:
 
         with ExitStack() as stack:
             stack.callback(on_exit)
-            stack.enter_context(ZiplineAPI(self.algo))
+            stack.enter_context(ZiplineAPI(algo_instance=self.algo))
 
-            if algo.data_frequency == "minute":
+            if algo.data_frequency == DataFrequency.MINUTE:
 
                 def execute_order_cancellation_policy():
                     algo.blotter.execute_cancel_policy(SESSION_END)
 
-                def calculate_minute_capital_changes(dt):
+                def calculate_minute_capital_changes(dt: pd.Timestamp):
                     # process any capital changes that came between the last
                     # and current minutes
                     return algo.calculate_capital_changes(
                         dt, emission_rate=emission_rate, is_interday=False
                     )
 
-            elif algo.data_frequency == "daily":
+            elif algo.data_frequency == DataFrequency.DAY:
 
                 def execute_order_cancellation_policy():
                     algo.blotter.execute_daily_cancel_policy(SESSION_END)
 
-                def calculate_minute_capital_changes(dt):
+                def calculate_minute_capital_changes(dt: pd.Timestamp):
                     return []
 
             else:
@@ -222,45 +224,45 @@ class AlgorithmSimulator:
                 def execute_order_cancellation_policy():
                     pass
 
-                def calculate_minute_capital_changes(dt):
+                def calculate_minute_capital_changes(dt: pd.Timestamp):
                     return []
 
             for dt, action in self.clock:
                 if action == BAR:
-                    for capital_change_packet in every_bar(dt):
+                    for capital_change_packet in every_bar(dt_to_use=dt):
                         yield capital_change_packet
                 elif action == SESSION_START:
-                    for capital_change_packet in once_a_day(dt):
+                    for capital_change_packet in once_a_day(midnight_dt=dt):
                         yield capital_change_packet
                 elif action == SESSION_END:
                     # End of the session.
                     positions = metrics_tracker.positions
-                    position_assets = algo.asset_finder.retrieve_all(positions)
-                    self._cleanup_expired_assets(dt, position_assets)
+                    position_assets = algo.asset_repository.retrieve_all(sids=positions)
+                    self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
 
                     execute_order_cancellation_policy()
                     algo.validate_account_controls()
 
-                    yield self._get_daily_message(dt, algo, metrics_tracker)
+                    yield self._get_daily_message(dt=dt, algo=algo, metrics_tracker=metrics_tracker)
                 elif action == BEFORE_TRADING_START_BAR:
                     self.simulation_dt = dt
-                    algo.on_dt_changed(dt)
-                    algo.before_trading_start(self.current_data)
+                    algo.on_dt_changed(dt=dt)
+                    algo.before_trading_start(data=self.current_data)
                 elif action == MINUTE_END:
                     minute_msg = self._get_minute_message(
-                        dt,
-                        algo,
-                        metrics_tracker,
+                        dt=dt,
+                        algo=algo,
+                        metrics_tracker=metrics_tracker,
                     )
 
                     yield minute_msg
 
             risk_message = metrics_tracker.handle_simulation_end(
-                self.data_portal,
+                data_portal=self.data_portal,
             )
             yield risk_message
 
-    def _cleanup_expired_assets(self, dt, position_assets):
+    def _cleanup_expired_assets(self, dt: pd.Timestamp, position_assets):
         """
         Clear out any assets that have expired before starting a new sim day.
 
@@ -275,7 +277,7 @@ class AlgorithmSimulator:
         """
         algo = self.algo
 
-        def past_auto_close_date(asset):
+        def past_auto_close_date(asset: Asset):
             acd = asset.auto_close_date
             if acd is not None:
                 acd = acd.tz_localize(dt.tzinfo)
@@ -283,50 +285,55 @@ class AlgorithmSimulator:
 
         # Remove positions in any sids that have reached their auto_close date.
         assets_to_clear = [
-            asset for asset in position_assets if past_auto_close_date(asset)
+            asset
+            for asset in position_assets
+            if past_auto_close_date(asset)
         ]
         metrics_tracker = algo.metrics_tracker
         data_portal = self.data_portal
         for asset in assets_to_clear:
-            metrics_tracker.process_close_position(asset, dt, data_portal)
+            metrics_tracker.process_close_position(asset=asset, dt=dt)
 
         # Remove open orders for any sids that have reached their auto close
         # date. These orders get processed immediately because otherwise they
         # would not be processed until the first bar of the next day.
         blotter = algo.blotter
+
         assets_to_cancel = [
-            asset for asset in blotter.open_orders if past_auto_close_date(asset)
+            asset
+            for asset in blotter.open_orders
+            if past_auto_close_date(asset=asset)
         ]
+
         for asset in assets_to_cancel:
-            blotter.cancel_all_orders_for_asset(asset)
+            blotter.cancel_all_orders_for_asset(asset=asset)
 
         # Make a copy here so that we are not modifying the list that is being
         # iterated over.
         for order in copy(blotter.new_orders):
             if order.status == ORDER_STATUS.CANCELLED:
-                metrics_tracker.process_order(order)
-                blotter.new_orders.remove(order)
+                metrics_tracker.process_order(order=order)
+                blotter.new_orders.remove(order=order)
 
-    def _get_daily_message(self, dt, algo, metrics_tracker):
+    def _get_daily_message(self, dt: pd.Timestamp, algo, metrics_tracker: MetricsTracker):
         """
         Get a perf message for the given datetime.
         """
         perf_message = metrics_tracker.handle_market_close(
-            dt,
-            self.data_portal,
+            dt=dt,
+            data_portal=self.data_portal,
         )
         perf_message["daily_perf"]["recorded_vars"] = algo.recorded_vars
         return perf_message
 
-    def _get_minute_message(self, dt, algo, metrics_tracker):
+    def _get_minute_message(self, dt: pd.Timestamp, algo, metrics_tracker: MetricsTracker):
         """
         Get a perf message for the given datetime.
         """
         rvars = algo.recorded_vars
 
         minute_message = metrics_tracker.handle_minute_close(
-            dt,
-            self.data_portal,
+            dt=dt,
         )
 
         minute_message["minute_perf"]["recorded_vars"] = rvars

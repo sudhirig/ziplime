@@ -1,7 +1,7 @@
 from typing import Any
 
 import pandas as pd
-from zipline._protocol import BarData
+from ziplime.protocol import BarData
 
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.data.abstract_data_bundle import AbstractDataBundle

@@ -3,6 +3,7 @@ from datetime import time
 import os.path
 import pandas as pd
 from ziplime.algorithm import TradingAlgorithm
+from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.gens.realtimeclock import RealtimeClock
 from ziplime.gens.tradesimulation import AlgorithmSimulator
 from ziplime.errors import ScheduleFunctionOutsideTradingStart
@@ -88,7 +89,7 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             frequency=self.data_frequency
         )
 
-    def _create_generator(self, sim_params):
+    def _create_generator(self, sim_params: SimulationParameters):
         # Call the simulation trading algorithm for side-effects:
         # it creates the perf tracker
         TradingAlgorithm._create_generator(self, sim_params)

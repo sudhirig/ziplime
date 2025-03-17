@@ -19,8 +19,9 @@ from numpy import full, nan, int64, zeros
 
 from zipline.utils.memoize import lazyval
 
-from ziplime.assets import Equity, Asset
+from ziplime.assets.domain.asset import Asset
 
+from ziplime.assets.domain.equity import Equity
 
 class AssetDispatchBarReader(ABC):
     """
@@ -28,7 +29,7 @@ class AssetDispatchBarReader(ABC):
     Parameters
     ----------
     - trading_calendar : zipline.utils.trading_calendar.TradingCalendar
-    - asset_finder : zipline.assets.AssetFinder
+    - asset_repository : zipline.assets.AssetFinder
     - readers : dict
         A dict mapping Asset type to the corresponding
         [Minute|Session]BarReader
@@ -40,12 +41,12 @@ class AssetDispatchBarReader(ABC):
     def __init__(
             self,
             trading_calendar,
-            asset_finder,
+            asset_repository,
             readers,
             last_available_dt=None,
     ):
         self._trading_calendar = trading_calendar
-        self._asset_finder = asset_finder
+        self._asset_repository = asset_repository
         self._readers = readers
         self._last_available_dt = last_available_dt
 
@@ -92,7 +93,7 @@ class AssetDispatchBarReader(ABC):
         return min(r.first_trading_day for r in self._readers.values())
 
     def get_value(self, sid, dt, field):
-        asset = self._asset_finder.retrieve_asset(sid)
+        asset = self._asset_repository.retrieve_asset(sid)
         r = self._readers[type(asset)]
         return r.get_value(asset, dt, field)
 

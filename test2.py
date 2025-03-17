@@ -1,4 +1,5 @@
-from zipline._protocol import BarData
+from ziplime.domain.benchmark_spec import BenchmarkSpec
+from ziplime.protocol import BarData
 
 from ziplime.constants.fundamental_data import FundamentalData, FundamentalDataValueType
 from ziplime.utils.run_algo import run_algorithm
@@ -23,7 +24,7 @@ register_default_bundles()
 def get_benchmark_returns(start, end):
     print('bench')
     bundle_data = load('lime')
-    spx_asset = bundle_data.asset_finder.lookup_symbol('AAPL', as_of_date=None)
+    spx_asset = bundle_data.asset_repository.lookup_symbol('AAPL', as_of_date=None)
     nys = xcals.get_calendar("XNYS")
     trading_days = nys.sessions_in_range(start, end)
     spx_data = bundle_data.historical_data_reader.load_raw_arrays(
@@ -53,16 +54,21 @@ def handler(event, context):
         start_session = pd.Timestamp(param_start)
         end_session = pd.Timestamp(param_end)
         benchmark_returns = get_benchmark_returns(start_session, end_session)
+
+        benchmark_spec = BenchmarkSpec(benchmark_returns=benchmark_returns,
+                                       benchmark_file=None,
+                                       benchmark_sid=None,
+                                       benchmark_symbol=None,
+                                       no_benchmark=False,
+                                       )
         result = run_algorithm(start=start_session,
                                end=end_session,
                                print_algo=True,
                                algotext=code_to_execute,
-                               initialize=None,
-                               handle_data=None,
                                capital_base=param_capital,
                                data_frequency=param_frequency,
                                bundle=param_bundle,
-                               benchmark_returns=benchmark_returns,
+                               benchmark_spec=benchmark_spec,
                                broker=get_broker('lime-trader-sdk'),
                                market_data_provider=get_live_market_data_provider("lime-trader-sdk")
                                )

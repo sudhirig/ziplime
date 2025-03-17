@@ -2,7 +2,7 @@ import logging
 
 from zipline.finance.blotter import Blotter
 
-from ziplime.assets import Asset
+from ziplime.assets.domain.asset import Asset
 from zipline.finance.order import Order as ZPOrder
 
 from ziplime.domain.data_frequency import DataFrequency

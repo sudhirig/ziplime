@@ -1,5 +1,4 @@
 import datetime
-from os import _Environ
 import logging
 import pandas as pd
 
@@ -59,7 +58,6 @@ def create_equities_bundle(
         symbol_list: list[str] = None,
 ):
     def ingest(
-            environ: _Environ,
             historical_market_data_provider: AbstractHistoricalMarketDataProvider,
             fundamental_data_provider: AbstractFundamentalDataProvider,
             asset_db_writer: AssetDBWriter,

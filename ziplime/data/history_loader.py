@@ -19,16 +19,17 @@ from abc import (
 
 import numpy as np
 import pandas as pd
+from exchange_calendars import ExchangeCalendar
 from lru import LRU
 from pandas import isnull
 from toolz import sliding_window
 
 from zipline.assets import Equity, Future
 
-from ziplime.assets import Asset
+from ziplime.assets.domain.asset import Asset
 # from zipline.lib.adjustment import Float64Multiply
 
-from ziplime.assets.continuous_futures import ContinuousFuture
+from ziplime.assets.domain.continuous_future import ContinuousFuture
 from zipline.lib._int64window import AdjustedArrayWindow as Int64Window
 from zipline.lib._float64window import AdjustedArrayWindow as Float64Window
 from zipline.lib.adjustment import Float64Multiply, Float64Add
@@ -144,13 +145,13 @@ class ContinuousFutureAdjustmentReader:
     def __init__(
             self,
             trading_calendar,
-            asset_finder,
+            asset_repository,
             bar_reader,
             roll_finders,
             frequency,
     ):
         self._trading_calendar = trading_calendar
-        self._asset_finder = asset_finder
+        self._asset_repository = asset_repository
         self._bar_reader = bar_reader
         self._roll_finders = roll_finders
         self._frequency = frequency
@@ -207,10 +208,10 @@ class ContinuousFutureAdjustmentReader:
         for partition in partitions:
             front_sid, back_sid, dt, roll_dt = partition
             last_front_dt = self._bar_reader.get_last_traded_dt(
-                self._asset_finder.retrieve_asset(front_sid), dt
+                self._asset_repository.retrieve_asset(front_sid), dt
             )
             last_back_dt = self._bar_reader.get_last_traded_dt(
-                self._asset_finder.retrieve_asset(back_sid), dt
+                self._asset_repository.retrieve_asset(back_sid), dt
             )
             if isnull(last_front_dt) or isnull(last_back_dt):
                 continue
@@ -279,17 +280,17 @@ class HistoryLoader:
 
     def __init__(
             self,
-            trading_calendar,
+            trading_calendar:ExchangeCalendar,
             reader,
             equity_adjustment_reader,
-            asset_finder,
+            asset_repository,
             fields: list[str],
             roll_finders=None,
             sid_cache_size=1000,
             prefetch_length=0,
     ):
         self.trading_calendar = trading_calendar
-        self._asset_finder = asset_finder
+        self._asset_repository = asset_repository
         self._reader = reader
         self._adjustment_readers = {}
         if equity_adjustment_reader is not None:
@@ -301,7 +302,7 @@ class HistoryLoader:
                 ContinuousFuture
             ] = ContinuousFutureAdjustmentReader(
                 trading_calendar,
-                asset_finder,
+                asset_repository,
                 reader,
                 roll_finders,
                 self._frequency,
@@ -332,10 +333,10 @@ class HistoryLoader:
             # Tick size should be the same for all contracts of a continuous
             # future, so arbitrarily get the contract with next upcoming auto
             # close date.
-            oc = self._asset_finder.get_ordered_contracts(asset.root_symbol)
+            oc = self._asset_repository.get_ordered_contracts(asset.root_symbol)
             contract_sid = oc.contract_before_auto_close(reference_date.value)
             if contract_sid is not None:
-                contract = self._asset_finder.retrieve_asset(contract_sid)
+                contract = self._asset_repository.retrieve_asset(contract_sid)
                 if contract.tick_size:
                     return number_of_decimal_places(contract.tick_size)
         return DEFAULT_ASSET_PRICE_DECIMALS
@@ -374,7 +375,7 @@ class HistoryLoader:
         needed_assets = []
         cal = self._calendar
 
-        assets = self._asset_finder.retrieve_all([a.sid for a in assets])
+        assets = self._asset_repository.retrieve_all([a.sid for a in assets])
         end_ix = find_in_sorted_index(cal, end)
 
         for asset in assets:
@@ -565,10 +566,10 @@ class PolarsHistoryLoader(HistoryLoader):
             # Tick size should be the same for all contracts of a continuous
             # future, so arbitrarily get the contract with next upcoming auto
             # close date.
-            oc = self._asset_finder.get_ordered_contracts(asset.root_symbol)
+            oc = self._asset_repository.get_ordered_contracts(asset.root_symbol)
             contract_sid = oc.contract_before_auto_close(reference_date.value)
             if contract_sid is not None:
-                contract = self._asset_finder.retrieve_asset(contract_sid)
+                contract = self._asset_repository.retrieve_asset(contract_sid)
                 if contract.tick_size:
                     return number_of_decimal_places(contract.tick_size)
         return DEFAULT_ASSET_PRICE_DECIMALS
@@ -607,7 +608,7 @@ class PolarsHistoryLoader(HistoryLoader):
         # needed_assets = []
         cal = self._calendar
 
-        assets = self._asset_finder.retrieve_all([a.sid for a in assets])
+        assets = self._asset_repository.retrieve_all([a.sid for a in assets])
         end_ix = find_in_sorted_index(cal, end)
         arrays = []
         for asset in assets:

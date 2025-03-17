@@ -24,14 +24,11 @@ import pandas as pd
 from pandas import isnull
 from functools import reduce
 
-from ziplime.assets import (
-    Asset,
-    AssetConvertible,
-    Equity,
-    Future,
-    PricingDataAssociable,
-)
-from ziplime.assets.continuous_futures import ContinuousFuture
+from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.equity import Equity
+from ziplime.assets.domain.future import Future
+
+from ziplime.assets.domain.continuous_future import ContinuousFuture
 from zipline.data.continuous_future_reader import (
     ContinuousFutureSessionBarReader,
     ContinuousFutureMinuteBarReader,
@@ -40,6 +37,8 @@ from zipline.assets.roll_finder import (
     CalendarRollFinder,
     VolumeRollFinder,
 )
+
+from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.data.dispatch_bar_reader import (
     AssetDispatchMinuteBarReader,
     AssetDispatchSessionBarReader,
@@ -50,8 +49,7 @@ from zipline.data.resample import (
     ReindexSessionBarReader,
 )
 from ziplime.data.history_loader import (
-    DailyHistoryLoader,
-    MinuteHistoryLoader, PolarsHistoryLoader,
+    PolarsHistoryLoader,
 )
 from zipline.data.bar_reader import NoDataOnDate
 
@@ -81,7 +79,7 @@ class DataPortal:
 
     Parameters
     ----------
-    asset_finder : zipline.assets.assets.AssetFinder
+    asset_repository : ziplime.assets.repositories.asset_repository.AssetRepository
         The AssetFinder instance used to resolve assets.
     trading_calendar: zipline.utils.calendar.exchange_calendar.TradingCalendar
         The calendar instance used to provide minute->session information.
@@ -112,7 +110,7 @@ class DataPortal:
 
     def __init__(
             self,
-            asset_finder,
+            asset_repository: AssetRepository,
             trading_calendar,
             first_trading_day,
             fields: list[str],
@@ -123,13 +121,11 @@ class DataPortal:
             adjustment_reader=None,
             last_available_session=None,
             last_available_minute=None,
-            minute_history_prefetch_length=_DEF_M_HIST_PREFETCH,
-            daily_history_prefetch_length=_DEF_D_HIST_PREFETCH,
     ):
         self._data_reader = historical_data_reader
         self.trading_calendar = trading_calendar
 
-        self.asset_finder = asset_finder
+        self.asset_repository = asset_repository
 
         self._adjustment_reader = adjustment_reader
         self._fields = fields
@@ -178,7 +174,7 @@ class DataPortal:
         aligned_future_session_reader = self._ensure_reader_aligned(future_daily_reader)
 
         self._roll_finders = {
-            "calendar": CalendarRollFinder(self.trading_calendar, self.asset_finder),
+            "calendar": CalendarRollFinder(self.trading_calendar, self.asset_repository),
         }
 
         aligned_minute_readers = {}
@@ -200,7 +196,7 @@ class DataPortal:
             aligned_session_readers[Future] = aligned_future_session_reader
             self._roll_finders["volume"] = VolumeRollFinder(
                 self.trading_calendar,
-                self.asset_finder,
+                self.asset_repository,
                 aligned_future_session_reader,
             )
             aligned_session_readers[
@@ -212,14 +208,14 @@ class DataPortal:
 
         _dispatch_minute_reader = AssetDispatchMinuteBarReader(
             self.trading_calendar,
-            self.asset_finder,
+            self.asset_repository,
             aligned_minute_readers,
             self._last_available_minute,
         )
 
         _dispatch_session_reader = AssetDispatchSessionBarReader(
             self.trading_calendar,
-            self.asset_finder,
+            self.asset_repository,
             aligned_session_readers,
             self._last_available_session,
         )
@@ -238,10 +234,9 @@ class DataPortal:
             self.trading_calendar,
             _dispatch_session_reader,
             self._adjustment_reader,
-            self.asset_finder,
+            self.asset_repository,
             self._fields,
             self._roll_finders,
-            prefetch_length=daily_history_prefetch_length,
         )
 
         self._first_trading_day = first_trading_day
@@ -284,10 +279,10 @@ class DataPortal:
     def _reindex_extra_source(self, df, source_date_index):
         return df.reindex(index=source_date_index, method="ffill")
 
-    def _get_pricing_reader(self, data_frequency):
+    def _get_pricing_reader(self, data_frequency: DataFrequency):
         return self._pricing_readers[data_frequency]
 
-    def get_last_traded_dt(self, asset, dt, data_frequency):
+    def get_last_traded_dt(self, asset, dt, data_frequency: DataFrequency):
         """Given an asset and dt, returns the last traded dt from the viewpoint
         of the given dt.
 
@@ -296,7 +291,7 @@ class DataPortal:
         return self._get_pricing_reader(data_frequency=data_frequency).get_last_traded_dt(asset=asset, dt=dt)
 
     def _get_single_asset_value(self, session_label: pd.Timestamp, asset: Asset, field: str, dt: pd.Timestamp,
-                                data_frequency: str):
+                                data_frequency: DataFrequency):
 
         if field not in self._fields:
             raise KeyError("Invalid column: " + str(field))
@@ -341,7 +336,7 @@ class DataPortal:
             else:
                 return self._get_minute_spot_value(asset=asset, column=field, dt=dt)
 
-    def get_spot_value(self, assets: list[Asset], field: str, dt: pd.Timestamp, data_frequency: str):
+    def get_spot_value(self, assets: list[Asset], field: str, dt: pd.Timestamp, data_frequency: DataFrequency):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
 
@@ -403,7 +398,7 @@ class DataPortal:
             for asset in assets
         ]
 
-    def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: pd.Timestamp, data_frequency: str):
+    def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: pd.Timestamp, data_frequency: DataFrequency):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
 
@@ -502,7 +497,7 @@ class DataPortal:
         return adjustment_ratios_per_asset
 
     def get_adjusted_value(
-            self, asset: Asset, field: str, dt: pd.Timestamp, perspective_dt: pd.Timestamp, data_frequency: str,
+            self, asset: Asset, field: str, dt: pd.Timestamp, perspective_dt: pd.Timestamp, data_frequency: DataFrequency,
             spot_value: float = None
     ):
         """Returns a scalar value representing the value
@@ -979,7 +974,7 @@ class DataPortal:
 
         splits = [split for split in splits if split[0] in assets]
         splits = [
-            (self.asset_finder.retrieve_asset(split[0]), split[1]) for split in splits
+            (self.asset_repository.retrieve_asset(split[0]), split[1]) for split in splits
         ]
 
         return splits
@@ -1081,9 +1076,9 @@ class DataPortal:
         contract_center = rf.get_contract_center(
             continuous_future.root_symbol, session, continuous_future.offset
         )
-        oc = self.asset_finder.get_ordered_contracts(continuous_future.root_symbol)
+        oc = self.asset_repository.get_ordered_contracts(continuous_future.root_symbol)
         chain = oc.active_chain(contract_center, session.value)
-        return self.asset_finder.retrieve_all(sids=chain)
+        return self.asset_repository.retrieve_all(sids=chain)
 
     def _get_current_contract(self, continuous_future: ContinuousFuture, dt: pd.Timestamp):
         rf = self._roll_finders[continuous_future.roll_style]
@@ -1092,7 +1087,7 @@ class DataPortal:
         )
         if contract_sid is None:
             return None
-        return self.asset_finder.retrieve_asset(sid=contract_sid)
+        return self.asset_repository.retrieve_asset(sid=contract_sid)
 
     @property
     def adjustment_reader(self):

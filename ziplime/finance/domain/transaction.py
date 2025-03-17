@@ -14,13 +14,16 @@
 # limitations under the License.
 from copy import copy
 
-
+import pandas as pd
 from zipline.protocol import DATASOURCE_TYPE
+
+from ziplime.assets.domain.asset import Asset
 
 
 class Transaction:
     # @expect_types(asset=Asset)
-    def __init__(self, asset, amount, dt, price, order_id, commission=None):
+    def __init__(self, asset: Asset, amount: float, dt: pd.Timestamp, price: float, order_id: str,
+                 commission: float | None = None):
         self.asset = asset
         self.amount = amount
         self.dt = dt
@@ -31,18 +34,6 @@ class Transaction:
 
     def __getitem__(self, name):
         return self.__dict__[name]
-
-    def __repr__(self):
-        template = "{cls}(asset={asset}, dt={dt}," " amount={amount}, price={price}, commission={commission)"
-
-        return template.format(
-            cls=type(self).__name__,
-            asset=self.asset,
-            dt=self.dt,
-            amount=self.amount,
-            price=self.price,
-            commission=self.commission
-        )
 
     def to_dict(self):
         py = copy(self.__dict__)
@@ -59,18 +50,3 @@ class Transaction:
 
         return py
 
-
-def create_transaction(order, dt, price, amount):
-    # floor the amount to protect against non-whole number orders
-    # TODO: Investigate whether we can add a robust check in blotter
-    # and/or tradesimulation, as well.
-    amount_magnitude = int(abs(amount))
-
-    if amount_magnitude < 1:
-        raise Exception("Transaction magnitude must be at least 1.")
-
-    transaction = Transaction(
-        asset=order.asset, amount=int(amount), dt=dt, price=price, order_id=order.id
-    )
-
-    return transaction

@@ -37,15 +37,16 @@ import logging
 
 from zipline.assets import Future
 import zipline.protocol as zp
+from zipline.data.adjustments import Dividend
 
-log = logging.getLogger("Performance")
+from ziplime.assets.domain.asset import Asset
 
 
 class Position:
-    __slots__ = "inner_position", "protocol_position"
 
     def __init__(
-        self, asset, amount=0, cost_basis=0.0, last_sale_price=0.0, last_sale_date=None
+            self, asset: Asset, amount: float = 0,
+            cost_basis: float = 0.0, last_sale_price: float = 0.0, last_sale_date=None
     ):
         inner = zp.InnerPosition(
             asset=asset,
@@ -54,8 +55,9 @@ class Position:
             last_sale_price=last_sale_price,
             last_sale_date=last_sale_date,
         )
-        object.__setattr__(self, "inner_position", inner)
-        object.__setattr__(self, "protocol_position", zp.Position(inner))
+        self.inner_position = inner
+        self.protocol_position = zp.Position(inner)
+        self._logger = logging.getLogger(__name__)
 
     def __getattr__(self, attr):
         return getattr(self.inner_position, attr)
@@ -63,7 +65,7 @@ class Position:
     def __setattr__(self, attr, value):
         setattr(self.inner_position, attr, value)
 
-    def earn_dividend(self, dividend):
+    def earn_dividend(self, dividend: Dividend) -> dict[str, float]:
         """
         Register the number of shares we held at this dividend's ex date so
         that we can pay out the correct amount on the dividend's pay date.
@@ -80,7 +82,7 @@ class Position:
             "share_count": np.floor(self.amount * float(stock_dividend.ratio)),
         }
 
-    def handle_split(self, asset, ratio):
+    def handle_split(self, asset: Asset, ratio: float):
         """
         Update the position by the split ratio, and return the resulting
         fractional share that will be converted into cash.
@@ -113,8 +115,8 @@ class Position:
 
         return_cash = round(float(fractional_share_count * new_cost_basis), 2)
 
-        log.info("after split: " + str(self))
-        log.info("returning cash: " + str(return_cash))
+        self._logger.info("after split: " + str(self))
+        self._logger.info("returning cash: " + str(return_cash))
 
         # return the leftover cash, which will be converted into cash
         # (rounded to the nearest cent)
@@ -152,7 +154,7 @@ class Position:
 
         self.amount = total_shares
 
-    def adjust_commission_cost_basis(self, asset, cost):
+    def adjust_commission_cost_basis(self, asset: Asset, cost: float):
         """
         A note about cost-basis in zipline: all positions are considered
         to share a cost basis, even if they were executed in different

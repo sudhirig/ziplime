@@ -3,7 +3,7 @@ from typing import Callable
 
 import pandas as pd
 
-from zipline.gens.sim_engine import (
+from ziplime.gens.sim_engine import (
     BAR,
     SESSION_START,
     SESSION_END,

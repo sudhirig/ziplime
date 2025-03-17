@@ -12,8 +12,10 @@ from lime_trader.models.market import Period
 from zipline.data.adjustments import SQLiteAdjustmentReader, SQLiteAdjustmentWriter
 from zipline.utils.calendar_utils import get_calendar
 from toolz import curry, complement, take
+from zipline.utils.sqlite_utils import check_and_create_engine
 
-from ziplime.assets import  AssetFinder, Asset
+from ziplime.assets.repositories.asset_repository import  AssetRepository
+from ziplime.assets.domain.asset import Asset
 from zipline.assets import AssetDBWriter,  ASSET_DB_VERSION
 
 from zipline.assets.asset_db_migrations import downgrade
@@ -31,52 +33,45 @@ from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
 from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
 from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
-from ziplime.data.storages.bcolz_data_minute_bundle import BcolzDataMinuteBundle, BcolzMinuteBarReader
 from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 
 log = logging.getLogger(__name__)
 
 
-def asset_db_path(bundle_name, timestr, environ=None, db_version=None):
+def asset_db_path(bundle_name, timestr, db_version=None):
     return pth.data_path(
         asset_db_relative(bundle_name, timestr, db_version),
-        environ=environ,
     )
 
 
-def minute_equity_path(bundle_name, timestr, environ=None):
+def minute_equity_path(bundle_name, timestr):
     return pth.data_path(
         minute_equity_relative(bundle_name, timestr),
-        environ=environ,
     )
 
 
-def daily_equity_path(bundle_name, timestr, environ=None):
+def daily_equity_path(bundle_name, timestr):
     return pth.data_path(
         daily_equity_relative(bundle_name, timestr),
-        environ=environ,
     )
 
 
-def fundamental_data_path(bundle_name, timestr, environ=None):
+def fundamental_data_path(bundle_name, timestr):
     return pth.data_path(
         fundamental_data_relative(bundle_name, timestr),
-        environ=environ,
     )
 
 
-def adjustment_db_path(bundle_name, timestr, environ=None):
+def adjustment_db_path(bundle_name, timestr):
     return pth.data_path(
         adjustment_db_relative(bundle_name, timestr),
-        environ=environ,
     )
 
 
-def cache_path(bundle_name, environ=None):
+def cache_path(bundle_name):
     return pth.data_path(
-        cache_relative(bundle_name),
-        environ=environ,
+        cache_relative(bundle_name)
     )
 
 
@@ -139,11 +134,11 @@ def from_bundle_ingest_dirname(cs):
     return pd.Timestamp(cs.replace(";", ":"))
 
 
-def ingestions_for_bundle(bundle, environ=None):
+def ingestions_for_bundle(bundle):
     return sorted(
         (
             from_bundle_ingest_dirname(ing)
-            for ing in os.listdir(pth.data_path([bundle], environ))
+            for ing in os.listdir(pth.data_path([bundle]))
             if not pth.hidden(ing)
         ),
         reverse=True,
@@ -166,7 +161,7 @@ RegisteredBundle = namedtuple(
 @dataclass
 class BundleData:
     name: str
-    asset_finder: AssetFinder
+    asset_repository: AssetRepository
     historical_data_reader: AbstractDataBundle
     fundamental_data_reader: AbstractDataBundle
 
@@ -272,9 +267,6 @@ def _make_bundle_core():
             The name of the bundle.
         f : callable
             The ingest function. This function will be passed:
-
-              environ : mapping
-                  The environment this is being run with.
               asset_db_writer : AssetDBWriter
                   The asset db writer to write into.
               data_bundle_writer : BcolzDailyBarWriter
@@ -377,7 +369,6 @@ def _make_bundle_core():
             market_data_fields: list[ColumnSpecification],
             fundamental_data_fields: list[ColumnSpecification],
             period: Period = None,
-            environ=os.environ,
             timestamp=None,
             assets_versions=(),
             show_progress: bool = False,
@@ -389,8 +380,6 @@ def _make_bundle_core():
         ----------
         name : str
             The name of the bundle.
-        environ : mapping, optional
-            The environment variables. By default this is os.environ.
         timestamp : datetime, optional
             The timestamp to use for the load.
             By default this is the current time.
@@ -422,8 +411,8 @@ def _make_bundle_core():
         timestamp = timestamp.tz_convert("utc").tz_localize(None)
 
         timestr = to_bundle_ingest_dirname(timestamp)
-        cachepath = cache_path(name, environ=environ)
-        pth.ensure_directory(pth.data_path([name, timestr], environ=environ))
+        cachepath = cache_path(name)
+        pth.ensure_directory(pth.data_path([name, timestr]))
         pth.ensure_directory(cachepath)
         with dataframe_cache(
                 cachepath, clean_on_failure=False
@@ -432,7 +421,7 @@ def _make_bundle_core():
             # cache directory if the load fails in the middle
             if bundle.create_writers:
                 wd = stack.enter_context(
-                    working_dir(pth.data_path([], environ=environ))
+                    working_dir(pth.data_path([]))
                 )
                 if period == Period.DAY:
                     bars_path = wd.ensure_dir(*daily_equity_relative(name, timestr))
@@ -487,7 +476,6 @@ def _make_bundle_core():
                     )
             log.info("Ingesting %s", name)
             bundle.ingest(
-                environ=environ,
                 historical_market_data_provider=historical_market_data_provider,
                 fundamental_data_provider=fundamental_data_provider,
                 asset_db_writer=asset_db_writer,
@@ -499,7 +487,7 @@ def _make_bundle_core():
                 end_session=end_session,
                 cache=cache,
                 show_progress=show_progress,
-                output_dir=pth.data_path([name, timestr], environ=environ),
+                output_dir=pth.data_path([name, timestr]),
                 market_data_fields=market_data_fields,
                 fundamental_data_fields=fundamental_data_fields,
                 **kwargs,
@@ -517,7 +505,7 @@ def _make_bundle_core():
                     shutil.copy2(assets_db_path, wf.path)
                     downgrade(wf.path, version)
 
-    def most_recent_data(bundle_name, timestamp, environ=None):
+    def most_recent_data(bundle_name, timestamp):
         """Get the path to the most recent data after ``date``for the
         given bundle.
 
@@ -527,15 +515,13 @@ def _make_bundle_core():
             The name of the bundle to lookup.
         timestamp : datetime
             The timestamp to begin searching on or before.
-        environ : dict, optional
-            An environment dict to forward to zipline_root.
         """
         if bundle_name not in bundles:
             raise UnknownBundle(bundle_name)
 
         try:
             candidates = os.listdir(
-                pth.data_path([bundle_name], environ=environ),
+                pth.data_path([bundle_name]),
             )
             return pth.data_path(
                 [
@@ -545,7 +531,6 @@ def _make_bundle_core():
                         key=from_bundle_ingest_dirname,
                     ),
                 ],
-                environ=environ,
             )
         except (ValueError, OSError) as e:
             if getattr(e, "errno", errno.ENOENT) != errno.ENOENT:
@@ -558,15 +543,13 @@ def _make_bundle_core():
                 ),
             )
 
-    def load(name,  period: Period, environ=os.environ, timestamp=None):
+    def load(name,  period: Period, timestamp=None):
         """Loads a previously ingested bundle.
 
         Parameters
         ----------
         name : str
             The name of the bundle.
-        environ : mapping, optional
-            The environment variables. Defaults of os.environ.
         timestamp : datetime, optional
             The timestamp of the data to lookup.
             Defaults to the current time.
@@ -578,28 +561,32 @@ def _make_bundle_core():
         """
         if timestamp is None:
             timestamp = pd.Timestamp.utcnow()
-        timestr = most_recent_data(name, timestamp, environ=environ)
+        timestr = most_recent_data(name, timestamp)
         if period == Period.DAY:
-            historical_root_directory = daily_equity_path(name, timestr, environ=environ)
+            historical_root_directory = daily_equity_path(name, timestr)
             historical_data_reader = PolarsDataBundle(
                 root_directory=historical_root_directory,
             )
         else:
-            historical_root_directory = minute_equity_path(name, timestr, environ=environ)
+            historical_root_directory = minute_equity_path(name, timestr)
             historical_data_reader = PolarsDataBundle(
                 root_directory=historical_root_directory,
             )
         return BundleData(
             name=name,
-            asset_finder=AssetFinder(
-                asset_db_path(name, timestr, environ=environ),
+            asset_repository=AssetRepository(
+                check_and_create_engine(asset_db_path(name, timestr), require_exists=True)
             ),
+        #         coerce_string(
+        #             partial(check_and_create_engine, require_exists=require_exists)
+        #         )
+        # ,
             historical_data_reader=historical_data_reader,
             fundamental_data_reader=BcolzDataBundle(
-                root_directory=fundamental_data_path(name, timestr, environ=environ),
+                root_directory=fundamental_data_path(name, timestr),
             ),
             adjustment_reader=SQLiteAdjustmentReader(
-                adjustment_db_path(name, timestr, environ=environ),
+                adjustment_db_path(name, timestr),
             ),
         )
 
@@ -607,7 +594,7 @@ def _make_bundle_core():
         before=optionally(ensure_timestamp),
         after=optionally(ensure_timestamp),
     )
-    def clean(name, before=None, after=None, keep_last=None, environ=os.environ):
+    def clean(name, before=None, after=None, keep_last=None):
         """Clean up data that was created with ``ingest`` or
         ``$ python -m zipline ingest``
 
@@ -626,8 +613,6 @@ def _make_bundle_core():
             This argument is mutually exclusive with:
               before
               after
-        environ : mapping, optional
-            The environment variables. Defaults of os.environ.
 
         Returns
         -------
@@ -644,7 +629,7 @@ def _make_bundle_core():
             all_runs = sorted(
                 filter(
                     complement(pth.hidden),
-                    os.listdir(pth.data_path([name], environ=environ)),
+                    os.listdir(pth.data_path([name])),
                 ),
                 key=from_bundle_ingest_dirname,
             )
@@ -679,7 +664,7 @@ def _make_bundle_core():
         for run in all_runs:
             if should_clean(run):
                 log.info("Cleaning %s.", run)
-                path = pth.data_path([name, run], environ=environ)
+                path = pth.data_path([name, run])
                 shutil.rmtree(path)
                 cleaned.add(path)
 

@@ -4,19 +4,22 @@ from decimal import Decimal
 
 from zipline.errors import SymbolNotFound
 
-from ziplime.protocol import Portfolio as ZpPortfolio, Position as ZpPosition, Account as ZpAccount
+from ziplime.domain.portfolio import Portfolio as ZpPortfolio
+from ziplime.domain.position import Position as ZpPosition
+from ziplime.domain.account import  Account as ZpAccount
+
+
 from lime_trader import LimeClient
 from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order, OrderSide, OrderDetails, OrderStatus, OrderType, TimeInForce
-from ziplime.assets import Asset
+from ziplime.assets.domain.asset import Asset
 from zipline.finance.order import (Order as ZPOrder,
                                    ORDER_STATUS as ZP_ORDER_STATUS)
 from zipline.finance.execution import (MarketOrder,
                                        LimitOrder,
-                                       StopOrder,
-                                       StopLimitOrder, ExecutionStyle)
-from ziplime.finance.transaction import Transaction
+                                       ExecutionStyle)
+from ziplime.finance.domain.transaction import Transaction
 from zipline.api import symbol as symbol_lookup
 import pandas as pd
 import numpy as np
@@ -31,16 +34,7 @@ class LimeTraderSdkBroker(Broker):
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)
         self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
-
         self._tracked_orders = {}
-
-    def subscribe_to_market_data(self, asset):
-        '''Do nothing to comply the interface'''
-        pass
-
-    def subscribed_assets(self):
-        '''Do nothing to comply the interface'''
-        return []
 
     def get_positions(self) -> dict[Asset, ZpPosition]:
         z_positions = {}

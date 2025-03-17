@@ -1,19 +1,18 @@
 from abc import abstractmethod
 
-from ziplime.assets import Asset
+from ziplime.assets.domain.asset import Asset
 from zipline.finance.order import Order as ZPOrder
 
-from ziplime.protocol import Position, Portfolio, Account
-
+from ziplime.domain.position import Position
+from ziplime.domain.portfolio import Portfolio
+from ziplime.domain.account import Account
 
 class Broker:
-    @abstractmethod
     def subscribe_to_market_data(self, asset):
-        pass
+        return []
 
-    @abstractmethod
     def get_subscribed_assets(self):
-        pass
+        return []
 
     @abstractmethod
     def get_positions(self) -> dict[Asset, Position]:

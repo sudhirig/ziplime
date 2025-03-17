@@ -7,7 +7,7 @@ Otherwise default to expanduser(~/.zipline)
 
 import os
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional, List
+from typing import Iterable, List
 
 import pandas as pd
 
@@ -80,7 +80,7 @@ def modified_since(path: str, dt: pd.Timestamp) -> bool:
     return Path(path).exists() and last_modified_time(path) > dt
 
 
-def zipline_root(environ: Optional[Mapping[Any, Any]] = None) -> str:
+def zipline_root() -> str:
     """Get the root directory for all zipline-managed files.
 
     For testing purposes, this accepts a dictionary to interpret as the os
@@ -88,126 +88,95 @@ def zipline_root(environ: Optional[Mapping[Any, Any]] = None) -> str:
 
     Parameters
     ----------
-    environ : dict, optional
-        A dict to interpret as the os environment.
 
     Returns
     -------
     root : string
         Path to the zipline root dir.
     """
-    if environ is None:
-        environ = os.environ
 
-    root = environ.get("ZIPLINE_ROOT", None)
+    root = os.environ.get("ZIPLINE_ROOT", None)
     if root is None:
         root = str(Path.expanduser(Path("~/.zipline")))
 
     return root
 
 
-def zipline_path(paths: List[str], environ: Optional[Mapping[Any, Any]] = None) -> str:
+def zipline_path(paths: List[str]) -> str:
     """Get a path relative to the zipline root.
 
     Parameters
     ----------
     paths : list[str]
         List of requested path pieces.
-    environ : dict, optional
-        An environment dict to forward to zipline_root.
-
     Returns
     -------
     newpath : str
         The requested path joined with the zipline root.
     """
-    return str(Path(zipline_root(environ=environ) / Path(*paths)))
+    return str(Path(zipline_root() / Path(*paths)))
 
 
-def default_extension(environ: Optional[Mapping[Any, Any]] = None) -> str:
-    """Get the path to the default zipline extension file.
-
-    Parameters
-    ----------
-    environ : dict, optional
-        An environment dict to forwart to zipline_root.
-
-    Returns
-    -------
-    default_extension_path : str
-        The file path to the default zipline extension file.
-    """
-    return zipline_path(["extension.py"], environ=environ)
-
-
-def data_root(environ: Optional[Mapping[Any, Any]] = None) -> str:
+def data_root() -> str:
     """The root directory for zipline data files.
 
     Parameters
     ----------
-    environ : dict, optional
-        An environment dict to forward to zipline_root.
 
     Returns
     -------
     data_root : str
        The zipline data root.
     """
-    return zipline_path(["data"], environ=environ)
+    return zipline_path(["data"])
 
 
-def data_path(paths: Iterable[str], environ: Optional[Mapping[Any, Any]] = None) -> str:
+def data_path(paths: Iterable[str]) -> str:
     """Get a path relative to the zipline data directory.
 
     Parameters
     ----------
     paths : iterable[str]
         List of requested path pieces.
-    environ : dict, optional
-        An environment dict to forward to zipline_root.
 
     Returns
     -------
     newpath : str
         The requested path joined with the zipline data root.
     """
-    return zipline_path(["data"] + list(paths), environ=environ)
+    return zipline_path(["data"] + list(paths))
 
 
-def cache_root(environ: Optional[Mapping[Any, Any]] = None) -> str:
+def cache_root() -> str:
     """The root directory for zipline cache files.
 
     Parameters
     ----------
-    environ : dict, optional
-        An environment dict to forward to zipline_root.
 
     Returns
     -------
     cache_root : str
        The zipline cache root.
     """
-    return zipline_path(["cache"], environ=environ)
+    return zipline_path(["cache"])
 
 
-def ensure_cache_root(environ: Optional[Mapping[Any, Any]] = None) -> None:
+def ensure_cache_root() -> None:
     """Ensure that the data root exists."""
-    ensure_directory(cache_root(environ=environ))
+    ensure_directory(cache_root())
 
 
-def cache_path(paths: Iterable[str], environ: Optional[dict] = None) -> str:
+def cache_path(paths: Iterable[str], ) -> str:
     """Get a path relative to the zipline cache directory.
 
     Parameters
     ----------
     paths : iterable[str]
         List of requested path pieces.
-    environ : dict, optional
-        An environment dict to forward to zipline_root.
 
     Returns
     -------
     newpath : str
         The requested path joined with the zipline cache root.
     """
-    return zipline_path(["cache"] + list(paths), environ=environ)
+    return zipline_path(["cache"] + list(paths))

@@ -23,7 +23,7 @@ from zipline.finance.transaction import Transaction
 import zipline.protocol as zp
 from zipline.utils.sentinel import sentinel
 from ziplime.finance.domain.position import Position
-from zipline.finance._finance_ext import (
+from ziplime.finance.finance_ext import (
     PositionStats,
     calculate_position_tracker_stats,
     update_position_last_sale_prices,

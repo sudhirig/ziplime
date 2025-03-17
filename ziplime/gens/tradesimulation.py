@@ -173,8 +173,8 @@ class AlgorithmSimulator:
             algo.on_dt_changed(midnight_dt)
 
             metrics_tracker.handle_market_open(
-                midnight_dt,
-                algo.data_portal,
+                session_label=midnight_dt,
+                data_portal=algo.data_portal,
             )
 
             # handle any splits that impact any positions or any open orders.

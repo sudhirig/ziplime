@@ -614,7 +614,7 @@ class AssetRepository:
         options = []
         country_codes = []
         for start, end, sid, _ in owners:
-            if start <= as_of_date < end:
+            if start.date() <= as_of_date < end.date():
                 # find the equity that owned it on the given asof date
                 asset = self.retrieve_asset(sid=sid)
 

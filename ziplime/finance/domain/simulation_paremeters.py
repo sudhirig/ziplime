@@ -11,8 +11,8 @@ class SimulationParameters:
             end_session: datetime.datetime,
             trading_calendar: ExchangeCalendar,
             capital_base: float,
-            emission_rate: DataFrequency,
-            data_frequency: DataFrequency,
+            emission_rate: datetime.timedelta,
+            data_frequency: datetime.timedelta,
             arena: str = "backtest",
     ):
 

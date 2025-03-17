@@ -97,8 +97,8 @@ def _build_ownership_map_from_rows(rows, key_from_row, value_from_row):
                 # TODO FIX TZ MESS
                 # pd.Timestamp(row.start_date, unit="ns", tz="utc"),
                 # pd.Timestamp(row.end_date, unit="ns", tz="utc"),
-                pd.Timestamp(row.start_date, unit="ns", tz=None),
-                pd.Timestamp(row.end_date, unit="ns", tz=None),
+                pd.Timestamp(row.start_date, unit="ns", tz='UTC').to_pydatetime(),
+                pd.Timestamp(row.end_date, unit="ns", tz='UTC').to_pydatetime(),
                 row.sid,
                 value_from_row(row),
             ),

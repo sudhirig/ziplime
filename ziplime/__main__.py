@@ -280,7 +280,7 @@ def bundles(ctx):
 )
 @click.option(
     "--data-frequency",
-    type=click.Choice({"daily", "minute"}),
+    type=click.Choice([df.value for df in DataFrequency]),
     default="daily",
     show_default=True,
     help="The data frequency of the simulation.",
@@ -293,9 +293,7 @@ def bundles(ctx):
 @click.option(
     "-b",
     "--bundle",
-    default=DEFAULT_BUNDLE,
     metavar="BUNDLE-NAME",
-    show_default=True,
     help="The data bundle to use for the simulation.",
 )
 @click.option(
@@ -435,7 +433,7 @@ def run(
     return run_algorithm(
         algofile=getattr(algofile, "name", "<algorithm>"),
         algotext=algotext,
-        data_frequency=DataFrequency.MINUTE if data_frequency == "minute" else DataFrequency.DAY,
+        data_frequency=DataFrequency(data_frequency),
         capital_base=capital_base,
         bundle=bundle,
         bundle_timestamp=bundle_timestamp,

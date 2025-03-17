@@ -104,7 +104,7 @@ class MetricsTracker:
         #     " is called",
         # )
         self._benchmark_source = None
-        if emission_rate == "minute":
+        if emission_rate == DataFrequency.MINUTE:
 
             def progress(self):
                 return 1.0  # a fake value
@@ -233,7 +233,7 @@ class MetricsTracker:
         ledger = self._ledger
         ledger.end_of_bar(session_ix=self._session_count)
         self.end_of_bar(
-            packer=packet,
+            packet=packet,
             ledger=ledger,
             dt=dt,
             session_ix=self._session_count,

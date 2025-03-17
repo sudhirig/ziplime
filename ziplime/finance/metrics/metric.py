@@ -15,16 +15,22 @@
 import datetime
 from functools import partial
 import operator as op
+from typing import Any
 
 from dateutil.relativedelta import relativedelta
 import empyrical as ep
 import numpy as np
 import pandas as pd
+from exchange_calendars import ExchangeCalendar
 
 from zipline.utils.exploding_object import NamedExplodingObject
-from zipline.finance._finance_ext import minute_annual_volatility
+
+from ziplime.data.data_portal import DataPortal
+from ziplime.finance.domain.ledger import Ledger
+from ziplime.finance.finance_ext import minute_annual_volatility
 
 from ziplime.domain.data_frequency import DataFrequency
+from ziplime.sources.benchmark_source import BenchmarkSource
 
 
 class SimpleLedgerField:
@@ -46,12 +52,12 @@ class SimpleLedgerField:
         else:
             self._packet_field = packet_field
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["minute_perf"][self._packet_field] = self._get_ledger_field(
             ledger,
         )
 
-    def end_of_session(self, packet, ledger, session, session_ix, data_portal):
+    def end_of_session(self, packet, ledger, session, session_ix, data_portal: DataPortal):
         packet["daily_perf"][self._packet_field] = self._get_ledger_field(
             ledger,
         )
@@ -77,13 +83,13 @@ class DailyLedgerField:
         else:
             self._packet_field = packet_field
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         field = self._packet_field
         packet["cumulative_perf"][field] = packet["minute_perf"][field] = (
             self._get_ledger_field(ledger)
         )
 
-    def end_of_session(self, packet, ledger, session, session_ix, data_portal):
+    def end_of_session(self, packet, ledger, session, session_ix, data_portal: DataPortal):
         field = self._packet_field
         packet["cumulative_perf"][field] = packet["daily_perf"][field] = (
             self._get_ledger_field(ledger)
@@ -110,11 +116,11 @@ class StartOfPeriodLedgerField:
             self._packet_field = packet_field
 
     def start_of_simulation(
-            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
         self._start_of_simulation = self._get_ledger_field(ledger)
 
-    def start_of_session(self, ledger, session, data_portal):
+    def start_of_session(self, ledger, session, data_portal: DataPortal):
         self._previous_day = self._get_ledger_field(ledger)
 
     def _end_of_period(self, sub_field, packet, ledger):
@@ -122,17 +128,17 @@ class StartOfPeriodLedgerField:
         packet["cumulative_perf"][packet_field] = self._start_of_simulation
         packet[sub_field][packet_field] = self._previous_day
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         self._end_of_period("minute_perf", packet, ledger)
 
-    def end_of_session(self, packet, ledger, session, session_ix, data_portal):
+    def end_of_session(self, packet, ledger, session, session_ix, data_portal: DataPortal):
         self._end_of_period("daily_perf", packet, ledger)
 
 
 class Returns:
     """Tracks the daily and cumulative returns of the algorithm."""
 
-    def _end_of_period(field, packet, ledger, dt, session_ix, data_portal):
+    def _end_of_period(field, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet[field]["returns"] = ledger.todays_returns
         packet["cumulative_perf"]["returns"] = ledger.portfolio.returns
         packet["cumulative_risk_metrics"][
@@ -149,13 +155,13 @@ class BenchmarkReturnsAndVolatility:
     """
 
     def start_of_simulation(
-            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
         daily_returns_series = benchmark_source.daily_returns(
-            sessions[0],
-            sessions[-1],
-        )
-        self._daily_returns = daily_returns_array = daily_returns_series.values
+            sessions[0].date(),
+            sessions[-1].date(),
+        ).select("pct_change")
+        self._daily_returns = daily_returns_array = daily_returns_series
         self._daily_cumulative_returns = np.cumprod(1 + daily_returns_array) - 1
         self._daily_annual_volatility = (
                 daily_returns_series.expanding(2).std(ddof=1) * np.sqrt(252)
@@ -171,9 +177,9 @@ class BenchmarkReturnsAndVolatility:
                 "does not exist in daily emission rate",
             )
         else:
-            open_ = trading_calendar.session_open(sessions[0])
-            close = trading_calendar.session_close(sessions[-1])
-            returns = benchmark_source.get_range(open_, close)
+            open_ = trading_calendar.session_open(sessions[0]).tz_convert(trading_calendar.tz).to_pydatetime()
+            close = trading_calendar.session_close(sessions[-1]).tz_convert(trading_calendar.tz).to_pydatetime()
+            returns = benchmark_source.get_range(start_dt=open_, end_dt=close)
             self._minute_cumulative_returns = (1 + returns).cumprod() - 1
             self._minute_annual_volatility = pd.Series(
                 minute_annual_volatility(
@@ -184,7 +190,7 @@ class BenchmarkReturnsAndVolatility:
                 index=returns.index,
             )
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         r = self._minute_cumulative_returns[dt]
         if np.isnan(r):
             r = None
@@ -195,7 +201,7 @@ class BenchmarkReturnsAndVolatility:
             v = None
         packet["cumulative_risk_metrics"]["benchmark_volatility"] = v
 
-    def end_of_session(self, packet, ledger, session, session_ix, data_portal):
+    def end_of_session(self, packet, ledger, session, session_ix, data_portal: DataPortal):
         r = self._daily_cumulative_returns[session_ix]
         if np.isnan(r):
             r = None
@@ -211,11 +217,11 @@ class PNL:
     """Tracks daily and cumulative PNL."""
 
     def start_of_simulation(
-            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
         self._previous_pnl = 0.0
 
-    def start_of_session(self, ledger, session, data_portal):
+    def start_of_session(self, ledger, session, data_portal: DataPortal):
         self._previous_pnl = ledger.portfolio.pnl
 
     def _end_of_period(self, field, packet, ledger):
@@ -223,10 +229,10 @@ class PNL:
         packet[field]["pnl"] = pnl - self._previous_pnl
         packet["cumulative_perf"]["pnl"] = ledger.portfolio.pnl
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         self._end_of_period("minute_perf", packet, ledger)
 
-    def end_of_session(self, packet, ledger, session, session_ix, data_portal):
+    def end_of_session(self, packet, ledger, session, session_ix, data_portal: DataPortal):
         self._end_of_period("daily_perf", packet, ledger)
 
 
@@ -239,16 +245,16 @@ class CashFlow:
     """
 
     def start_of_simulation(
-            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
         self._previous_cash_flow = 0.0
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         cash_flow = ledger.portfolio.cash_flow
         packet["minute_perf"]["capital_used"] = cash_flow - self._previous_cash_flow
         packet["cumulative_perf"]["capital_used"] = cash_flow
 
-    def end_of_session(self, packet, ledger, session, session_ix, data_portal):
+    def end_of_session(self, packet, ledger, session, session_ix, data_portal: DataPortal):
         cash_flow = ledger.portfolio.cash_flow
         packet["daily_perf"]["capital_used"] = cash_flow - self._previous_cash_flow
         packet["cumulative_perf"]["capital_used"] = cash_flow
@@ -258,30 +264,30 @@ class CashFlow:
 class Orders:
     """Tracks daily orders."""
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["minute_perf"]["orders"] = ledger.orders(dt)
 
-    def end_of_session(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_session(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["daily_perf"]["orders"] = ledger.orders()
 
 
 class Transactions:
     """Tracks daily transactions."""
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["minute_perf"]["transactions"] = ledger.transactions(dt)
 
-    def end_of_session(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_session(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["daily_perf"]["transactions"] = ledger.transactions()
 
 
 class Positions:
     """Tracks daily positions."""
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["minute_perf"]["positions"] = ledger.positions(dt)
 
-    def end_of_session(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_session(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["daily_perf"]["positions"] = ledger.positions()
 
 
@@ -305,7 +311,7 @@ class ReturnsStatistic:
         self._function = function
         self._field_name = field_name
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         res = self._function(ledger.daily_returns_array[: session_ix + 1])
         if not np.isfinite(res):
             res = None
@@ -318,14 +324,14 @@ class AlphaBeta:
     """End of simulation alpha and beta to the benchmark."""
 
     def start_of_simulation(
-            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
         self._daily_returns_array = benchmark_source.daily_returns(
-            sessions[0],
-            sessions[-1],
-        ).values
+            sessions[0].date(),
+            sessions[-1].date(),
+        ).select("pct_change")
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         risk = packet["cumulative_risk_metrics"]
 
         alpha, beta = ep.alpha_beta_aligned(
@@ -346,10 +352,10 @@ class AlphaBeta:
 class MaxLeverage:
     """Tracks the maximum account leverage."""
 
-    def start_of_simulation(self, ledger, emission_rate, trading_calendar, sessions, benchmark_source):
+    def start_of_simulation(self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource):
         self._max_leverage = 0.0
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         self._max_leverage = max(self._max_leverage, ledger.account.leverage)
         packet["cumulative_risk_metrics"]["max_leverage"] = self._max_leverage
 
@@ -359,13 +365,13 @@ class MaxLeverage:
 class NumTradingDays:
     """Report the number of trading days."""
 
-    def start_of_simulation(self, ledger, emission_rate, trading_calendar, sessions, benchmark_source):
+    def start_of_simulation(self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource):
         self._num_trading_days = 0
 
-    def start_of_session(self, ledger, session, data_portal):
+    def start_of_session(self, ledger, session, data_portal: DataPortal):
         self._num_trading_days += 1
 
-    def end_of_bar(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["cumulative_risk_metrics"]["trading_days"] = self._num_trading_days
 
     end_of_session = end_of_bar
@@ -384,7 +390,7 @@ class _ConstantCumulativeRiskMetric:
         self._field = field
         self._value = value
 
-    def end_of_bar(self, packet, *args):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["cumulative_risk_metrics"][self._field] = self._value
 
     def end_of_session(self, packet, *args):
@@ -394,10 +400,10 @@ class _ConstantCumulativeRiskMetric:
 class PeriodLabel:
     """Backwards compat, please kill me."""
 
-    def start_of_session(self, ledger, session, data_portal):
+    def start_of_session(self, ledger, session, data_portal: DataPortal):
         self._label = session.strftime("%Y-%m")
 
-    def end_of_bar(self, packet, *args):
+    def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         packet["cumulative_risk_metrics"]["period_label"] = self._label
 
     end_of_session = end_of_bar
@@ -407,11 +413,11 @@ class _ClassicRiskMetrics:
     """Produces original risk packet."""
 
     def start_of_simulation(
-            self, ledger, emission_rate, trading_calendar, sessions, benchmark_source
+            self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar, sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
         self._leverages = np.full_like(sessions, np.nan, dtype="float64")
 
-    def end_of_session(self, packet, ledger, dt, session_ix, data_portal):
+    def end_of_session(self, packet: dict[str, Any], ledger: Ledger, dt: datetime.datetime, session_ix: int, data_portal: DataPortal):
         self._leverages[session_ix] = ledger.account.leverage
 
     @classmethod
@@ -595,9 +601,9 @@ class _ClassicRiskMetrics:
             self.risk_report(
                 algorithm_returns=ledger.daily_returns_series,
                 benchmark_returns=benchmark_source.daily_returns(
-                    sessions[0],
-                    sessions[-1],
-                ),
+                    sessions[0].date(),
+                    sessions[-1].date(),
+                ).select("pct_change"),
                 algorithm_leverages=self._leverages,
             )
         )

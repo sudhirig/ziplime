@@ -15,6 +15,7 @@ from ziplime.finance.metrics import default_metrics
 from ziplime.gens.brokers.broker import Broker
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.data.data_portal_live import DataPortalLive
+from ziplime.sources.benchmark_source import BenchmarkSource
 
 try:
     from pygments import highlight
@@ -68,7 +69,7 @@ class _RunAlgoError(click.ClickException, ValueError):
 # flake8: noqa: C901
 def run_algorithm(
         algofile: str,
-        algotext,
+        algotext: str,
         data_frequency: DataFrequency,
         capital_base: float,
         bundle: str,
@@ -98,20 +99,13 @@ def run_algorithm(
 
     # date parameter validation
     if not broker and trading_calendar.sessions_distance(start, end) < 1:
-        raise _RunAlgoError(
-            "There are no trading days between %s and %s"
-            % (
-                start.date(),
-                end.date(),
-            ),
-        )
+        raise _RunAlgoError(f"There are no trading days between {start.date()} and {end.date()}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
         asset_repository=bundle_data.asset_repository,
         start_date=start.date(),
         end_date=end.date(),
     )
-
 
     if print_algo:
         if PYGMENTS:
@@ -130,7 +124,7 @@ def run_algorithm(
     realtime_bar_target = None
     # emission_rate = data_frequency
     if broker:
-        data = DataPortalLive(
+        data_portal = DataPortalLive(
             asset_repository=bundle_data.asset_repository,
             broker=broker,
             trading_calendar=trading_calendar,
@@ -147,7 +141,7 @@ def run_algorithm(
         realtime_bar_target = f"{data_path(['realtime'])}"
         # emission_rate = 'minute'
     else:
-        data = DataPortal(
+        data_portal = DataPortal(
             bundle_data.asset_repository,
             trading_calendar=trading_calendar,
             first_trading_day=first_trading_day,
@@ -180,20 +174,36 @@ def run_algorithm(
         end_session=end,
         trading_calendar=trading_calendar,
         capital_base=capital_base,
-        emission_rate=data_frequency,
-        data_frequency=data_frequency,
+        emission_rate=data_frequency.to_timedelta(),
+        data_frequency=data_frequency.to_timedelta(),
+    )
+
+    if benchmark_sid is not None:
+        benchmark_asset = data_portal.asset_repository.retrieve_asset(benchmark_sid)
+        benchmark_returns = None
+    else:
+        benchmark_asset = None
+        benchmark_returns = benchmark_returns
+    benchmark_source = BenchmarkSource(
+        benchmark_asset=benchmark_asset,
+        benchmark_returns=benchmark_returns,
+        trading_calendar=trading_calendar,
+        sessions=sim_params.sessions,
+        data_portal=data_portal,
+        emission_rate=sim_params.emission_rate,
+        timedelta_period=data_frequency.to_timedelta(),
+        benchmark_fields=["close"]
     )
 
     try:
         if broker is None:
             tr = TradingAlgorithm(
-                data_portal=data,
+                data_portal=data_portal,
                 get_pipeline_loader=choose_loader,
                 sim_params=sim_params,
                 metrics_set=metrics_set,
                 blotter=SimulationBlotter(),
-                benchmark_returns=benchmark_returns,
-                benchmark_sid=benchmark_sid,
+                benchmark_source=benchmark_source,
                 algo_filename=algofile,
                 script=algotext
             )
@@ -204,13 +214,12 @@ def run_algorithm(
                 broker=broker,
                 state_filename=state_filename,
                 realtime_bar_target=realtime_bar_target,
-                data_portal=data,
+                data_portal=data_portal,
                 get_pipeline_loader=choose_loader,
                 sim_params=sim_params,
                 metrics_set=metrics_set,
                 blotter=blotter_live,
-                benchmark_returns=benchmark_returns,
-                benchmark_sid=benchmark_sid,
+                benchmark_source=benchmark_source,
                 algo_filename=algofile,
                 script=algotext,
             )
@@ -237,104 +246,3 @@ def run_algorithm(
         perf.to_pickle(output)
 
     return perf
-
-#
-# def run_algorithm(
-#         start: datetime.datetime,
-#         end: datetime.datetime,
-#         capital_base: float,
-#         data_frequency: DataFrequency,
-#         before_trading_start=None,
-#         analyze=None,
-#         bundle: str = "lime",
-#         bundle_timestamp=None,
-#         trading_calendar=None,
-#         metrics_set="default",
-#         benchmark_returns=None,
-#         environ=os.environ,
-#         custom_loader=None,
-#         print_algo: bool = False,
-#         algotext=None,
-#         algofile=None,
-#         market_data_provider: AbstractLiveMarketDataProvider = None,
-#         broker: Broker = None
-# ):
-#     """
-#     Run a trading algorithm.
-#
-#     Parameters
-#     ----------
-#     start : datetime
-#         The start date of the backtest.
-#     end : datetime
-#         The end date of the backtest..
-#     initialize : callable[context -> None]
-#         The initialize function to use for the algorithm. This is called once
-#         at the very begining of the backtest and should be used to set up
-#         any state needed by the algorithm.
-#     capital_base : float
-#         The starting capital for the backtest.
-#     handle_data : callable[(context, BarData) -> None], optional
-#         The handle_data function to use for the algorithm. This is called
-#         every minute when ``data_frequency == 'minute'`` or every day
-#         when ``data_frequency == 'daily'``.
-#     before_trading_start : callable[(context, BarData) -> None], optional
-#         The before_trading_start function for the algorithm. This is called
-#         once before each trading day (after initialize on the first day).
-#     analyze : callable[(context, pd.DataFrame) -> None], optional
-#         The analyze function to use for the algorithm. This function is called
-#         once at the end of the backtest and is passed the context and the
-#         performance data.
-#     data_frequency : {'daily', 'minute'}, optional
-#         The data frequency to run the algorithm at.
-#     bundle : str, optional
-#         The name of the data bundle to use to load the data to run the backtest
-#         with. This defaults to 'quantopian-quandl'.
-#     bundle_timestamp : datetime, optional
-#         The datetime to lookup the bundle data for. This defaults to the
-#         current time.
-#     trading_calendar : TradingCalendar, optional
-#         The trading calendar to use for your backtest.
-#     metrics_set : iterable[Metric] or str, optional
-#         The set of metrics to compute in the simulation. If a string is passed,
-#         resolve the set with :func:`zipline.finance.metrics.load`.
-#     benchmark_returns : pd.Series, optional
-#         Series of returns to use as the benchmark.
-#     environ : mapping[str -> str], optional
-#         The os environment to use. Many extensions use this to get parameters.
-#         This defaults to ``os.environ``.
-#
-#     Returns
-#     -------
-#     perf : pd.DataFrame
-#         The daily performance of the algorithm.
-#
-#     See Also
-#     --------
-#     zipline.data.bundles.bundles : The available data bundles.
-#     """
-#
-#     benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
-#
-#     return _run(
-#         before_trading_start=before_trading_start,
-#         analyze=analyze,
-#         algofile=algofile,
-#         algotext=algotext,
-#         data_frequency=data_frequency,
-#         capital_base=capital_base,
-#         bundle=bundle,
-#         bundle_timestamp=bundle_timestamp,
-#         start=start,
-#         end=end,
-#         output=os.devnull,
-#         trading_calendar=trading_calendar,
-#         print_algo=print_algo,
-#         metrics_set=metrics_set,
-#         local_namespace=False,
-#         environ=environ,
-#         custom_loader=custom_loader,
-#         benchmark_spec=benchmark_spec,
-#         broker=broker,
-#         market_data_provider=market_data_provider,
-#     )

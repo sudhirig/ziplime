@@ -10,6 +10,7 @@ import polars as pl
 
 from ziplime.assets.domain.asset import Asset
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
+from ziplime.domain import data_frequency
 from ziplime.domain.column_specification import ColumnSpecification
 
 import numpy as np
@@ -20,6 +21,8 @@ import pandas as pd
 from zipline.data.bar_reader import NoDataAfterDate, NoDataBeforeDate, NoDataOnDate
 from zipline.utils.calendar_utils import get_calendar
 from zipline.utils.cli import maybe_show_progress
+
+from ziplime.domain.data_frequency import DataFrequency
 
 
 class PolarsDataBundle(AbstractDataBundle):
@@ -95,6 +98,12 @@ class PolarsDataBundle(AbstractDataBundle):
 
     @property
     @lru_cache
+    def data_frequency(self) -> DataFrequency:
+        return DataFrequency.MINUTE
+        return DataFrequency(self.get_metadata()["data_frequency"], "%Y-%m-%d")
+
+    @property
+    @lru_cache
     def trading_calendar(self):
         return get_calendar(self.get_metadata()["calendar_name"])
 
@@ -121,14 +130,20 @@ class PolarsDataBundle(AbstractDataBundle):
     def last_available_dt(self):
         return self.sessions[-1]
 
-    def load_raw_arrays(self, fields: list[str], start_date: pd.Timestamp, end_date: pd.Timestamp,
+    def load_raw_arrays(self, fields: list[str], start_date: datetime.datetime, end_date: datetime.datetime,
                         assets: list[Asset]):
         df_cols = list(set(fields + ["date", "sid"]))
         df = self.get_dataframe()[df_cols]
-        start_date_tz = start_date.to_pydatetime().replace(tzinfo=self.trading_calendar.tz)
-        end_date_tz = end_date.to_pydatetime().replace(tzinfo=self.trading_calendar.tz)
-        res = df.filter(pl.col("date").is_between(start_date_tz, end_date_tz),
+        res = df.filter(pl.col("date").is_between(start_date, end_date),
                         pl.col("sid").is_in([asset.sid for asset in assets]))
+        return res
+
+    def load_raw_arrays_limit(self, fields: list[str], limit: int, end_date: datetime.datetime,
+                              assets: list[Asset]):
+        df_cols = list(set(fields + ["date", "sid"]))
+        df = self.get_dataframe()[df_cols]
+        res = df.filter(pl.col("date") < end_date,
+                        pl.col("sid").is_in([asset.sid for asset in assets]))[-limit:]
         return res
 
     @lru_cache
@@ -279,6 +294,7 @@ class PolarsDataBundle(AbstractDataBundle):
             self, data, calendar: ExchangeCalendar, start_session: pd.Timestamp, end_session: pd.Timestamp,
             cols: list[ColumnSpecification],
             validate_sessions: bool,
+            data_frequency: DataFrequency,
             assets=None, show_progress=False, invalid_data_behavior="warn",
             **kwargs
     ):
@@ -314,14 +330,16 @@ class PolarsDataBundle(AbstractDataBundle):
             return self._write_internal(iterator=it, assets=assets, calendar=calendar,
                                         start_session=start_session, end_session=end_session,
                                         cols=cols, show_progress=show_progress,
-                                        validate_sessions=validate_sessions
+                                        validate_sessions=validate_sessions,
+                                        data_frequency=data_frequency,
                                         )
 
     def _write_internal(self, iterator, assets,
                         calendar: ExchangeCalendar, start_session: pd.Timestamp, end_session: pd.Timestamp,
                         show_progress,
                         cols: list[ColumnSpecification],
-                        validate_sessions: bool
+                        validate_sessions: bool,
+                        data_frequency: DataFrequency
                         ):
         """Internal implementation of write.
 
@@ -422,7 +440,8 @@ class PolarsDataBundle(AbstractDataBundle):
             "first_trading_day": earliest_date,
             "column_specification": [
                 asdict(col) for col in cols
-            ]
+            ],
+            "data_frequency": data_frequency.value
         }
         with open(self.metadata_path, "wb") as f:
             json_metadata = orjson.dumps(metadata)

@@ -29,6 +29,7 @@ from itertools import chain, repeat
 
 from exchange_calendars import ExchangeCalendar
 
+from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.blotter.blotter import Blotter
 from zipline.utils.calendar_utils import get_calendar, days_at_time
 
@@ -221,8 +222,7 @@ class TradingAlgorithm:
             metrics_set,
             blotter: Blotter,
             algo_filename,
-            benchmark_sid=None,
-            benchmark_returns=None,
+            benchmark_source:BenchmarkSource,
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
@@ -245,7 +245,7 @@ class TradingAlgorithm:
         # set_benchmark.
         self.data_portal = data_portal
 
-        self.benchmark_returns = benchmark_returns
+        self.benchmark_source = benchmark_source
 
         # XXX: This is also a mess. We should remove all of this and only allow
         #      one way to pass a calendar.
@@ -324,7 +324,6 @@ class TradingAlgorithm:
 
         self.initialize_kwargs = initialize_kwargs or {}
 
-        self.benchmark_sid = benchmark_sid
 
         # A dictionary of capital changes, keyed by timestamp, indicating the
         # target/delta of the capital changes, along with values
@@ -392,8 +391,8 @@ class TradingAlgorithm:
             self.trading_calendar.tz)
         minutely_emission = False
 
-        if self.sim_params.data_frequency == "minute":
-            minutely_emission = self.sim_params.emission_rate == "minute"
+        if self.sim_params.data_frequency == DataFrequency.MINUTE:
+            minutely_emission = self.sim_params.emission_rate == DataFrequency.MINUTE
 
             # The calendar's execution times are the minutes over which we
             # actually want to run the clock. Typically the execution times
@@ -439,23 +438,10 @@ class TradingAlgorithm:
             market_closes=execution_closes,
             before_trading_start_minutes=before_trading_start_minutes,
             minute_emission=minutely_emission,
+            timezone=self.sim_params.trading_calendar.tz
         )
 
-    def _create_benchmark_source(self) -> BenchmarkSource:
-        if self.benchmark_sid is not None:
-            benchmark_asset = self.data_portal.asset_repository.retrieve_asset(self.benchmark_sid)
-            benchmark_returns = None
-        else:
-            benchmark_asset = None
-            benchmark_returns = self.benchmark_returns
-        return BenchmarkSource(
-            benchmark_asset=benchmark_asset,
-            benchmark_returns=benchmark_returns,
-            trading_calendar=self.trading_calendar,
-            sessions=self.sim_params.sessions,
-            data_portal=self.data_portal,
-            emission_rate=self.sim_params.emission_rate,
-        )
+
 
     def _create_generator(self):
         self.metrics_tracker = MetricsTracker(
@@ -476,18 +462,17 @@ class TradingAlgorithm:
             self.initialize(**self.initialize_kwargs)
             self.initialized = True
 
-        benchmark_source = self._create_benchmark_source()
 
         self.trading_client = AlgorithmSimulator(
             algo=self,
             sim_params=self.sim_params,
             data_portal=self.data_portal,
             clock=self._create_clock(),
-            benchmark_source=benchmark_source,
+            benchmark_source=self.benchmark_source,
             restrictions=self.restrictions,
         )
 
-        self.metrics_tracker.handle_start_of_simulation(benchmark_source=benchmark_source)
+        self.metrics_tracker.handle_start_of_simulation(benchmark_source=self.benchmark_source)
         return self.trading_client.transform()
 
     def compute_eager_pipelines(self):
@@ -727,25 +712,6 @@ class TradingAlgorithm:
             self._recorded_vars[name] = value
 
     @api_method
-    def set_benchmark(self, benchmark: Asset):
-        """Set the benchmark asset.
-
-        Parameters
-        ----------
-        benchmark : zipline.assets.Asset
-            The asset to set as the new benchmark.
-
-        Notes
-        -----
-        Any dividends payed out for that new benchmark asset will be
-        automatically reinvested.
-        """
-        if self.initialized:
-            raise SetBenchmarkOutsideInitialize()
-
-        self.benchmark_sid = benchmark
-
-    @api_method
     def continuous_future(
             self, root_symbol_str: str, offset: int = 0, roll: str = "volume", adjustment: str = "mul"
     ):
@@ -809,7 +775,7 @@ class TradingAlgorithm:
         _lookup_date = (
             self._symbol_lookup_date
             if self._symbol_lookup_date is not None
-            else pd.Timestamp(self.sim_params.end_session).to_pydatetime()
+            else pd.Timestamp(self.sim_params.end_session).to_pydatetime().date()
         )
 
         return self.data_portal.asset_repository.lookup_symbol(
@@ -1185,9 +1151,7 @@ class TradingAlgorithm:
         self.blotter.set_date(dt)
 
     @api_method
-    @preprocess(tz=coerce_string(pytz.timezone))
-    @expect_types(tz=optional(tzinfo))
-    def get_datetime(self, tz=None):
+    def get_datetime(self):
         """Returns the current simulation datetime.
 
         Parameters
@@ -1201,21 +1165,6 @@ class TradingAlgorithm:
             The current simulation datetime converted to ``tz``.
         """
         dt = self.datetime
-        from packaging.version import Version
-        import pytz
-
-        if Version(pd.__version__) < Version("2.0.0"):
-            assert (
-                    dt.tzinfo == pytz.utc
-            ), f"Algorithm should have a pytc utc datetime, {dt.tzinfo}"
-        else:
-            assert (
-                    dt.tzinfo == timezone.utc
-            ), f"Algorithm should have a timezone.utc datetime, {dt.tzinfo}"
-        if tz is not None:
-            dt = dt.astimezone(tz)
-        else:
-            dt = dt.astimezone(self.trading_calendar.tz)
         return dt
 
     @api_method

@@ -22,7 +22,7 @@ import pandas as pd
 from zipline.finance.transaction import Transaction
 import zipline.protocol as zp
 from ziplime.finance.domain.position import Position
-from zipline.finance._finance_ext import (
+from ziplime.finance.finance_ext import (
     PositionStats,
     calculate_position_tracker_stats,
     update_position_last_sale_prices,
@@ -281,7 +281,7 @@ class PositionTracker:
                 field="price",
                 dt=previous_minute,
                 perspective_dt=dt,
-                data_frequency=self._data_frequency
+                data_frequency=self.data_frequency
             )
 
         else:
@@ -289,7 +289,7 @@ class PositionTracker:
                 self._data_portal.get_scalar_asset_spot_value,
                 field="price",
                 dt=dt,
-                data_frequency=self._data_frequency
+                data_frequency=self.data_frequency
             )
 
         update_position_last_sale_prices(self.positions, get_price, dt)

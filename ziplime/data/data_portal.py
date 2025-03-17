@@ -497,7 +497,8 @@ class DataPortal:
         return adjustment_ratios_per_asset
 
     def get_adjusted_value(
-            self, asset: Asset, field: str, dt: pd.Timestamp, perspective_dt: pd.Timestamp, data_frequency: DataFrequency,
+            self, asset: Asset, field: str, dt: pd.Timestamp, perspective_dt: pd.Timestamp,
+            data_frequency: DataFrequency,
             spot_value: float = None
     ):
         """Returns a scalar value representing the value
@@ -737,9 +738,13 @@ class DataPortal:
         return pd.DataFrame(asset_minute_data, index=minutes_for_window, columns=assets)
 
     def get_history_window(
-            self, assets: list[Asset], end_dt: pd.Timestamp, bar_count: int, frequency: DataFrequency,
+            self, assets: list[Asset],
+            end_dt: pd.Timestamp, bar_count: int,
+            frequency: DataFrequency,
             fields: list[str],
-            data_frequency: DataFrequency, ffill: bool = True
+            data_frequency: DataFrequency,
+            timedelta_period:datetime.timedelta=None,
+            ffill: bool = True
     ):
         """Public API method that returns a dataframe containing the requested
         history window.  Data is fully adjusted.
@@ -770,9 +775,7 @@ class DataPortal:
         -------
         A dataframe containing the requested data.
         """
-        # if field not in OHLCVP_FIELDS and field != "sid":
-        #     raise ValueError(f"Invalid field: {field}")
-
+        data_bundle_delta = self._data_reader.data_frequency.to_timedelta()
         if bar_count < 1:
             raise ValueError(f"bar_count must be >= 1, but got {bar_count}")
         fields_for_fetch = []
@@ -781,16 +784,35 @@ class DataPortal:
                 fields_for_fetch.append("close")
             else:
                 fields_for_fetch.append(field)
+        total_bar_count = bar_count
+        if data_bundle_delta < timedelta_period:
+            multiplier = int(timedelta_period/data_bundle_delta) * data_bundle_delta
+            total_bar_count = bar_count * multiplier
 
-        if frequency == DataFrequency.DAY:
-            df = self._get_history_daily_window(
-                assets=assets, end_dt=end_dt, bar_count=bar_count, fields=fields_for_fetch,
-                data_frequency=data_frequency
+        df = self._data_reader.load_raw_arrays_limit(
+                fields=fields,
+                limit=total_bar_count,
+                end_date=end_dt,
+                assets=assets,
             )
-        elif frequency == DataFrequency.MINUTE:
-            df = self._get_history_minute_window(assets=assets, end_dt=end_dt, bar_count=bar_count, fields=fields_for_fetch)
-        else:
-            raise ValueError(f"Invalid frequency: {frequency}")
+        return df
+        # df = self._data_reader.load_raw_arrays(
+        #         fields=fields,
+        #         start_date=days_for_window[0],
+        #         end_date=days_for_window[-1],
+        #         assets=assets,
+        #     )
+
+        # if frequency == DataFrequency.DAY:
+        #     df = self._get_history_daily_window(
+        #         assets=assets, end_dt=end_dt, bar_count=bar_count, fields=fields_for_fetch,
+        #         data_frequency=data_frequency
+        #     )
+        # elif frequency == DataFrequency.MINUTE:
+        #     df = self._get_history_minute_window(assets=assets, end_dt=end_dt, bar_count=bar_count,
+        #                                          fields=fields_for_fetch)
+        # else:
+        #     raise ValueError(f"Invalid frequency: {frequency}")
 
         # forward-fill price
         # if field == "price":

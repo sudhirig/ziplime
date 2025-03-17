@@ -1,3 +1,5 @@
+import datetime
+
 import pandas as pd
 import structlog
 
@@ -5,6 +7,7 @@ from zipline.data.benchmarks import get_benchmark_returns_from_file
 
 from zipline.errors import SymbolNotFound
 
+from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.utils.run_algo import _RunAlgoError
 
 
@@ -34,8 +37,8 @@ class BenchmarkSpec:
             self,
             benchmark_returns: pd.Series,
             benchmark_file: str | None,
-            benchmark_sid: int| None,
-            benchmark_symbol: str| None,
+            benchmark_sid: int | None,
+            benchmark_symbol: str | None,
             no_benchmark: bool,
     ):
         self._logger = structlog.get_logger(__name__)
@@ -46,8 +49,7 @@ class BenchmarkSpec:
         self.benchmark_symbol = benchmark_symbol
         self.no_benchmark = no_benchmark
 
-
-    def resolve(self, asset_repository, start_date, end_date):
+    def resolve(self, asset_repository: AssetRepository, start_date: datetime.date, end_date: datetime.date):
         """
         Resolve inputs into values to be passed to TradingAlgorithm.
 
@@ -91,16 +93,14 @@ class BenchmarkSpec:
                 benchmark_sid = asset.sid
                 benchmark_returns = None
             except SymbolNotFound:
-                raise _RunAlgoError(
-                    "Symbol %r as a benchmark not found in this bundle."
-                    % self.benchmark_symbol
-                )
+                raise _RunAlgoError(f"Symbol {self.benchmark_symbol} as a benchmark not found in this bundle.")
         elif self.no_benchmark:
             benchmark_sid = None
-            benchmark_returns = self._zero_benchmark_returns(
-                start_date=start_date,
-                end_date=end_date,
+            benchmark_returns = pd.Series(
+                index=pd.date_range(start_date, end_date, freq="1d").date,
+                data=0.0,
             )
+
         else:
             self._logger.warning(
                 "No benchmark configured. " "Assuming algorithm calls set_benchmark."
@@ -116,10 +116,3 @@ class BenchmarkSpec:
             benchmark_returns = None
 
         return benchmark_sid, benchmark_returns
-
-    @staticmethod
-    def _zero_benchmark_returns(start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.Series:
-        return pd.Series(
-            index=pd.date_range(start_date, end_date, freq="1d").date,
-            data=0.0,
-        )

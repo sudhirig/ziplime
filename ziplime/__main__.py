@@ -425,12 +425,16 @@ def run(
         benchmark_file=benchmark_file,
         no_benchmark=no_benchmark,
     )
+    algotext = None
+    if algofile is not None:
+        algotext = algofile.read()
+
     if broker is not None:
         start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)  # - pd.Timedelta(days=3)
         end = start + pd.Timedelta('5 day')
     return run_algorithm(
-        algofile=algofile,
-        algotext=None,
+        algofile=getattr(algofile, "name", "<algorithm>"),
+        algotext=algotext,
         data_frequency=DataFrequency.MINUTE if data_frequency == "minute" else DataFrequency.DAY,
         capital_base=capital_base,
         bundle=bundle,

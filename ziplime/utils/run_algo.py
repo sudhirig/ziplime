@@ -112,8 +112,6 @@ def run_algorithm(
         end_date=end.date(),
     )
 
-    if algofile is not None:
-        algotext = algofile.read()
 
     if print_algo:
         if PYGMENTS:
@@ -196,7 +194,7 @@ def run_algorithm(
                 blotter=SimulationBlotter(),
                 benchmark_returns=benchmark_returns,
                 benchmark_sid=benchmark_sid,
-                algo_filename=getattr(algofile, "name", "<algorithm>"),
+                algo_filename=algofile,
                 script=algotext
             )
         else:
@@ -213,7 +211,7 @@ def run_algorithm(
                 blotter=blotter_live,
                 benchmark_returns=benchmark_returns,
                 benchmark_sid=benchmark_sid,
-                algo_filename=getattr(algofile, "name", "<algorithm>"),
+                algo_filename=algofile,
                 script=algotext,
             )
         tr.bundle_data = bundle_data

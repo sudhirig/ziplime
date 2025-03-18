@@ -89,9 +89,9 @@ class BenchmarkSource:
            This method expects minute inputs if ``emission_rate == 'minute'``
            and session labels when ``emission_rate == 'daily``.
         """
-        return self._precalculated_series.loc[dt]
+        return self._precalculated_series.iloc[dt]
 
-    def get_range(self, start_dt: pd.Timestamp, end_dt: pd.Timestamp) -> pd.Series:
+    def get_range(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pl.DataFrame:
         """Look up the returns for a given period.
 
         Parameters
@@ -115,7 +115,7 @@ class BenchmarkSource:
            This method expects minute inputs if ``emission_rate == 'minute'``
            and session labels when ``emission_rate == 'daily``.
         """
-        return self._precalculated_series.loc[start_dt.date():end_dt.date()]
+        return self._precalculated_series.filter(pl.col("date").is_between(start_dt,end_dt))
 
     def daily_returns(self, start: datetime.datetime, end: datetime.datetime | None = None) -> pd.Series:
         """Returns the daily returns for the given period.

@@ -237,7 +237,7 @@ class AlgorithmSimulator:
                 elif action == SESSION_END:
                     # End of the session.
                     positions = metrics_tracker.positions
-                    position_assets = algo.asset_repository.retrieve_all(sids=positions)
+                    position_assets = algo.data_portal.asset_repository.retrieve_all(sids=positions)
                     self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
 
                     execute_order_cancellation_policy()

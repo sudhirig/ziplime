@@ -316,9 +316,9 @@ class MetricsTracker:
         ledger = self._ledger
         ledger.end_of_session(session_ix=session_ix)
         self.end_of_session(
-            packer=packet,
+            packet=packet,
             ledger=ledger,
-            dt=completed_session,
+            session=completed_session,
             session_ix=session_ix,
             data_portal=data_portal,
         )

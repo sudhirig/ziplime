@@ -12,7 +12,7 @@ class AbstractFundamentalDataProvider:
                              symbols: list[str],
                              date_from: datetime.datetime,
                              date_to: datetime.datetime,
-                             period: Period,
+                             frequency: datetime.timedelta,
                              fundamental_data_list: set[str]
                              ):
         pass

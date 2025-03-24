@@ -10,7 +10,6 @@ import polars as pl
 
 from ziplime.assets.domain.asset import Asset
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
-from ziplime.domain import data_frequency
 from ziplime.domain.column_specification import ColumnSpecification
 
 import numpy as np
@@ -96,11 +95,14 @@ class PolarsDataBundle(AbstractDataBundle):
     def first_trading_day(self):
         return datetime.datetime.strptime(self.get_metadata()["first_trading_day"], "%Y-%m-%d")
 
+
     @property
     @lru_cache
-    def data_frequency(self) -> DataFrequency:
-        return DataFrequency.MINUTE
-        return DataFrequency(self.get_metadata()["data_frequency"], "%Y-%m-%d")
+    def frequency(self) -> datetime.timedelta:
+        return datetime.timedelta(seconds=int(self.get_metadata()["frequency"]))
+
+        # return DataFrequency.MINUTE
+        # return DataFrequency(self.get_metadata()["data_frequency"], "%Y-%m-%d")
 
     @property
     @lru_cache
@@ -131,20 +133,41 @@ class PolarsDataBundle(AbstractDataBundle):
         return self.sessions[-1]
 
     def load_raw_arrays(self, fields: list[str], start_date: datetime.datetime, end_date: datetime.datetime,
-                        assets: list[Asset]):
+                        assets: list[Asset]) -> pl.DataFrame:
         df_cols = list(set(fields + ["date", "sid"]))
         df = self.get_dataframe()[df_cols]
         res = df.filter(pl.col("date").is_between(start_date, end_date),
                         pl.col("sid").is_in([asset.sid for asset in assets]))
         return res
 
-    def load_raw_arrays_limit(self, fields: list[str], limit: int, end_date: datetime.datetime,
-                              assets: list[Asset]):
-        df_cols = list(set(fields + ["date", "sid"]))
-        df = self.get_dataframe()[df_cols]
-        res = df.filter(pl.col("date") < end_date,
-                        pl.col("sid").is_in([asset.sid for asset in assets]))[-limit:]
-        return res
+    def load_raw_arrays_limit(self, fields: list[str], limit: int,
+                              end_date: datetime.datetime,
+                              frequency: datetime.timedelta,
+                              assets: list[Asset],
+                              include_end_date: bool,
+                              ) -> pl.DataFrame:
+
+        total_bar_count = limit
+        if self.frequency < frequency:
+            multiplier = int(frequency / self.frequency)
+            total_bar_count = limit * multiplier
+
+        cols = list(set(fields + ["date", "sid"]))
+        if include_end_date:
+            df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
+                pl.col("date") <= end_date,
+                pl.col("sid").is_in([asset.sid for asset in assets])
+            ).group_by(pl.col("sid")).tail(total_bar_count).sort(by="date")
+        else:
+            df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
+                pl.col("date") < end_date,
+                pl.col("sid").is_in([asset.sid for asset in assets])).group_by(pl.col("sid")).tail(
+                total_bar_count).sort(by="date")
+        if self.frequency < frequency:
+            df = df_raw.group_by_dynamic(
+                index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields)
+            return df
+        return df_raw
 
     @lru_cache
     def get_dataframe(self) -> pl.DataFrame:
@@ -294,7 +317,7 @@ class PolarsDataBundle(AbstractDataBundle):
             self, data, calendar: ExchangeCalendar, start_session: pd.Timestamp, end_session: pd.Timestamp,
             cols: list[ColumnSpecification],
             validate_sessions: bool,
-            data_frequency: DataFrequency,
+            frequency: datetime.timedelta,
             assets=None, show_progress=False, invalid_data_behavior="warn",
             **kwargs
     ):
@@ -331,7 +354,7 @@ class PolarsDataBundle(AbstractDataBundle):
                                         start_session=start_session, end_session=end_session,
                                         cols=cols, show_progress=show_progress,
                                         validate_sessions=validate_sessions,
-                                        data_frequency=data_frequency,
+                                        frequency=frequency,
                                         )
 
     def _write_internal(self, iterator, assets,
@@ -339,7 +362,7 @@ class PolarsDataBundle(AbstractDataBundle):
                         show_progress,
                         cols: list[ColumnSpecification],
                         validate_sessions: bool,
-                        data_frequency: DataFrequency
+                        frequency: datetime.timedelta
                         ):
         """Internal implementation of write.
 
@@ -357,6 +380,7 @@ class PolarsDataBundle(AbstractDataBundle):
 
         types_map = {
             "float64": pl.Float64,
+            "float": pl.Float64,
             "float32": pl.Float32,
             "int": pl.Int64,
             "date": pl.Datetime,
@@ -441,7 +465,7 @@ class PolarsDataBundle(AbstractDataBundle):
             "column_specification": [
                 asdict(col) for col in cols
             ],
-            "data_frequency": data_frequency.value
+            "frequency": frequency.total_seconds()
         }
         with open(self.metadata_path, "wb") as f:
             json_metadata = orjson.dumps(metadata)

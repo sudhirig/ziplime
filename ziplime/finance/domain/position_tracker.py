@@ -262,7 +262,7 @@ class PositionTracker:
         for asset, pos in self.positions.items():
             # Adds the new position if we didn't have one before, or overwrite
             # one we have currently
-            positions[asset] = pos.protocol_position
+            positions[asset] = pos
 
         return positions
 
@@ -275,24 +275,24 @@ class PositionTracker:
         self._dirty_stats = True
 
         if handle_non_market_minutes:
-            previous_minute = self._data_portal.trading_calendar.previous_minute(dt)
+            previous_minute = self._data_portal.trading_calendar.previous_minute(minute=dt)
             get_price = partial(
                 self._data_portal.get_adjusted_value,
-                field="price",
+                field="close",
                 dt=previous_minute,
                 perspective_dt=dt,
-                data_frequency=self.data_frequency
+                frequency=self.data_frequency
             )
 
         else:
             get_price = partial(
                 self._data_portal.get_scalar_asset_spot_value,
-                field="price",
+                field="close",
                 dt=dt,
-                data_frequency=self.data_frequency
+                frequency=self.data_frequency
             )
 
-        update_position_last_sale_prices(self.positions, get_price, dt)
+        update_position_last_sale_prices(positions=self.positions, get_price=get_price, dt=dt)
 
     @property
     def stats(self):

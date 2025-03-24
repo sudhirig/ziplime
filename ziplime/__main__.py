@@ -10,7 +10,6 @@ from zipline.utils.calendar_utils import get_calendar
 
 from ziplime.constants.default_columns import OHLCV_COLUMNS_POLARS, DEFAULT_COLUMNS_POLARS
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
-from ziplime.data.storages.bcolz_data_bundle import BcolzDataBundle
 from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
 from ziplime.domain.benchmark_spec import BenchmarkSpec
 from ziplime.domain.data_frequency import DataFrequency
@@ -100,9 +99,9 @@ def main(ctx):
                                  )
 )
 @click.option(
-    "--period",
-    default="day",
-    type=click.Choice(['minute', 'hour', 'day', 'week', 'month', 'quarter'], case_sensitive=False),
+    "--frequency",
+    default="1d",
+    type=click.Choice([df.value for df in DataFrequency]),
 )
 @click.option("-s", '--symbols')
 @click.option('--fundamental-data')
@@ -138,7 +137,7 @@ def main(ctx):
     help="If passed, fundamental data won't be ingested.",
 )
 @click.pass_context
-def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, fundamental_data, show_progress,
+def ingest(ctx, bundle, new_bundle_name, start_date, end_date, frequency, symbols, fundamental_data, show_progress,
            assets_version, calendar,
            historical_market_data_provider,
            fundamental_data_provider,
@@ -158,17 +157,18 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         bundle_name = bundle
         ctx.args = ['-b', bundle] + ctx.args
     # install a logging handler before performing any other operations
+    fundamental_data_list_cols = fundamental_data_list if fundamental_data_list is not None else [
+        col.name for col in
+        FUNDAMENTAL_DATA_COLUMNS
+    ]
     register_lime_symbol_list_equities_bundle(
         bundle_name=bundle_name,
         symbols=symbols_parsed,
         start_session=start_date,
         end_session=end_date,
-        period=Period(period),
+        frequency=DataFrequency(frequency).to_timedelta(),
         calendar_name=calendar,
-        fundamental_data_list=fundamental_data_list if fundamental_data_list is not None else [
-            col.name for col in
-            FUNDAMENTAL_DATA_COLUMNS
-        ],
+        fundamental_data_list=fundamental_data_list_cols,
     )
 
     new_params = dict(**ctx.params)
@@ -178,7 +178,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
 
     fundamental_data_provider_instance = get_fundamental_data_provider(code=fundamental_data_provider)
     fundamental_data_column_names = fundamental_data_provider_instance.get_fundamental_data_column_names(
-        fundamental_data_fields=set(fundamental_data_list))
+        fundamental_data_fields=set(fundamental_data_list_cols))
     fundamental_data_cols = (
         [
             col
@@ -186,7 +186,7 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
             if col.name in fundamental_data_column_names
         ]
         if fundamental_data_list is not None
-        else DEFAULT_COLUMNS_POLARS
+        else FUNDAMENTAL_DATA_COLUMNS
     )
     bundles_module.ingest(
         name=bundle_name,
@@ -196,10 +196,10 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, period, symbols, 
         historical_market_data_provider=get_historical_market_data_provider(code=historical_market_data_provider),
         fundamental_data_provider=fundamental_data_provider_instance,
         data_bundle_writer_class=PolarsDataBundle,
-        fundamental_data_writer_class=BcolzDataBundle,
+        fundamental_data_writer_class=PolarsDataBundle,
         market_data_fields=OHLCV_COLUMNS_POLARS,
         fundamental_data_fields=fundamental_data_cols,
-        period=Period(period)
+        frequency=DataFrequency(frequency).to_timedelta()
     )
 
 
@@ -279,11 +279,10 @@ def bundles(ctx):
     help="The file that contains the algorithm to run.",
 )
 @click.option(
-    "--data-frequency",
+    "--emission-rate",
     type=click.Choice([df.value for df in DataFrequency]),
-    default="daily",
     show_default=True,
-    help="The data frequency of the simulation.",
+    help="Emission rate of the simulation.",
 )
 @click.option(
     "--capital-base",
@@ -332,13 +331,13 @@ def bundles(ctx):
 )
 @click.option(
     "-s",
-    "--start",
+    "--start-date",
     type=click.DateTime(formats=["%Y-%m-%d"]),
     help="The start date of the simulation.",
 )
 @click.option(
     "-e",
-    "--end",
+    "--end-date",
     type=click.DateTime(formats=["%Y-%m-%d"]),
     help="The end date of the simulation.",
 )
@@ -395,7 +394,7 @@ def bundles(ctx):
 def run(
         ctx,
         algofile,
-        data_frequency,
+        emission_rate,
         capital_base,
         bundle,
         bundle_timestamp,
@@ -403,8 +402,8 @@ def run(
         benchmark_symbol,
         benchmark_sid,
         no_benchmark,
-        start,
-        end,
+        start_date,
+        end_date,
         output,
         trading_calendar,
         print_algo,
@@ -428,17 +427,17 @@ def run(
         algotext = algofile.read()
 
     if broker is not None:
-        start = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)  # - pd.Timedelta(days=3)
-        end = start + pd.Timedelta('5 day')
+        start_date = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)  # - pd.Timedelta(days=3)
+        end_date = start_date + pd.Timedelta('5 day')
     return run_algorithm(
         algofile=getattr(algofile, "name", "<algorithm>"),
         algotext=algotext,
-        data_frequency=DataFrequency(data_frequency),
+        emission_rate=DataFrequency(emission_rate).to_timedelta(),
         capital_base=capital_base,
         bundle=bundle,
         bundle_timestamp=bundle_timestamp,
-        start=start,
-        end=end,
+        start_date=start_date,
+        end_date=end_date,
         output=output,
         trading_calendar=trading_calendar,
         print_algo=print_algo,

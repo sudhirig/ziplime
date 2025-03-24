@@ -16,7 +16,7 @@ def _get_fundamental_data_task(
         symbol: str,
         date_from: datetime.datetime,
         date_to: datetime.datetime,
-        period: Period,
+        frequency: datetime.timedelta,
         fundamental_data_list: set[str],
         limex_api_key: str
 ):
@@ -146,14 +146,14 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
                              symbols: list[str],
                              date_from: datetime.datetime,
                              date_to: datetime.datetime,
-                             period: Period,
+                             frequency: datetime.timedelta,
                              fundamental_data_list: set[str]
                              ):
 
         def fetch_fundamental(limex_api_key: str, symbol: str):
             try:
                 result = _get_fundamental_data_task(date_from=date_from, date_to=date_to,
-                                                    limex_api_key=limex_api_key, symbol=symbol, period=period,
+                                                    limex_api_key=limex_api_key, symbol=symbol, frequency=frequency,
                                                     fundamental_data_list=fundamental_data_list)
                 return result
             except Exception as e:

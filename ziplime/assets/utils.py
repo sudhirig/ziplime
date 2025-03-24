@@ -164,7 +164,7 @@ def _convert_asset_timestamp_fields(dict_):
     for key in _asset_timestamp_fields & dict_.keys():
         # TODO FIX TZ MESS
         # value = pd.Timestamp(dict_[key], tz="UTC")
-        value = pd.Timestamp(dict_[key], tz=None)
+        value = pd.Timestamp(dict_[key], tz=None).to_pydatetime().date()
         dict_[key] = None if pd.isnull(value) else value
     return dict_
 

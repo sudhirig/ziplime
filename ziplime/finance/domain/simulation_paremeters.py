@@ -1,7 +1,6 @@
 import datetime
 from exchange_calendars import ExchangeCalendar
-
-from ziplime.domain.data_frequency import DataFrequency
+import polars as pl
 
 
 class SimulationParameters:
@@ -43,7 +42,7 @@ class SimulationParameters:
             # push it forward to the first valid session
             self.start_session = trading_calendar.minute_to_session(
                 self.start_session
-            ).tz_localize(self.trading_calendar.tz)
+            ).tz_localize(self.trading_calendar.tz).to_pydatetime().date()
 
         if not trading_calendar.is_session(self.end_session):
             # if the end date is not a valid session in this calendar,
@@ -51,16 +50,16 @@ class SimulationParameters:
             # end date.
             self._end_session = trading_calendar.minute_to_session(
                 self.end_session, direction="previous"
-            ).tz_localize(self.trading_calendar.tz)
+            ).tz_localize(self.trading_calendar.tz).to_pydatetime()
 
         self.first_open = trading_calendar.session_first_minute(
             self.start_session
-        ).tz_convert(self.trading_calendar.tz)
+        ).tz_convert(self.trading_calendar.tz).to_pydatetime()
         self.last_close = trading_calendar.session_close(
             self.end_session
-        ).tz_convert(self.trading_calendar.tz)
+        ).tz_convert(self.trading_calendar.tz).to_pydatetime()
 
 
-        self.sessions = self.trading_calendar.sessions_in_range(
-            self.start_session, self.end_session
-        )
+        self.sessions = pl.Series(self.trading_calendar.sessions_in_range(
+            self.start_session, self.end_session)
+        ).dt.date()

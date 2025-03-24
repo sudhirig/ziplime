@@ -22,6 +22,8 @@ from zipline.assets import Future
 from zipline.finance.transaction import Transaction
 import zipline.protocol as zp
 from zipline.utils.sentinel import sentinel
+
+from ziplime.domain.order import Order
 from ziplime.finance.domain.position import Position
 from ziplime.finance.finance_ext import (
     PositionStats,
@@ -245,7 +247,7 @@ class Ledger:
         if leftover_cash > 0:
             self._cash_flow(leftover_cash)
 
-    def process_order(self, order):
+    def process_order(self, order: Order):
         """Keep track of an order that was placed.
 
         Parameters

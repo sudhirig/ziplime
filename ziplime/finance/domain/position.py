@@ -35,35 +35,40 @@ from math import copysign
 import numpy as np
 import logging
 
-from zipline.assets import Future
-import zipline.protocol as zp
 from zipline.data.adjustments import Dividend
 
 from ziplime.assets.domain.asset import Asset
-
+from ziplime.assets.domain.future import Future
+from ziplime.domain.inner_position import InnerPosition
+from ziplime.domain.position import Position  as ZpPosition
 
 class Position:
 
     def __init__(
-            self, asset: Asset, amount: float = 0,
+            self, asset: Asset, amount: int = 0,
             cost_basis: float = 0.0, last_sale_price: float = 0.0, last_sale_date=None
     ):
-        inner = zp.InnerPosition(
-            asset=asset,
-            amount=amount,
-            cost_basis=cost_basis,
-            last_sale_price=last_sale_price,
-            last_sale_date=last_sale_date,
-        )
-        self.inner_position = inner
-        self.protocol_position = zp.Position(inner)
+        # inner = InnerPosition(
+        #     asset=asset,
+        #     amount=amount,
+        #     cost_basis=cost_basis,
+        #     last_sale_price=last_sale_price,
+        #     last_sale_date=last_sale_date,
+        # )
+        self.asset =asset
+        self.amount = amount
+        self.cost_basis = cost_basis
+        self.last_sale_price = last_sale_price
+        self.last_sale_date = last_sale_date
+        # self.inner_position = inner
+        # self.protocol_position = self
         self._logger = logging.getLogger(__name__)
 
-    def __getattr__(self, attr):
-        return getattr(self.inner_position, attr)
-
-    def __setattr__(self, attr, value):
-        setattr(self.inner_position, attr, value)
+    # def __getattr__(self, attr):
+    #     return getattr(self.inner_position, attr)
+    #
+    # def __setattr__(self, attr, value):
+    #     setattr(self.inner_position, attr, value)
 
     def earn_dividend(self, dividend: Dividend) -> dict[str, float]:
         """

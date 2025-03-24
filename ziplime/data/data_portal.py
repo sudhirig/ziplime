@@ -19,6 +19,7 @@ import logging
 from typing import Any
 
 import numpy as np
+import polars as pl
 from numpy import float64, int64, nan
 import pandas as pd
 from pandas import isnull
@@ -39,6 +40,7 @@ from zipline.assets.roll_finder import (
 )
 
 from ziplime.assets.repositories.asset_repository import AssetRepository
+from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.data.dispatch_bar_reader import (
     AssetDispatchMinuteBarReader,
     AssetDispatchSessionBarReader,
@@ -83,7 +85,7 @@ class DataPortal:
         The AssetFinder instance used to resolve assets.
     trading_calendar: zipline.utils.calendar.exchange_calendar.TradingCalendar
         The calendar instance used to provide minute->session information.
-    first_trading_day : pd.Timestamp
+    first_trading_day : datetime.datetime
         The first trading day for the simulation.
     historical_data_reader : BcolzDailyBarReader, optional
         The daily bar reader for equities. This will be used to service
@@ -102,9 +104,9 @@ class DataPortal:
     adjustment_reader : SQLiteAdjustmentWriter, optional
         The adjustment reader. This is used to apply splits, dividends, and
         other adjustment data to the raw data from the readers.
-    last_available_session : pd.Timestamp, optional
+    last_available_session : datetime.datetime, optional
         The last session to make available in session-level data.
-    last_available_minute : pd.Timestamp, optional
+    last_available_minute : datetime.datetime, optional
         The last minute to make available in minute-level data.
     """
 
@@ -115,7 +117,7 @@ class DataPortal:
             first_trading_day,
             fields: list[str],
             fundamental_data_reader,
-            historical_data_reader=None,
+            historical_data_reader: AbstractDataBundle,
             future_daily_reader=None,
             future_minute_reader=None,
             adjustment_reader=None,
@@ -290,14 +292,20 @@ class DataPortal:
         """
         return self._get_pricing_reader(data_frequency=data_frequency).get_last_traded_dt(asset=asset, dt=dt)
 
-    def _get_single_asset_value(self, session_label: pd.Timestamp, asset: Asset, field: str, dt: pd.Timestamp,
-                                data_frequency: DataFrequency):
+    def _get_single_asset_value(self, asset: Asset, field: str, dt: datetime.datetime,
+                                frequency: datetime.timedelta) -> pl.DataFrame:
 
+        return self.get_spot_value(
+            assets=[asset],
+            fields=[field],
+            dt=dt,
+            frequency=frequency,
+        )
         if field not in self._fields:
             raise KeyError("Invalid column: " + str(field))
 
         if (
-                dt < asset.start_date.tz_localize(dt.tzinfo)
+                dt < asset.start_date
                 or (
                 data_frequency == "daily" and add_tz_info(session_label, tzinfo=datetime.timezone.utc) > add_tz_info(
             asset.end_date, tzinfo=datetime.timezone.utc))
@@ -336,7 +344,8 @@ class DataPortal:
             else:
                 return self._get_minute_spot_value(asset=asset, column=field, dt=dt)
 
-    def get_spot_value(self, assets: list[Asset], field: str, dt: pd.Timestamp, data_frequency: DataFrequency):
+    def get_spot_value(self, assets: list[Asset], fields: list[str], dt: datetime.datetime,
+                       frequency: datetime.timedelta):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
 
@@ -347,7 +356,7 @@ class DataPortal:
         field : {'open', 'high', 'low', 'close', 'volume',
                  'price', 'last_traded'}
             The desired field of the asset.
-        dt : pd.Timestamp
+        dt : datetime.datetime
             The timestamp for the desired value.
         data_frequency : str
             The frequency of the data to query; i.e. whether the data is
@@ -355,7 +364,7 @@ class DataPortal:
 
         Returns
         -------
-        value : float, int, or pd.Timestamp
+        value : float, int, or datetime.datetime
             The spot value of ``field`` for ``asset`` The return type is based
             on the ``field`` requested. If the field is one of 'open', 'high',
             'low', 'close', or 'price', the value will be a float. If the
@@ -375,7 +384,7 @@ class DataPortal:
         #             "Unexpected 'assets' value of type {}.".format(type(assets))
         #         ) from exc
 
-        session_label = self.trading_calendar.minute_to_session(dt)
+        session_label = self.trading_calendar.minute_to_session(dt).date()
 
         # if assets_is_scalar:
         #     return self._get_single_asset_value(
@@ -387,18 +396,28 @@ class DataPortal:
         #     )
         # else:
         # get_single_asset_value =
-        return [
-            self._get_single_asset_value(
-                session_label=session_label,
-                asset=asset,
-                field=field,
-                dt=dt,
-                data_frequency=data_frequency,
-            )
-            for asset in assets
-        ]
+        # self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
 
-    def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: pd.Timestamp, data_frequency: DataFrequency):
+        df_raw = self._data_reader.load_raw_arrays_limit(
+            fields=fields,
+            limit=1,
+            end_date=dt,
+            frequency=frequency,
+            assets=assets,
+            include_end_date=True,
+        )
+        return df_raw
+
+        # return self._get_single_asset_value(
+        #     session_label=session_label,
+        #     asset=asset,
+        #     field=field,
+        #     dt=dt,
+        #     data_frequency=data_frequency,
+        # )
+
+    def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
+                                    frequency: datetime.timedelta):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
 
@@ -410,7 +429,7 @@ class DataPortal:
         field : {'open', 'high', 'low', 'close', 'volume',
                  'price', 'last_traded'}
             The desired field of the asset.
-        dt : pd.Timestamp
+        dt : datetime.datetime
             The timestamp for the desired value.
         data_frequency : str
             The frequency of the data to query; i.e. whether the data is
@@ -418,7 +437,7 @@ class DataPortal:
 
         Returns
         -------
-        value : float, int, or pd.Timestamp
+        value : float, int, or datetime.datetime
             The spot value of ``field`` for ``asset`` The return type is based
             on the ``field`` requested. If the field is one of 'open', 'high',
             'low', 'close', or 'price', the value will be a float. If the
@@ -426,14 +445,13 @@ class DataPortal:
             'last_traded' the value will be a Timestamp.
         """
         return self._get_single_asset_value(
-            session_label=self.trading_calendar.minute_to_session(dt),
             asset=asset,
             field=field,
             dt=dt,
-            data_frequency=data_frequency,
+            frequency=frequency,
         )
 
-    def get_adjustments(self, assets: list[Asset], field: str, dt: pd.Timestamp, perspective_dt: pd.Timestamp):
+    def get_adjustments(self, assets: list[Asset], field: str, dt: datetime.datetime, perspective_dt: datetime.datetime):
         """Returns a list of adjustments between the dt and perspective_dt for the
         given field and list of assets
 
@@ -444,9 +462,9 @@ class DataPortal:
         field : {'open', 'high', 'low', 'close', 'volume', \
                  'price', 'last_traded'}
             The desired field of the asset.
-        dt : pd.Timestamp
+        dt : datetime.datetime
             The timestamp for the desired value.
-        perspective_dt : pd.Timestamp
+        perspective_dt : datetime.datetime
             The timestamp from which the data is being viewed back from.
 
         Returns
@@ -497,7 +515,7 @@ class DataPortal:
         return adjustment_ratios_per_asset
 
     def get_adjusted_value(
-            self, asset: Asset, field: str, dt: pd.Timestamp, perspective_dt: pd.Timestamp,
+            self, asset: Asset, field: str, dt: datetime.datetime, perspective_dt: datetime.datetime,
             data_frequency: DataFrequency,
             spot_value: float = None
     ):
@@ -511,9 +529,9 @@ class DataPortal:
         field : {'open', 'high', 'low', 'close', 'volume', \
                  'price', 'last_traded'}
             The desired field of the asset.
-        dt : pd.Timestamp
+        dt : datetime.datetime
             The timestamp for the desired value.
-        perspective_dt : pd.Timestamp
+        perspective_dt : datetime.datetime
             The timestamp from which the data is being viewed back from.
         data_frequency : str
             The frequency of the data to query; i.e. whether the data is
@@ -521,7 +539,7 @@ class DataPortal:
 
         Returns
         -------
-        value : float, int, or pd.Timestamp
+        value : float, int, or datetime.datetime
             The value of the given ``field`` for ``asset`` at ``dt`` with any
             adjustments known by ``perspective_dt`` applied. The return type is
             based on the ``field`` requested. If the field is one of 'open',
@@ -546,7 +564,7 @@ class DataPortal:
 
         return spot_value
 
-    def _get_minute_spot_value(self, asset: Asset, column: str, dt: pd.Timestamp, ffill: bool = False):
+    def _get_minute_spot_value(self, asset: Asset, column: str, dt: datetime.datetime, ffill: bool = False):
         reader = self._get_pricing_reader(data_frequency="minute")
 
         if not ffill:
@@ -590,7 +608,7 @@ class DataPortal:
             asset=asset, field=column, dt=query_dt, perspective_dt=dt, data_frequency="minute", spot_value=result
         )
 
-    def _get_daily_spot_value(self, asset: Asset, column: str, dt: pd.Timestamp):
+    def _get_daily_spot_value(self, asset: Asset, column: str, dt: datetime.datetime):
         reader = self._get_pricing_reader(data_frequency="daily")
         if column == "last_traded":
             last_traded_dt = reader.get_last_traded_dt(asset=asset, dt=dt)
@@ -625,7 +643,7 @@ class DataPortal:
                 return np.nan
 
     @remember_last
-    def _get_days_for_window(self, end_date: pd.Timestamp, bar_count: int):
+    def _get_days_for_window(self, end_date: datetime.datetime, bar_count: int):
         tds = self.trading_calendar.sessions
         end_loc = tds.get_loc(end_date)
         start_loc = end_loc - bar_count + 1
@@ -641,7 +659,7 @@ class DataPortal:
     def _get_history_daily_window(
             self,
             assets: list[Asset],
-            end_dt: pd.Timestamp,
+            end_dt: datetime.datetime,
             bar_count: int,
             fields: list[str],
             data_frequency: DataFrequency
@@ -739,11 +757,11 @@ class DataPortal:
 
     def get_history_window(
             self, assets: list[Asset],
-            end_dt: pd.Timestamp, bar_count: int,
-            frequency: DataFrequency,
+            end_dt: datetime.datetime,
+            bar_count: int,
             fields: list[str],
-            data_frequency: DataFrequency,
-            timedelta_period:datetime.timedelta=None,
+            frequency: datetime.timedelta,
+            include_end: bool = False,
             ffill: bool = True
     ):
         """Public API method that returns a dataframe containing the requested
@@ -775,104 +793,17 @@ class DataPortal:
         -------
         A dataframe containing the requested data.
         """
-        data_bundle_delta = self._data_reader.data_frequency.to_timedelta()
         if bar_count < 1:
             raise ValueError(f"bar_count must be >= 1, but got {bar_count}")
-        fields_for_fetch = []
-        for idx, field in enumerate(fields):
-            if field == "price":
-                fields_for_fetch.append("close")
-            else:
-                fields_for_fetch.append(field)
-        total_bar_count = bar_count
-        if data_bundle_delta < timedelta_period:
-            multiplier = int(timedelta_period/data_bundle_delta) * data_bundle_delta
-            total_bar_count = bar_count * multiplier
-
-        df = self._data_reader.load_raw_arrays_limit(
-                fields=fields,
-                limit=total_bar_count,
-                end_date=end_dt,
-                assets=assets,
-            )
-        return df
-        # df = self._data_reader.load_raw_arrays(
-        #         fields=fields,
-        #         start_date=days_for_window[0],
-        #         end_date=days_for_window[-1],
-        #         assets=assets,
-        #     )
-
-        # if frequency == DataFrequency.DAY:
-        #     df = self._get_history_daily_window(
-        #         assets=assets, end_dt=end_dt, bar_count=bar_count, fields=fields_for_fetch,
-        #         data_frequency=data_frequency
-        #     )
-        # elif frequency == DataFrequency.MINUTE:
-        #     df = self._get_history_minute_window(assets=assets, end_dt=end_dt, bar_count=bar_count,
-        #                                          fields=fields_for_fetch)
-        # else:
-        #     raise ValueError(f"Invalid frequency: {frequency}")
-
-        # forward-fill price
-        # if field == "price":
-        #     if frequency == "1m":
-        #         ffill_data_frequency = "minute"
-        #     elif frequency == "1d":
-        #         ffill_data_frequency = "daily"
-        #     else:
-        #         raise Exception("Only 1d and 1m are supported for forward-filling.")
-
-        # assets_with_leading_nan = np.where(isnull(df.iloc[0]))[0]
-
-        # history_start, history_end = df.index[[0, -1]]
-        # if ffill_data_frequency == "daily" and data_frequency == "minute":
-        #     # When we're looking for a daily value, but we haven't seen any
-        #     # volume in today's minute bars yet, we need to use the
-        #     # previous day's ffilled daily price. Using today's daily price
-        #     # could yield a value from later today.
-        #     history_start -= self.trading_calendar.day
-
-        # initial_values = []
-        # for asset in df.columns[assets_with_leading_nan]:
-        #     last_traded = self.get_last_traded_dt(
-        #         asset=asset,
-        #         dt=history_start,
-        #         data_frequency=ffill_data_frequency,
-        #     )
-        #     if isnull(last_traded):
-        #         initial_values.append(nan)
-        #     else:
-        #         initial_values.append(
-        #             self.get_adjusted_value(
-        #                 asset=asset,
-        #                 field=field,
-        #                 dt=last_traded,
-        #                 perspective_dt=history_end,
-        #                 data_frequency=ffill_data_frequency,
-        #             )
-        #         )
-
-        # Set leading values for assets that were missing data, then ffill.
-        # df.iloc[0, assets_with_leading_nan] = np.array(
-        #     initial_values, dtype=np.float64
-        # )
-        # df.ffill(inplace=True)
-
-        # forward-filling will incorrectly produce values after the end of
-        # an asset's lifetime, so write NaNs back over the asset's
-        # end_date.
-        # normed_index = df.index.normalize()
-        # for asset in df.columns:
-        #     if history_end >= asset.end_date.tz_localize(history_end.tzinfo):
-        #         # if the window extends past the asset's end date, set
-        #         # all post-end-date values to NaN in that asset's series
-        #         df.loc[
-        #             normed_index > asset.end_date.tz_localize(normed_index.tz),
-        #             asset,
-        #         ] = nan
-
-        return df
+        df_raw = self._data_reader.load_raw_arrays_limit(
+            fields=fields,
+            limit=bar_count,
+            frequency=frequency,
+            end_date=end_dt,
+            assets=assets,
+            include_end_date=False
+        )
+        return df_raw
 
     def _get_daily_window_data(self, assets: list[Asset], fields: list[str], days_in_window, extra_slot: bool = True):
         """Internal method that gets a window of adjusted daily data for a sid
@@ -950,7 +881,7 @@ class DataPortal:
         Returns
         -------
         adjustments: list
-            A list of [multiplier, pd.Timestamp], earliest first
+            A list of [multiplier, datetime.datetime], earliest first
 
         """
         if self._adjustment_reader is None:
@@ -967,14 +898,14 @@ class DataPortal:
 
         return adjustments
 
-    def get_splits(self, assets: list[Asset], dt: pd.Timestamp):
+    def get_splits(self, assets: list[Asset], dt: datetime.date):
         """Returns any splits for the given sids and the given dt.
 
         Parameters
         ----------
         assets : container
             Assets for which we want splits.
-        dt : pd.Timestamp
+        dt : datetime.datetime
             The date for which we are checking for splits. Note: this is
             expected to be midnight UTC.
 
@@ -988,10 +919,10 @@ class DataPortal:
 
         # convert dt to # of seconds since epoch, because that's what we use
         # in the adjustments db
-        seconds = int(dt.value / 1e9)
+        # seconds = int(dt.value / 1e9)
 
         splits = self._adjustment_reader.conn.execute(
-            "SELECT sid, ratio FROM SPLITS WHERE effective_date = ?", (seconds,)
+            "SELECT sid, ratio FROM SPLITS WHERE effective_date = ?", (dt,)
         ).fetchall()
 
         splits = [split for split in splits if split[0] in assets]
@@ -1016,7 +947,7 @@ class DataPortal:
         Returns
         -------
         list: A list of objects with all relevant attributes populated.
-        All timestamp fields are converted to pd.Timestamps.
+        All timestamp fields are converted to datetime.datetime.
         """
 
         if self._adjustment_reader is None:
@@ -1025,8 +956,8 @@ class DataPortal:
         if len(trading_days) == 0:
             return []
 
-        start_dt = trading_days[0].value / 1e9
-        end_dt = trading_days[-1].value / 1e9
+        start_dt = trading_days[0]
+        end_dt = trading_days[-1]
 
         dividends = self._adjustment_reader.conn.execute(
             "SELECT declared_date, ex_date, pay_date, payment_sid, ratio, "
@@ -1043,19 +974,19 @@ class DataPortal:
         for dividend_tuple in dividends:
             dividend_info.append(
                 {
-                    "declared_date": pd.Timestamp(dividend_tuple[0], unit="s"),
-                    "ex_date": pd.Timestamp(dividend_tuple[1], unit="s"),
-                    "pay_date": pd.Timestamp(dividend_tuple[2], unit="s"),
+                    "declared_date": pd.Timestamp(dividend_tuple[0], unit="s").to_pydatetime(),
+                    "ex_date": pd.Timestamp(dividend_tuple[1], unit="s").to_pydatetime(),
+                    "pay_date": pd.Timestamp(dividend_tuple[2], unit="s").to_pydatetime(),
                     "payment_sid": dividend_tuple[3],
                     "ratio": dividend_tuple[4],
-                    "record_date": pd.Timestamp(dividend_tuple[5], unit="s"),
+                    "record_date": pd.Timestamp(dividend_tuple[5], unit="s").to_pydatetime(),
                     "sid": dividend_tuple[6],
                 }
             )
 
         return dividend_info
 
-    def get_fetcher_assets(self, dt: pd.Timestamp):
+    def get_fetcher_assets(self, dt: datetime.datetime):
         """Returns a list of assets for the current date, as defined by the
         fetcher data.
 
@@ -1081,7 +1012,7 @@ class DataPortal:
         else:
             return [assets] if isinstance(assets, Asset) else []
 
-    def get_current_future_chain(self, continuous_future: ContinuousFuture, dt: pd.Timestamp):
+    def get_current_future_chain(self, continuous_future: ContinuousFuture, dt: datetime.datetime):
         """Retrieves the future chain for the contract at the given `dt` according
         the `continuous_future` specification.
 
@@ -1102,7 +1033,7 @@ class DataPortal:
         chain = oc.active_chain(contract_center, session.value)
         return self.asset_repository.retrieve_all(sids=chain)
 
-    def _get_current_contract(self, continuous_future: ContinuousFuture, dt: pd.Timestamp):
+    def _get_current_contract(self, continuous_future: ContinuousFuture, dt: datetime.datetime):
         rf = self._roll_finders[continuous_future.roll_style]
         contract_sid = rf.get_contract_center(
             continuous_future.root_symbol, dt, continuous_future.offset

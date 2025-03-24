@@ -7,7 +7,7 @@ from ziplime.gens.sim_engine import (
     BAR,
     SESSION_START,
     SESSION_END,
-    MINUTE_END,
+    EMISSION_RATE_END,
     BEFORE_TRADING_START_BAR
 )
 
@@ -88,14 +88,14 @@ class RealtimeClock:
                     self._last_emit = server_time
                     yield server_time, BAR
                     if self.minute_emission:
-                        yield server_time, MINUTE_END
+                        yield server_time, EMISSION_RATE_END
                 else:
                     sleep(1)
             elif server_time == self.execution_closes.iloc[current_session_index]:
                 self._last_emit = server_time
                 yield server_time, BAR
                 if self.minute_emission:
-                    yield server_time, MINUTE_END
+                    yield server_time, EMISSION_RATE_END
                 yield server_time, SESSION_END
             elif server_time > self.execution_closes.iloc[current_session_index]:
                 # Return with no yield if the algo is started in after hours

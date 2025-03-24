@@ -242,10 +242,9 @@ class BenchmarkSource:
             assets=[asset],
             end_dt=all_bars[-1],
             bar_count=len(all_bars) + 1,
-            frequency=DataFrequency.MINUTE,
+            # frequency=DataFrequency.MINUTE,
+            frequency=self.timedelta_period,
             fields=self.benchmark_fields,
-            data_frequency=None,
-            timedelta_period=self.timedelta_period,
             ffill=True,
         )
         return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))[1:]
@@ -267,9 +266,9 @@ class BenchmarkSource:
                 assets=[asset],
                 end_dt=trading_days[-1],
                 bar_count=len(trading_days) + 1,
-                frequency=DataFrequency.DAY,
+                # frequency=DataFrequency.DAY,
+                frequency=self.emission_rate.to_timedelta(),
                 fields=["price"],
-                data_frequency=self.emission_rate,
                 ffill=True,
             )[asset]
 
@@ -282,24 +281,24 @@ class BenchmarkSource:
                 assets=[asset],
                 end_dt=trading_days[-1],
                 bar_count=len(trading_days),
-                frequency=DataFrequency.DAY,
+                # frequency=DataFrequency.DAY,
+                frequency=self.emission_rate.to_timedelta(),
                 fields=["price"],
-                data_frequency=self.emission_rate,
                 ffill=True,
             )[asset]
 
             # get a minute history window of the first day
             first_open = data_portal.get_spot_value(
                 assets=[asset],
-                field="open",
+                fields=["open"],
                 dt=trading_days[0],
-                data_frequency=DataFrequency.DAY,
+                data_frequency=datetime.timedelta(days=1),
             )
             first_close = data_portal.get_spot_value(
                 assets=[asset],
-                field=["close"],
+                fields=["close"],
                 dt=trading_days[0],
-                data_frequency=DataFrequency.DAY,
+                frequency=datetime.timedelta(days=1),
             )
 
             first_day_return = (first_close - first_open) / first_open

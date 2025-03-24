@@ -144,7 +144,7 @@ class BarData:
             dt = self.data_portal.trading_calendar.minute_to_session(dt)
 
         # return dt
-        return dt.tz_localize(self.data_portal.trading_calendar.tz)
+        return dt
 
     # @check_parameters(('assets', 'fields'),
     #                   ((Asset, ContinuousFuture, str), (str,)))
@@ -300,16 +300,22 @@ class BarData:
 
         if not self._adjust_minutes:
             for field in fields:
-                series = pd.Series(data={
-                    asset: self.data_portal.get_spot_value(
-                        assets=[asset],
-                        field=field,
+                # series = pd.Series(data={
+                #     asset: self.data_portal.get_spot_value(
+                #         assets=[asset],
+                #         field=field,
+                #         dt=self._get_current_minute(),
+                #         data_frequency=self.data_frequency
+                #     )
+                #     for asset in assets
+                # }, index=assets, name=field)
+                # data[field] = series
+                return self.data_portal.get_spot_value(
+                        assets=assets,
+                        fields=[field],
                         dt=self._get_current_minute(),
-                        data_frequency=self.data_frequency
+                        frequency=self.data_frequency
                     )
-                    for asset in assets
-                }, index=assets, name=field)
-                data[field] = series
         else:
             for field in fields:
                 series = pd.Series(data={
@@ -326,8 +332,6 @@ class BarData:
 
         return pd.DataFrame(data=data)
 
-    # @check_parameters(('continuous_future',),
-    #                   (ContinuousFuture,))
     def current_chain(self, continuous_future: ContinuousFuture):
         return self.data_portal.get_current_future_chain(
             continuous_future=continuous_future,
@@ -486,7 +490,7 @@ class BarData:
 
             return not (last_traded_dt is pd.NaT)
 
-    def history(self, assets: list[Asset], fields: list[str], bar_count: int, frequency: DataFrequency):
+    def history(self, assets: list[Asset], fields: list[str], bar_count: int, frequency: datetime.timedelta):
         """Returns a trailing window of length ``bar_count`` with data for
         the given assets, fields, and frequency, adjusted for splits, dividends,
         and mergers as of the current simulation time.
@@ -543,62 +547,11 @@ class BarData:
         If the current simulation time is not a valid market time, we use the last market close instead.
         """
 
-        # single_field = isinstance(fields, str)
-
-        # single_asset = isinstance(assets, PricingDataAssociable)
-        # if single_asset:
-        #     asset_list = [assets]
-        # else:
-        #     asset_list = assets
-
-        # if single_field:  # for one or more assets:
-        #     df = self.data_portal.get_history_window(
-        #         assets=asset_list,
-        #         end_dt=self._get_current_minute(),
-        #         bar_count=bar_count,
-        #         frequency=frequency,
-        #         fields=fields,
-        #         data_frequency=self.data_frequency,
-        #     )
-        #
-        #     if self._adjust_minutes:
-        #         adjs = self.data_portal.get_adjustments(
-        #             asset_list,
-        #             fields,
-        #             self._get_current_minute(),
-        #             self.simulation_dt_func()
-        #         )
-        #
-        #         df = df * adjs
-        #
-        #     if single_asset:
-        #         # single asset, single field: return pd.Series with pd.DateTimeIndex
-        #         return df.loc[:, assets]
-        #     else:
-        #         # multiple assets, single field: return DataFrame with pd.DateTimeIndex
-        #         # and assets in columns.
-        #         return df
-        # else:  # multiple fields
-        #     # if single_asset:
-        #     # todo: optimize by querying multiple fields
-        #     # Make multiple history calls, one per field, then combine results
-        #
-        #     # df_dict = {
-        #     #     field: self.data_portal.get_history_window(asset_list,
-        #     #                                                self._get_current_minute(),
-        #     #                                                bar_count,
-        #     #                                                frequency,
-        #     #                                                field,
-        #     #                                                self.data_frequency,
-        #     #                                                ).loc[:, asset_list]
-        #     #     for field in fields
-        #     # }
         df = self.data_portal.get_history_window(assets=assets,
                                                  end_dt=self._get_current_minute(),
                                                  bar_count=bar_count,
                                                  frequency=frequency,
                                                  fields=fields,
-                                                 data_frequency=self.data_frequency,
                                                  )
 
         if self._adjust_minutes:
@@ -615,14 +568,6 @@ class BarData:
                 field: df * adjs[field]
                 for field, df in df.items()
             }
-
-        # dt_label = 'date' if frequency == '1d' else 'date_time'
-        # df = (pd.concat(df_dict,
-        #                 keys=df_dict.keys(),
-        #                 names=['fields', dt_label])
-        #       .stack(dropna=False)  # ensure we return all fields/assets/dates despite missing values
-        #       .unstack(level='fields'))
-        # df.index.set_names([dt_label, 'asset'])
         return df
 
     @property

@@ -22,10 +22,13 @@ from ziplime.assets.domain.asset import Asset
 
 class Transaction:
     # @expect_types(asset=Asset)
-    def __init__(self, asset: Asset, amount: float, dt: pd.Timestamp, price: float, order_id: str,
+    def __init__(self, asset: Asset, amount: int, dt: pd.Timestamp, price: float, order_id: str,
                  commission: float | None = None):
         self.asset = asset
         self.amount = amount
+        if amount < 1:
+            raise Exception("Transaction magnitude must be at least 1.")
+
         self.dt = dt
         self.price = price
         self.order_id = order_id

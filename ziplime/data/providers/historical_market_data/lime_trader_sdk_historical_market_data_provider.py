@@ -22,7 +22,7 @@ class LimeTraderSdkHistoricalMarketDataProvider(AbstractHistoricalMarketDataProv
         self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
 
     def get_historical_data_table(self, symbols: list[str],
-                                  period: Period,
+                                  frequency: datetime.timedelta,
                                   date_from: datetime.datetime,
                                   date_to: datetime.datetime,
                                   show_progress: bool,

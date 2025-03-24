@@ -1,3 +1,4 @@
+import datetime
 import os
 
 from lime_trader.models.market import Period
@@ -29,7 +30,7 @@ def register_default_bundles(calendar_name: str = "NYSE",
             symbols=[],
             start_session=None,
             end_session=None,
-            period=Period("day"),
+            frequency=datetime.timedelta(days=1),
             calendar_name=calendar_name,
             fundamental_data_list=fundamental_data_list
         )

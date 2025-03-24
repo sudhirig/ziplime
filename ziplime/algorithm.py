@@ -20,7 +20,7 @@ import warnings
 from datetime import tzinfo, time, timezone
 import logging
 from typing import Callable
-
+import polars as pl
 import pytz
 import pandas as pd
 import numpy as np
@@ -222,7 +222,7 @@ class TradingAlgorithm:
             metrics_set,
             blotter: Blotter,
             algo_filename,
-            benchmark_source:BenchmarkSource,
+            benchmark_source: BenchmarkSource,
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
@@ -300,9 +300,7 @@ class TradingAlgorithm:
 
         self._initialize = self.namespace.get("initialize", noop)
         self._handle_data = self.namespace.get("handle_data", noop)
-        self._before_trading_start = self.namespace.get(
-            "before_trading_start",
-        )
+        self._before_trading_start = self.namespace.get("before_trading_start", )
         # Optional analyze function, gets called after run
         self._analyze = self.namespace.get("analyze")
 
@@ -323,7 +321,6 @@ class TradingAlgorithm:
         self.initialized = False
 
         self.initialize_kwargs = initialize_kwargs or {}
-
 
         # A dictionary of capital changes, keyed by timestamp, indicating the
         # target/delta of the capital changes, along with values
@@ -385,43 +382,43 @@ class TradingAlgorithm:
 
     def _create_clock(self):
         """If the clock property is not set, then create one based on frequency."""
-        market_closes = self.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
-            self.trading_calendar.tz)
-        market_opens = self.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
-            self.trading_calendar.tz)
-        minutely_emission = False
+        market_closes = pl.Series(self.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
+            self.trading_calendar.tz))
+        market_opens = pl.Series(self.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
+            self.trading_calendar.tz))
+        # minutely_emission = False
 
-        if self.sim_params.data_frequency == DataFrequency.MINUTE:
-            minutely_emission = self.sim_params.emission_rate == DataFrequency.MINUTE
-
-            # The calendar's execution times are the minutes over which we
-            # actually want to run the clock. Typically the execution times
-            # simply adhere to the market open and close times. In the case of
-            # the futures calendar, for example, we only want to simulate over
-            # a subset of the full 24 hour calendar, so the execution times
-            # dictate a market open time of 6:31am US/Eastern and a close of
-            # 5:00pm US/Eastern.
-            if self.trading_calendar.name == "us_futures":
-                execution_opens = self.trading_calendar.execution_time_from_open(
-                    market_opens
-                )
-                execution_closes = self.trading_calendar.execution_time_from_close(
-                    market_closes
-                )
-            else:
-                execution_opens = market_opens
-                execution_closes = market_closes
-        else:
-            # in daily mode, we want to have one bar per session, timestamped
-            # as the last minute of the session.
-            if self.trading_calendar.name == "us_futures":
-                execution_closes = self.trading_calendar.execution_time_from_close(
-                    market_closes
-                )
-                execution_opens = execution_closes
-            else:
-                execution_closes = market_closes
-                execution_opens = market_closes
+        # if self.sim_params.data_frequency == dateti:
+        #     minutely_emission = self.sim_params.emission_rate == DataFrequency.MINUTE
+        #
+        #     # The calendar's execution times are the minutes over which we
+        #     # actually want to run the clock. Typically the execution times
+        #     # simply adhere to the market open and close times. In the case of
+        #     # the futures calendar, for example, we only want to simulate over
+        #     # a subset of the full 24 hour calendar, so the execution times
+        #     # dictate a market open time of 6:31am US/Eastern and a close of
+        #     # 5:00pm US/Eastern.
+        #     if self.trading_calendar.name == "us_futures":
+        #         execution_opens = self.trading_calendar.execution_time_from_open(
+        #             market_opens
+        #         )
+        #         execution_closes = self.trading_calendar.execution_time_from_close(
+        #             market_closes
+        #         )
+        #     else:
+        #         execution_opens = market_opens
+        #         execution_closes = market_closes
+        # else:
+        #     # in daily mode, we want to have one bar per session, timestamped
+        #     # as the last minute of the session.
+        #     if self.trading_calendar.name == "us_futures":
+        #         execution_closes = self.trading_calendar.execution_time_from_close(
+        #             market_closes
+        #         )
+        #         execution_opens = execution_closes
+        #     else:
+        #         execution_closes = market_closes
+        #         execution_opens = market_closes
 
         # FIXME generalize these values
         # before_trading_start_minutes = days_at_time(
@@ -430,18 +427,16 @@ class TradingAlgorithm:
         #     "US/Eastern",
         #     day_offset=0,
         # )
-        before_trading_start_minutes = market_opens.map(lambda x: x - pd.Timedelta(minutes=46))
+        before_trading_start_minutes = market_opens - datetime.timedelta(minutes=46)
 
         return MinuteSimulationClock(
             sessions=self.sim_params.sessions,
-            market_opens=execution_opens,
-            market_closes=execution_closes,
+            market_opens=market_opens,
+            market_closes=market_closes,
             before_trading_start_minutes=before_trading_start_minutes,
-            minute_emission=minutely_emission,
+            emission_rate=self.sim_params.emission_rate,
             timezone=self.sim_params.trading_calendar.tz
         )
-
-
 
     def _create_generator(self):
         self.metrics_tracker = MetricsTracker(
@@ -461,7 +456,6 @@ class TradingAlgorithm:
         if not self.initialized:
             self.initialize(**self.initialize_kwargs)
             self.initialized = True
-
 
         self.trading_client = AlgorithmSimulator(
             algo=self,
@@ -891,19 +885,10 @@ class TradingAlgorithm:
         return value / (last_price * value_multiplier)
 
     def _can_order_asset(self, asset: Asset):
-        if not isinstance(asset, Asset):
-            raise UnsupportedOrderParameters(
-                msg="Passing non-Asset argument to 'order()' is not supported."
-                    " Use 'sid()' or 'symbol()' methods to look up an Asset."
-            )
-
         if asset.auto_close_date:
-            day = add_tz_info(self.trading_calendar.minute_to_session(self.get_datetime()),
-                              tzinfo=datetime.timezone.utc)
-            asset_end_date = add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc)
-            asset_auto_close_date = add_tz_info(asset.auto_close_date, tzinfo=datetime.timezone.utc)
+            day = self.trading_calendar.minute_to_session(self.get_datetime()).date()
 
-            if day > min(asset_end_date, asset_auto_close_date):
+            if day > min(asset.end_date, asset.auto_close_date):
                 # If we are after the asset's end date or auto close date, warn
                 # the user that they can't place an order for this asset, and
                 # return None.
@@ -911,7 +896,7 @@ class TradingAlgorithm:
                     "Cannot place order for {0}, as it has de-listed. "
                     "Any existing positions for this asset will be "
                     "liquidated on "
-                    "{1}.".format(asset.symbol, asset_auto_close_date)
+                    "{1}.".format(asset.symbol, asset.auto_close_date)
                 )
 
                 return False

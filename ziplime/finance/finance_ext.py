@@ -20,9 +20,9 @@ def update_position_last_sale_prices(positions, get_price, dt):
     """
 
     for outer_position in positions.values():
-        inner_position = outer_position.inner_position
+        inner_position = outer_position
 
-        last_sale_price = get_price(inner_position.asset)
+        last_sale_price = get_price(inner_position.asset)["close"][0]
 
         # inline ~isnan because this gets called once per position per minute
         if last_sale_price == last_sale_price:
@@ -196,7 +196,7 @@ def calculate_position_tracker_stats(positions, stats):
     ix = 0
 
     for outer_position in positions.values():
-        position = outer_position.inner_position
+        position = outer_position
 
         # NOTE: this loop does a lot of stuff!
         # we call this function every time the portfolio value is needed,
@@ -281,7 +281,8 @@ def minute_annual_volatility(date_labels,
             demeaned_old = daily_returns[:day_ix] - mean
             variance += demeaned_old.dot(demeaned_old)
 
-            variance /= day_ix  # day_count - 1 for ddof=1
+            # variance /= day_ix  # day_count - 1 for ddof=1
+            variance = variance/day_ix
 
         out[ix] = sqrt(variance) * annualization_factor
 

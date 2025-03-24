@@ -194,24 +194,29 @@ class BenchmarkReturnsAndVolatility:
             close = trading_calendar.session_close(sessions[-1]).tz_convert(trading_calendar.tz).to_pydatetime()
             returns = benchmark_source.get_range(start_dt=open_, end_dt=close)
             rrs = (1 + returns["pct_change"].to_pandas()).cumprod() - 1
-            self._minute_cumulative_returns = (returns.select((1 + pl.col("pct_change")).cum_prod())) - 1
-            self._minute_annual_volatility = pd.Series(
-                minute_annual_volatility(
-                    date_labels=returns["date"].dt.date(),  # returns.index.normalize().view("int64"),
-                    minute_returns=returns["pct_change"],
-                    daily_returns=daily_returns_array["pct_change"],
-                ),
-                # index=returns.index,
+            self._minute_cumulative_returns = (
+                returns.select(pl.col("date"), pl.col("sid"), (1 + pl.col("pct_change")).cum_prod() - 1))
+            min_annual_volatility = minute_annual_volatility(
+                date_labels=returns["date"].dt.date(),  # returns.index.normalize().view("int64"),
+                minute_returns=returns["pct_change"],
+                daily_returns=daily_returns_array["pct_change"],
             )
+
+            self._minute_annual_volatility = pl.DataFrame(
+                [
+                    returns.select("date").to_series(),
+                    pl.Series("value", min_annual_volatility)
+                ]
+            )  # pl.DataFrame([pd.Series(returns.select("date"))])
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
                    data_portal: DataPortal):
-        r = self._minute_cumulative_returns[session]
+        r = self._minute_cumulative_returns["date" == session]["literal"][0]
         if np.isnan(r):
             r = None
         packet["cumulative_risk_metrics"]["benchmark_period_return"] = r
 
-        v = self._minute_annual_volatility[session]
+        v = self._minute_annual_volatility["date" == session]["value"][0]
         if np.isnan(v):
             v = None
         packet["cumulative_risk_metrics"]["benchmark_volatility"] = v
@@ -367,7 +372,7 @@ class AlphaBeta:
 
         alpha, beta = ep.alpha_beta_aligned(
             ledger.daily_returns_array[: session_ix + 1],
-            self._daily_returns_array[: session_ix + 1].to_pandas(),
+            self._daily_returns_array[: session_ix + 1]["pct_change"].to_pandas(),
         )
         if not np.isfinite(alpha):
             alpha = None

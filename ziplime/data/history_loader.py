@@ -574,121 +574,6 @@ class PolarsHistoryLoader(HistoryLoader):
                     return number_of_decimal_places(contract.tick_size)
         return DEFAULT_ASSET_PRICE_DECIMALS
 
-    def _ensure_sliding_windows(self, assets, dts, field, is_perspective_after):
-        """Ensure that there is a Float64Multiply window for each asset that can
-        provide data for the given parameters.
-        If the corresponding window for the (assets, len(dts), field) does not
-        exist, then create a new one.
-        If a corresponding window does exist for (assets, len(dts), field), but
-        can not provide data for the current dts range, then create a new
-        one and replace the expired window.
-
-        Parameters
-        ----------
-        assets : iterable of Assets
-            The assets in the window
-        dts : iterable of datetime64-like
-            The datetimes for which to fetch data.
-            Makes an assumption that all dts are present and contiguous,
-            in the calendar.
-        field : str
-            The OHLCV field for which to retrieve data.
-        is_perspective_after : bool
-            see: `PricingHistoryLoader.history`
-
-        Returns
-        -------
-        out : list of Float64Window with sufficient data so that each asset's
-        window can provide `get` for the index corresponding with the last
-        value in `dts`
-        """
-        end = dts[-1]
-        # size = len(dts)
-        asset_windows = {}
-        # needed_assets = []
-        cal = self._calendar
-
-        assets = self._asset_repository.retrieve_all([a.sid for a in assets])
-        end_ix = find_in_sorted_index(cal, end)
-        arrays = []
-        for asset in assets:
-            arrays.append(
-            self._reader.load_raw_arrays(
-                [field],
-                dts[0],
-                dts[-1],
-                [a.sid for a in assets],
-            )[0])
-            # try:
-                # window = self._window_blocks[field].get(
-                #     (asset, size, is_perspective_after), end
-                # )
-            # except KeyError:
-            #     needed_assets.append(asset)
-            # else:
-            #     if end_ix < window.most_recent_ix:
-            #         # Window needs reset. Requested end index occurs before the
-            #         # end index from the previous history call for this window.
-            #         # Grab new window instead of rewinding adjustments.
-            #         needed_assets.append(asset)
-            #     else:
-            #         asset_windows[asset] = window
-
-        # if needed_assets:
-            # offset = 0
-            # start_ix = find_in_sorted_index(cal, dts[0])
-            #
-            # prefetch_end_ix = min(end_ix + self._prefetch_length, len(cal) - 1)
-            # prefetch_end = cal[prefetch_end_ix]
-            # prefetch_dts = cal[start_ix: prefetch_end_ix + 1]
-            # if is_perspective_after:
-                # adj_end_ix = min(prefetch_end_ix + 1, len(cal) - 1)
-                # adj_dts = cal[start_ix: adj_end_ix + 1]
-            # else:
-                # adj_dts = prefetch_dts
-            # prefetch_len = len(prefetch_dts)
-            # array = self._array(prefetch_dts, needed_assets, field)
-            #
-            # if field == "sid":
-            #     window_type = Int64Window
-            # else:
-            #     window_type = Float64Window
-            #
-            # view_kwargs = {}
-            # if field == "volume":
-            #     array = array.astype(float64_dtype)
-            #
-            # for i, asset in enumerate(needed_assets):
-            #     adj_reader = None
-            #     try:
-            #         adj_reader = self._adjustment_readers[type(asset)]
-            #     except KeyError:
-            #         adj_reader = None
-            #     if adj_reader is not None:
-            #         adjs = adj_reader.load_pricing_adjustments(
-            #             [field], adj_dts, [asset]
-            #         )[0]
-            #     else:
-            #         adjs = {}
-            #     window = window_type(
-            #         array[:, i].reshape(prefetch_len, 1),
-            #         view_kwargs,
-            #         adjs,
-            #         offset,
-            #         size,
-            #         int(is_perspective_after),
-            #         self._decimal_places_for_asset(asset, dts[-1]),
-            #     )
-            #     # sliding_window = SlidingWindow(window, size, start_ix, offset)
-            #     # asset_windows[asset] = sliding_window
-            #     # self._window_blocks[field].set(
-            #     #     (asset, size, is_perspective_after),
-            #     #     sliding_window,
-            #     #     prefetch_end,
-            #     # )
-
-        return [asset_windows[asset] for asset in assets]
-
     def history(self, assets: list[Asset], dts: list[pd.Timestamp], fields: list[str], is_perspective_after: bool):
         """A window of pricing data with adjustments applied assuming that the
         end of the window is the day before the current simulation time.
@@ -763,18 +648,12 @@ class PolarsHistoryLoader(HistoryLoader):
         -------
         out : np.ndarray with shape(len(days between start, end), len(assets))
         """
-        # block = self._ensure_sliding_windows(assets, dts, field, is_perspective_after)
-        # end_ix = self._calendar.searchsorted(dts[-1])
         return self._reader.load_raw_arrays(
                 columns=fields,
                 start_date=dts[0],
                 end_date=dts[-1],
                 assets=assets,
             )
-        # return np.concatenate(
-        #     [window.get(end_ix) for window in block],
-        #     axis=1,
-        # )
 
 
 class MinuteHistoryLoader(HistoryLoader):

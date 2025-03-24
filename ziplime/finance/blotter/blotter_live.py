@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 from zipline.finance.blotter import Blotter
@@ -11,7 +12,7 @@ from ziplime.gens.brokers.broker import Broker
 
 class BlotterLive(Blotter):
 
-    def __init__(self, data_frequency: DataFrequency, broker: Broker):
+    def __init__(self, data_frequency: datetime.timedelta, broker: Broker):
         super().__init__()
         self.broker = broker
         self._processed_closed_orders = []

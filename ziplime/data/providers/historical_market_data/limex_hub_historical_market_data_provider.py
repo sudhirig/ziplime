@@ -16,20 +16,20 @@ from ziplime.data.abstract_historical_market_data_provider import AbstractHistor
 def fetch_historical_limex_data_task(date_from: datetime.datetime,
                                      date_to: datetime.datetime,
                                      exchange_calendar: ExchangeCalendar,
-                                     limex_api_key: str, symbol: str, period: Period):
+                                     limex_api_key: str, symbol: str, frequency: datetime.timedelta):
     limex_client = limexhub.RestAPI(token=limex_api_key)
     timeframe = 3
-    if period == Period.MINUTE:
+    if frequency == datetime.timedelta(minutes=1):
         timeframe = 1
-    elif period == Period.HOUR:
+    elif frequency == datetime.timedelta(hours=1):
         timeframe = 2
-    elif period == Period.DAY:
+    elif frequency == datetime.timedelta(days=1):
         timeframe = 3
-    elif period == Period.WEEK:
+    elif frequency == datetime.timedelta(weeks=1):
         timeframe = 4
-    elif period == Period.MONTH:
+    elif frequency == datetime.timedelta(days=30):
         timeframe = 5
-    elif period == Period.QUARTER:
+    elif frequency == datetime.timedelta(days=90):
         timeframe = 6
     df = limex_client.candles(symbol=symbol,
                               from_date=date_from.strftime("%Y-%m-%d"),
@@ -66,7 +66,7 @@ class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider)
             self._maximum_threads = multiprocessing.cpu_count() * 2
 
     def get_historical_data_table(self, symbols: list[str],
-                                  period: Period,
+                                  frequency: datetime.timedelta,
                                   date_from: datetime.datetime,
                                   date_to: datetime.datetime,
                                   show_progress: bool,
@@ -77,7 +77,7 @@ class LimexHubHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider)
             try:
                 result = fetch_historical_limex_data_task(date_from=date_from, date_to=date_to,
                                                           exchange_calendar=exchange_calendar,
-                                                          limex_api_key=limex_api_key, symbol=symbol, period=period)
+                                                          limex_api_key=limex_api_key, symbol=symbol, frequency=frequency)
                 return result
             except Exception as e:
                 logging.exception(

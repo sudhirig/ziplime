@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
+
 import pandas as pd
 import structlog
 from exchange_calendars import ExchangeCalendar
@@ -65,11 +67,11 @@ class MetricsTracker:
             self,
             data_portal: DataPortal,
             trading_calendar: ExchangeCalendar,
-            first_session: pd.Timestamp,
-            last_session: pd.Timestamp,
+            first_session: datetime.datetime,
+            last_session: datetime.datetime,
             capital_base: float,
-            emission_rate: DataFrequency,
-            data_frequency: DataFrequency,
+            emission_rate: datetime.timedelta,
+            data_frequency: datetime.timedelta,
             metrics,
     ):
         self.emission_rate = emission_rate
@@ -235,7 +237,7 @@ class MetricsTracker:
         self.end_of_bar(
             packet=packet,
             ledger=ledger,
-            dt=dt,
+            session=dt,
             session_ix=self._session_count,
             data_portal=self._data_portal,
         )
@@ -330,12 +332,9 @@ class MetricsTracker:
         and send it out on the results socket.
         """
         self._logger.info(
-            "Simulated %(days)s trading days\n first open: %(first)s\n last close: %(last)s",
-            dict(
-                days=self._session_count,
-                first=self._trading_calendar.session_open(self._first_session),
-                last=self._trading_calendar.session_close(self._last_session),
-            ),
+            f"Simulated {self._session_count} trading days\n first open: "
+            f"{self._trading_calendar.session_open(self._first_session)}\n "
+            f"last close: {self._trading_calendar.session_close(self._last_session)}",
         )
 
         packet = {}

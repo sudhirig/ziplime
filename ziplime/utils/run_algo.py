@@ -70,12 +70,12 @@ class _RunAlgoError(click.ClickException, ValueError):
 def run_algorithm(
         algofile: str,
         algotext: str,
-        data_frequency: DataFrequency,
+        emission_rate: datetime.timedelta,
         capital_base: float,
         bundle: str,
         bundle_timestamp,
-        start: datetime.datetime,
-        end: datetime.datetime,
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
         output,
         trading_calendar: ExchangeCalendar,
         print_algo: bool,
@@ -94,17 +94,17 @@ def run_algorithm(
     bundle_data = bundles.load(
         name=bundle,
         timestamp=bundle_timestamp,
-        period=data_frequency,
+        frequency=emission_rate,
     )
 
     # date parameter validation
-    if not broker and trading_calendar.sessions_distance(start, end) < 1:
-        raise _RunAlgoError(f"There are no trading days between {start.date()} and {end.date()}")
+    if not broker and trading_calendar.sessions_distance(start_date, end_date) < 1:
+        raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
         asset_repository=bundle_data.asset_repository,
-        start_date=start.date(),
-        end_date=end.date(),
+        start_date=start_date.date(),
+        end_date=end_date.date(),
     )
 
     if print_algo:
@@ -170,16 +170,16 @@ def run_algorithm(
     metrics_set = default_metrics()
 
     sim_params = SimulationParameters(
-        start_session=start,
-        end_session=end,
+        start_session=start_date,
+        end_session=end_date,
         trading_calendar=trading_calendar,
         capital_base=capital_base,
-        emission_rate=data_frequency.to_timedelta(),
-        data_frequency=data_frequency.to_timedelta(),
+        emission_rate=emission_rate,
+        data_frequency=emission_rate,
     )
 
     if benchmark_sid is not None:
-        benchmark_asset = data_portal.asset_repository.retrieve_asset(benchmark_sid)
+        benchmark_asset = data_portal.asset_repository.retrieve_asset(sid=benchmark_sid)
         benchmark_returns = None
     else:
         benchmark_asset = None
@@ -191,7 +191,7 @@ def run_algorithm(
         sessions=sim_params.sessions,
         data_portal=data_portal,
         emission_rate=sim_params.emission_rate,
-        timedelta_period=data_frequency.to_timedelta(),
+        timedelta_period=emission_rate,
         benchmark_fields=["close"]
     )
 
@@ -209,7 +209,7 @@ def run_algorithm(
             )
         else:
 
-            blotter_live = BlotterLive(data_frequency=data_frequency, broker=broker)
+            blotter_live = BlotterLive(data_frequency=emission_rate, broker=broker)
             tr = LiveTradingAlgorithm(
                 broker=broker,
                 state_filename=state_filename,

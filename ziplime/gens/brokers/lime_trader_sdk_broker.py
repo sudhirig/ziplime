@@ -12,13 +12,14 @@ from ziplime.domain.account import  Account as ZpAccount
 from lime_trader import LimeClient
 from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
-from lime_trader.models.trading import Order, OrderSide, OrderDetails, OrderStatus, OrderType, TimeInForce
+from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
 from ziplime.assets.domain.asset import Asset
-from zipline.finance.order import (Order as ZPOrder,
-                                   ORDER_STATUS as ZP_ORDER_STATUS)
 from zipline.finance.execution import (MarketOrder,
                                        LimitOrder,
                                        ExecutionStyle)
+
+from ziplime.finance.domain.order import Order
+from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.domain.transaction import Transaction
 from zipline.api import symbol as symbol_lookup
 import pandas as pd
@@ -104,14 +105,14 @@ class LimeTraderSdkBroker(Broker):
         except Exception as _:
             return False
 
-    def _order2zp(self, order: OrderDetails) -> ZPOrder | None:
+    def _order2zp(self, order: OrderDetails) -> Order | None:
 
         try:
             asset = symbol_lookup(order.symbol)
         except SymbolNotFound:
             return None
 
-        zp_order = ZPOrder(
+        zp_order = Order(
             id=order.client_order_id,
             asset=asset,
             amount=int(order.quantity) if order.order_side == OrderSide.BUY else -int(order.quantity),
@@ -122,28 +123,28 @@ class LimeTraderSdkBroker(Broker):
             commission=0.0,
         )
 
-        zp_order.status = ZP_ORDER_STATUS.OPEN
-        if order.order_status == OrderStatus.CANCELED:
-            zp_order.status = ZP_ORDER_STATUS.CANCELLED
-        elif order.order_status == OrderStatus.REJECTED:
-            zp_order.status = ZP_ORDER_STATUS.REJECTED
-        elif order.order_status == OrderStatus.SUSPENDED:
-            zp_order.status = ZP_ORDER_STATUS.SUSPENDED
-        # elif order.order_status == OrderStatus.REPLACED:
-        #     zp_order.status = ZP_ORDER_STATUS.REPLACED
-        # elif order.order_status == OrderStatus.PENDING_CANCEL:
-        #     zp_order.status = ZP_ORDER_STATUS.PENDING_CANCEL
-        # elif order.order_status == OrderStatus.DONE_FOR_DAY:
-        #     zp_order.status = ZP_ORDER_STATUS.DONE_FOR_DAY
-        elif order.order_status == OrderStatus.NEW:
-            zp_order.status = ZP_ORDER_STATUS.OPEN
-        elif order.order_status == OrderStatus.PENDING_NEW:
-            zp_order.status = ZP_ORDER_STATUS.OPEN
-        elif order.order_status == OrderStatus.PARTIALLY_FILLED:
-            zp_order.status = ZP_ORDER_STATUS.OPEN
+        zp_order.status = OrderStatus.OPEN
+        if order.order_status == LimeTraderOrderStatus.CANCELED:
+            zp_order.status = OrderStatus.CANCELLED
+        elif order.order_status == LimeTraderOrderStatus.REJECTED:
+            zp_order.status = OrderStatus.REJECTED
+        elif order.order_status == LimeTraderOrderStatus.SUSPENDED:
+            zp_order.status = OrderStatus.HELD
+        # elif order.order_status == LimeTraderOrderStatus.REPLACED:
+        #     zp_order.status = OrderStatus.REPLACED
+        # elif order.order_status == LimeTraderOrderStatus.PENDING_CANCEL:
+        #     zp_order.status = OrderStatus.PENDING_CANCEL
+        # elif order.order_status == LimeTraderOrderStatus.DONE_FOR_DAY:
+        #     zp_order.status = OrderStatus.DONE_FOR_DAY
+        elif order.order_status == LimeTraderOrderStatus.NEW:
+            zp_order.status = OrderStatus.OPEN
+        elif order.order_status == LimeTraderOrderStatus.PENDING_NEW:
+            zp_order.status = OrderStatus.OPEN
+        elif order.order_status == LimeTraderOrderStatus.PARTIALLY_FILLED:
+            zp_order.status = OrderStatus.OPEN
             zp_order.filled = int(order.executed_quantity)
-        elif order.order_status == OrderStatus.FILLED:
-            zp_order.status = ZP_ORDER_STATUS.FILLED
+        elif order.order_status == LimeTraderOrderStatus.FILLED:
+            zp_order.status = OrderStatus.FILLED
             zp_order.filled = int(order.executed_quantity)
         return zp_order
 
@@ -167,7 +168,7 @@ class LimeTraderSdkBroker(Broker):
 
         zp_order_id = self._new_order_id()
         dt = pd.to_datetime('now', utc=True)
-        zp_order = ZPOrder(
+        zp_order = Order(
             dt=dt,
             asset=asset,
             amount=amount,
@@ -175,7 +176,7 @@ class LimeTraderSdkBroker(Broker):
             limit=limit_price,
             id=zp_order_id,
         )
-        order = Order(
+        order = LimeTraderOrder(
             symbol=symbol,
             quantity=Decimal(qty),
             side=side,
@@ -198,7 +199,7 @@ class LimeTraderSdkBroker(Broker):
         # TODO: add this as param
         return self._lime_sdk_client.account.get_balances()[0].account_number
 
-    def get_orders(self) -> dict[str, ZPOrder]:
+    def get_orders(self) -> dict[str, Order]:
         # return {}
         current_active_orders = self._lime_sdk_client.trading.get_active_orders(
             account_number=self._get_account_number())

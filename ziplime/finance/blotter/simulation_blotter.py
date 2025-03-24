@@ -16,12 +16,11 @@ import logging
 from collections import defaultdict
 from copy import copy
 
-from zipline.assets import Equity, Future, Asset
+from ziplime.assets.domain.asset import Asset
 from zipline.finance.execution import ExecutionStyle
 
 from .blotter import Blotter
-from zipline.finance.order import Order
-from zipline.finance.slippage import (
+from ziplime.finance.slippage import (
     DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
     VolatilityVolumeShare,
     FixedBasisPointsSlippage,
@@ -34,6 +33,9 @@ from zipline.finance.commission import (
 )
 
 from ziplime.domain.bar_data import BarData
+from ziplime.finance.domain.order import Order
+from ziplime.assets.domain.equity import Equity
+from ziplime.assets.domain.future import Future
 
 log = logging.getLogger("Blotter")
 warning_logger = logging.getLogger("AlgoWarning")
@@ -96,7 +98,7 @@ class SimulationBlotter(Blotter):
             current_dt=self.current_dt,
         )
 
-    def order(self, asset: Asset, amount: float, style: ExecutionStyle, order_id: str | None = None):
+    def order(self, asset: Asset, amount: int, style: ExecutionStyle, order_id: str | None = None):
         """Place an order.
 
         Parameters
@@ -390,7 +392,7 @@ class SimulationBlotter(Blotter):
             for asset, asset_orders in self.open_orders.items():
                 slippage = self.slippage_models[type(asset)]
 
-                for order, txn in slippage.simulate(bar_data, asset, asset_orders):
+                for order, txn in slippage.simulate(data=bar_data, assets=[asset], orders_for_asset=asset_orders):
                     commission = self.commission_models[type(asset)]
                     additional_commission = commission.calculate(order, txn)
 

@@ -9,7 +9,7 @@ class AbstractHistoricalMarketDataProvider:
 
     @abstractmethod
     def get_historical_data_table(self, symbols: list[str],
-                                  period: Period,
+                                  frequency: datetime.timedelta,
                                   date_from: datetime.datetime,
                                   date_to: datetime.datetime,
                                   show_progress: bool,

@@ -1,17 +1,3 @@
-#
-# Copyright 2016 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import datetime
 from typing import Callable
 
@@ -20,55 +6,12 @@ from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
 from ziplime.data.data_portal import DataPortal
-from ziplime.domain.data_frequency import DataFrequency
 
-# from zipline._protocol import BarData  # noqa
-
-# Datasource type should completely determine the other fields of a
-# message with its type.
-# DATASOURCE_TYPE = enum(
-#     'AS_TRADED_EQUITY',
-#     'MERGER',
-#     'SPLIT',
-#     'DIVIDEND',
-#     'TRADE',
-#     'TRANSACTION',
-#     'ORDER',
-#     'EMPTY',
-#     'DONE',
-#     'CUSTOM',
-#     'BENCHMARK',
-#     'COMMISSION',
-#     'CLOSE_POSITION'
-# )
 from contextlib import contextmanager
 import numpy as np
 
-from collections.abc import Iterable
-
 from ziplime.assets.utils import Asset
-# Expected fields/index values for a dividend Series.
-DIVIDEND_FIELDS = [
-    'declared_date',
-    'ex_date',
-    'gross_amount',
-    'net_amount',
-    'pay_date',
-    'payment_sid',
-    'ratio',
-    'sid',
-]
-# Expected fields/index values for a dividend payment Series.
-DIVIDEND_PAYMENT_FIELDS = [
-    'id',
-    'payment_sid',
-    'cash_amount',
-    'share_count',
-]
 
-
-def _is_iterable(obj) -> bool:
-    return isinstance(obj, Iterable) and not isinstance(obj, str)
 
 
 @contextmanager
@@ -108,7 +51,7 @@ class BarData:
 
     def __init__(self, data_portal: DataPortal,
                  simulation_dt_func: Callable,
-                 data_frequency: DataFrequency,
+                 data_frequency: datetime.timedelta,
                  trading_calendar: ExchangeCalendar,
                  restrictions):
         self.data_portal = data_portal
@@ -146,8 +89,6 @@ class BarData:
         # return dt
         return dt
 
-    # @check_parameters(('assets', 'fields'),
-    #                   ((Asset, ContinuousFuture, str), (str,)))
     def current(self, assets: list[Asset], fields: list[str]):
         """Returns the "current" value of the given fields for the given assets
         at the current simulation time.
@@ -208,108 +149,10 @@ class BarData:
         If the current simulation time is not a valid market time for an asset,
         we use the most recent market close instead.
         """
-        multiple_assets = _is_iterable(assets)
-        multiple_fields = _is_iterable(fields)
-
-        # There's some overly verbose code in here, particularly around
-        # 'do something if self._adjust_minutes is False, otherwise do
-        # something else'. This could be less verbose, but the 99% case is that
-        # `self._adjust_minutes` is False, so it's important to keep that code
-        # path as fast as possible.
-
-        # There's probably a way to make this method (and `history`) less
-        # verbose, but this is OK for now.
-
-        # if not multiple_assets:
-        #     asset = assets
-        #
-        #     if not multiple_fields:
-        #         field = fields
-        #
-        #         # return scalar value
-        #         if not self._adjust_minutes:
-        #             return self.data_portal.get_spot_value(
-        #                 assets=[asset],
-        #                 field=field,
-        #                 dt=self._get_current_minute(),
-        #                 data_frequency=self.data_frequency
-        #             )
-        #         else:
-        #             return self.data_portal.get_adjusted_value(
-        #                 asset=[asset],
-        #                 field=field,
-        #                 dt=self._get_current_minute(),
-        #                 perspective_dt=self.simulation_dt_func(),
-        #                 data_frequency=self.data_frequency
-        #             )
-        #     else:
-        #         # assume fields is iterable
-        #         # return a Series indexed by field
-        #         if not self._adjust_minutes:
-        #             return pd.Series(data={
-        #                 field: self.data_portal.get_spot_value(
-        #                     asset,
-        #                     field,
-        #                     self._get_current_minute(),
-        #                     self.data_frequency
-        #                 )
-        #                 for field in fields
-        #             }, index=fields, name=assets.symbol)
-        #         else:
-        #             return pd.Series(data={
-        #                 field: self.data_portal.get_adjusted_value(
-        #                     asset,
-        #                     field,
-        #                     self._get_current_minute(),
-        #                     self.simulation_dt_func(),
-        #                     self.data_frequency
-        #                 )
-        #                 for field in fields
-        #             }, index=fields, name=assets.symbol)
-        # else:
-        #     if not multiple_fields:
-        #         field = fields
-        #
-        #         # assume assets is iterable
-        #         # return a Series indexed by asset
-        #         if not self._adjust_minutes:
-        #             return pd.Series(data={
-        #                 asset: self.data_portal.get_spot_value(
-        #                     asset,
-        #                     field,
-        #                     self._get_current_minute(),
-        #                     self.data_frequency
-        #                 )
-        #                 for asset in assets
-        #             }, index=assets, name=fields)
-        #         else:
-        #             return pd.Series(data={
-        #                 asset: self.data_portal.get_adjusted_value(
-        #                     asset,
-        #                     field,
-        #                     self._get_current_minute(),
-        #                     self.simulation_dt_func(),
-        #                     self.data_frequency
-        #                 )
-        #                 for asset in assets
-        #             }, index=assets, name=fields)
-
-            # else:
-                # both assets and fields are iterable
         data = {}
 
         if not self._adjust_minutes:
             for field in fields:
-                # series = pd.Series(data={
-                #     asset: self.data_portal.get_spot_value(
-                #         assets=[asset],
-                #         field=field,
-                #         dt=self._get_current_minute(),
-                #         data_frequency=self.data_frequency
-                #     )
-                #     for asset in assets
-                # }, index=assets, name=field)
-                # data[field] = series
                 return self.data_portal.get_spot_value(
                         assets=assets,
                         fields=[field],
@@ -428,67 +271,6 @@ class BarData:
             )
         )
 
-    # @check_parameters(('assets',), (Asset,))
-    def is_stale(self, assets: list[Asset]):
-        """For the given asset or iterable of assets, returns True if the asset
-        is alive and there is no trade data for the current simulation time.
-
-        If the asset has never traded, returns False.
-
-        If the current simulation time is not a valid market time, we use the
-        current time to check if the asset is alive, but we use the last
-        market minute/day for the trade data check.
-
-        Parameters
-        ----------
-        assets: zipline.assets.Asset or iterable of zipline.assets.Asset
-            Asset(s) for which staleness should be determined.
-
-        Returns
-        -------
-        is_stale : bool or pd.Series[bool]
-            Bool or series of bools indicating whether the requested asset(s)
-            are stale.
-        """
-        dt = self.simulation_dt_func()
-        if self._adjust_minutes:
-            adjusted_dt = self._get_current_minute()
-        else:
-            adjusted_dt = dt
-
-        if isinstance(assets, Asset):
-            return self._is_stale_for_asset(
-                asset=assets, dt=dt, adjusted_dt=adjusted_dt
-            )
-        else:
-            return pd.Series(data={
-                asset: self._is_stale_for_asset(
-                    asset=asset, dt=dt, adjusted_dt=adjusted_dt
-                )
-                for asset in assets
-            })
-
-    def _is_stale_for_asset(self, asset: Asset, dt: pd.Timestamp, adjusted_dt: pd.Timestamp) -> bool:
-        session_label = dt.normalize()  # FIXME
-
-        if not asset.is_alive_for_session(session_label):
-            return False
-
-        current_volume = self.data_portal.get_spot_value(
-            assets=[asset], field="volume", dt=adjusted_dt, data_frequency=self.data_frequency
-        )
-
-        if current_volume > 0:
-            # found a current value, so we know this asset is not stale.
-            return False
-        else:
-            # we need to distinguish between if this asset has ever traded
-            # (stale = True) or has never traded (stale = False)
-            last_traded_dt = \
-                self.data_portal.get_spot_value(assets=[asset], field="last_traded", dt=adjusted_dt,
-                                           data_frequency=self.data_frequency)
-
-            return not (last_traded_dt is pd.NaT)
 
     def history(self, assets: list[Asset], fields: list[str], bar_count: int, frequency: datetime.timedelta):
         """Returns a trailing window of length ``bar_count`` with data for
@@ -591,11 +373,5 @@ class BarData:
         return self._trading_calendar.minute_to_session(
             self.simulation_dt_func(),
             direction="next"
-        )
-
-    @property
-    def current_session_minutes(self):
-        return self._trading_calendar.session_minutes(
-            self.current_session
         )
 

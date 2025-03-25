@@ -1,17 +1,3 @@
-#
-# Copyright 2015 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import datetime
 from copy import copy
 
@@ -20,25 +6,16 @@ import structlog
 
 from ziplime.assets.domain.asset import Asset
 from ziplime.data.data_portal import DataPortal
-from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
-from ziplime.finance.metrics import MetricsTracker
 from ziplime.domain.bar_data import BarData
 from zipline.utils.api_support import ZiplineAPI
 from zipline.utils.compat import ExitStack
 
-from ziplime.gens.sim_engine import (
-    BAR,
-    SESSION_START,
-    SESSION_END,
-    EMISSION_RATE_END,
-    BEFORE_TRADING_START_BAR,
-)
+from ziplime.gens.domain.simulation_event import SimulationEvent
 
 
 class AlgorithmSimulator:
-    EMISSION_TO_PERF_KEY_MAP = {"minute": "minute_perf", "daily": "daily_perf"}
 
     def __init__(
             self,
@@ -50,10 +27,6 @@ class AlgorithmSimulator:
             restrictions,
     ):
 
-        # ==============
-        # Simulation
-        # Param Setup
-        # ==============
         self.sim_params = sim_params
         self.data_portal = data_portal
         self.restrictions = restrictions
@@ -65,12 +38,6 @@ class AlgorithmSimulator:
 
         self._logger = structlog.get_logger(__name__)
 
-        # ==============
-        # Snapshot Setup
-        # ==============
-
-        # This object is the way that user algorithms interact with OHLCV data,
-        # fetcher data, and some API methods like `data.can_trade`.
         self.current_data = BarData(
             data_portal=self.data_portal,
             simulation_dt_func=self.get_simulation_dt,
@@ -87,15 +54,6 @@ class AlgorithmSimulator:
 
         self.benchmark_source = benchmark_source
 
-        # =============
-        # Logging Setup
-        # =============
-
-        # Processor function for injecting the algo_dt into
-        # user prints/logs.
-
-        # TODO CHECK: Disabled the old logbook mechanism,
-        # didn't replace with an equivalent `logging` approach.
 
     def get_simulation_dt(self) -> pd.Timestamp:
         return self.simulation_dt
@@ -200,7 +158,7 @@ class AlgorithmSimulator:
             if self.algo.data_frequency < datetime.timedelta(days=1):
 
                 def execute_order_cancellation_policy():
-                    self.algo.blotter.execute_cancel_policy(SESSION_END)
+                    self.algo.blotter.execute_cancel_policy(SimulationEvent.SESSION_END)
 
                 def calculate_minute_capital_changes(dt: pd.Timestamp):
                     # process any capital changes that came between the last
@@ -212,7 +170,7 @@ class AlgorithmSimulator:
             elif self.algo.data_frequency == datetime.timedelta(days=1):
 
                 def execute_order_cancellation_policy():
-                    self.algo.blotter.execute_daily_cancel_policy(SESSION_END)
+                    self.algo.blotter.execute_daily_cancel_policy(SimulationEvent.SESSION_END)
 
                 def calculate_minute_capital_changes(dt: pd.Timestamp):
                     return []
@@ -226,14 +184,14 @@ class AlgorithmSimulator:
                     return []
 
             for dt, action in self.clock:
-                if action == BAR:
+                if action == SimulationEvent.BAR:
                     for capital_change_packet in every_bar(dt_to_use=dt, current_data=self.current_data,
                                                            handle_data=self.algo.event_manager.handle_data):
                         yield capital_change_packet
-                elif action == SESSION_START:
+                elif action == SimulationEvent.SESSION_START:
                     for capital_change_packet in once_a_day(midnight_dt=dt):
                         yield capital_change_packet
-                elif action == SESSION_END:
+                elif action == SimulationEvent.SESSION_END:
                     # End of the session.
                     positions = self.algo.metrics_tracker.positions
                     position_assets = self.algo.data_portal.asset_repository.retrieve_all(sids=[a.sid for a in positions])
@@ -243,11 +201,11 @@ class AlgorithmSimulator:
                     self.algo.validate_account_controls()
 
                     yield self._get_daily_message(dt=dt)
-                elif action == BEFORE_TRADING_START_BAR:
+                elif action == SimulationEvent.BEFORE_TRADING_START_BAR:
                     self.simulation_dt = dt
                     self.algo.on_dt_changed(dt=dt)
                     self.algo.before_trading_start(data=self.current_data)
-                elif action == EMISSION_RATE_END:
+                elif action == SimulationEvent.EMISSION_RATE_END:
                     minute_msg = self._get_minute_message(
                         dt=dt,
                     )

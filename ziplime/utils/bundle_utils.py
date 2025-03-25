@@ -1,8 +1,7 @@
 import datetime
 import os
 
-from lime_trader.models.market import Period
-from zipline.utils.paths import data_root
+from ziplime.utils.paths import data_root
 
 from ziplime.data.providers.historical_market_data.lime_trader_sdk_historical_market_data_provider import \
     LimeTraderSdkHistoricalMarketDataProvider

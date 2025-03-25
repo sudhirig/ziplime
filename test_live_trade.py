@@ -9,7 +9,6 @@ from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.utils.bundle_utils import register_default_bundles
 
 from ziplime.data.bundles import load
-from ziplime.utils.paths import data_path
 
 
 def initialize(context: TradingAlgorithm):

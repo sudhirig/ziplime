@@ -1,26 +1,10 @@
-#
-# Copyright 2016 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import datetime
 from operator import mul
 
-import logging
 from typing import Any
 
 import numpy as np
 import polars as pl
-from numpy import float64, int64, nan
 import pandas as pd
 from pandas import isnull
 from functools import reduce
@@ -41,10 +25,7 @@ from zipline.assets.roll_finder import (
 
 from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
-from ziplime.data.dispatch_bar_reader import (
-    AssetDispatchMinuteBarReader,
-    AssetDispatchSessionBarReader,
-)
+
 from zipline.data.resample import (
     DailyHistoryAggregator,
     ReindexMinuteBarReader,
@@ -59,17 +40,6 @@ from zipline.utils.memoize import remember_last
 from zipline.errors import HistoryWindowStartsBeforeData
 
 from ziplime.domain.data_frequency import DataFrequency
-from ziplime.utils.calendar_utils import add_tz_info
-
-log = logging.getLogger("DataPortal")
-
-HISTORY_FREQUENCIES = set(["1m", "1d"])
-
-DEFAULT_MINUTE_HISTORY_PREFETCH = 1560
-DEFAULT_DAILY_HISTORY_PREFETCH = 40
-
-_DEF_M_HIST_PREFETCH = DEFAULT_MINUTE_HISTORY_PREFETCH
-_DEF_D_HIST_PREFETCH = DEFAULT_DAILY_HISTORY_PREFETCH
 
 
 class DataPortal:
@@ -135,10 +105,6 @@ class DataPortal:
         self._splits_dict = {}
         self._mergers_dict = {}
         self._dividends_dict = {}
-
-        # Handle extra sources, like Fetcher.
-        # self._augmented_sources_map = {}
-        # self._extra_source_df = None
 
         self._first_available_session = first_trading_day
 
@@ -208,33 +174,14 @@ class DataPortal:
                 self._roll_finders,
             )
 
-        _dispatch_minute_reader = AssetDispatchMinuteBarReader(
-            self.trading_calendar,
-            self.asset_repository,
-            aligned_minute_readers,
-            self._last_available_minute,
-        )
-
-        _dispatch_session_reader = AssetDispatchSessionBarReader(
-            self.trading_calendar,
-            self.asset_repository,
-            aligned_session_readers,
-            self._last_available_session,
-        )
-
-        self._pricing_readers = {
-            "minute": _dispatch_minute_reader,
-            "daily": _dispatch_session_reader,
-        }
-
         self._daily_aggregator = DailyHistoryAggregator(
             self.trading_calendar.first_minutes,
-            _dispatch_minute_reader,
+            self._data_reader,
             self.trading_calendar,
         )
         self._history_loader = PolarsHistoryLoader(
             self.trading_calendar,
-            _dispatch_session_reader,
+            self._data_reader,
             self._adjustment_reader,
             self.asset_repository,
             self._fields,
@@ -301,48 +248,48 @@ class DataPortal:
             dt=dt,
             frequency=frequency,
         )
-        if field not in self._fields:
-            raise KeyError("Invalid column: " + str(field))
-
-        if (
-                dt < asset.start_date
-                or (
-                data_frequency == "daily" and add_tz_info(session_label, tzinfo=datetime.timezone.utc) > add_tz_info(
-            asset.end_date, tzinfo=datetime.timezone.utc))
-                or (
-                data_frequency == "minute" and add_tz_info(session_label, tzinfo=datetime.timezone.utc) > add_tz_info(
-            asset.end_date, tzinfo=datetime.timezone.utc))
-        ):
-            if field == "volume":
-                return 0
-            elif field == "contract":
-                return None
-            elif field != "last_traded":
-                return np.nan
-
-        if data_frequency == "daily":
-            if field == "contract":
-                return self._get_current_contract(continuous_future=asset, dt=session_label)
-            else:
-                return self._get_daily_spot_value(
-                    asset=asset,
-                    column=field,
-                    dt=session_label,
-                )
-        else:
-            if field == "last_traded":
-                return self.get_last_traded_dt(asset, dt, "minute")
-            elif field == "price":
-                return self._get_minute_spot_value(
-                    asset=asset,
-                    column="close",
-                    dt=dt,
-                    ffill=True,
-                )
-            elif field == "contract":
-                return self._get_current_contract(continuous_future=asset, dt=dt)
-            else:
-                return self._get_minute_spot_value(asset=asset, column=field, dt=dt)
+        # if field not in self._fields:
+        #     raise KeyError("Invalid column: " + str(field))
+        #
+        # if (
+        #         dt < asset.start_date
+        #         or (
+        #         data_frequency == "daily" and add_tz_info(session_label, tzinfo=datetime.timezone.utc) > add_tz_info(
+        #     asset.end_date, tzinfo=datetime.timezone.utc))
+        #         or (
+        #         data_frequency == "minute" and add_tz_info(session_label, tzinfo=datetime.timezone.utc) > add_tz_info(
+        #     asset.end_date, tzinfo=datetime.timezone.utc))
+        # ):
+        #     if field == "volume":
+        #         return 0
+        #     elif field == "contract":
+        #         return None
+        #     elif field != "last_traded":
+        #         return np.nan
+        #
+        # if data_frequency == "daily":
+        #     if field == "contract":
+        #         return self._get_current_contract(continuous_future=asset, dt=session_label)
+        #     else:
+        #         return self._get_daily_spot_value(
+        #             asset=asset,
+        #             column=field,
+        #             dt=session_label,
+        #         )
+        # else:
+        #     if field == "last_traded":
+        #         return self.get_last_traded_dt(asset, dt, "minute")
+        #     elif field == "price":
+        #         return self._get_minute_spot_value(
+        #             asset=asset,
+        #             column="close",
+        #             dt=dt,
+        #             ffill=True,
+        #         )
+        #     elif field == "contract":
+        #         return self._get_current_contract(continuous_future=asset, dt=dt)
+        #     else:
+        #         return self._get_minute_spot_value(asset=asset, column=field, dt=dt)
 
     def get_spot_value(self, assets: list[Asset], fields: list[str], dt: datetime.datetime,
                        frequency: datetime.timedelta):
@@ -371,33 +318,6 @@ class DataPortal:
             ``field`` is 'volume' the value will be a int. If the ``field`` is
             'last_traded' the value will be a Timestamp.
         """
-        # assets_is_scalar = False
-        # if isinstance(assets, (AssetConvertible, PricingDataAssociable)):
-        #     assets_is_scalar = True
-        # else:
-        #     # If 'assets' was not one of the expected types then it should be
-        #     # an iterable.
-        #     try:
-        #         iter(assets)
-        #     except TypeError as exc:
-        #         raise TypeError(
-        #             "Unexpected 'assets' value of type {}.".format(type(assets))
-        #         ) from exc
-
-        session_label = self.trading_calendar.minute_to_session(dt).date()
-
-        # if assets_is_scalar:
-        #     return self._get_single_asset_value(
-        #         session_label=session_label,
-        #         asset=assets,
-        #         field=field,
-        #         dt=dt,
-        #         data_frequency=data_frequency,
-        #     )
-        # else:
-        # get_single_asset_value =
-        # self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
-
         df_raw = self._data_reader.load_raw_arrays_limit(
             fields=fields,
             limit=1,
@@ -408,13 +328,6 @@ class DataPortal:
         )
         return df_raw
 
-        # return self._get_single_asset_value(
-        #     session_label=session_label,
-        #     asset=asset,
-        #     field=field,
-        #     dt=dt,
-        #     data_frequency=data_frequency,
-        # )
 
     def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                     frequency: datetime.timedelta):
@@ -565,11 +478,10 @@ class DataPortal:
         return spot_value
 
     def _get_minute_spot_value(self, asset: Asset, column: str, dt: datetime.datetime, ffill: bool = False):
-        reader = self._get_pricing_reader(data_frequency="minute")
 
         if not ffill:
             try:
-                return reader.get_value(sid=asset.sid, dt=dt, field=column)
+                return self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
             except NoDataOnDate:
                 if column != "volume":
                     return np.nan
@@ -581,7 +493,7 @@ class DataPortal:
         try:
             # Optimize the best case scenario of a liquid asset
             # returning a valid price.
-            result = reader.get_value(sid=asset.sid, dt=dt, field=column)
+            result = self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
             if not pd.isnull(result):
                 return result
         except NoDataOnDate:
@@ -591,13 +503,13 @@ class DataPortal:
             pass
         # If forward filling, we want the last minute with values (up to
         # and including dt).
-        query_dt = reader.get_last_traded_dt(asset=asset, dt=dt)
+        query_dt = self._data_reader.get_last_traded_dt(asset=asset, dt=dt)
 
         if pd.isnull(query_dt):
             # no last traded dt, bail
             return np.nan
 
-        result = reader.get_value(sid=asset.sid, dt=query_dt, field=column)
+        result = self._data_reader.get_value(sid=asset.sid, dt=query_dt, field=column)
 
         if (dt == query_dt) or (dt.date() == query_dt.date()):
             return result
@@ -609,9 +521,9 @@ class DataPortal:
         )
 
     def _get_daily_spot_value(self, asset: Asset, column: str, dt: datetime.datetime):
-        reader = self._get_pricing_reader(data_frequency="daily")
+
         if column == "last_traded":
-            last_traded_dt = reader.get_last_traded_dt(asset=asset, dt=dt)
+            last_traded_dt = self._data_reader.get_last_traded_dt(asset=asset, dt=dt)
 
             if isnull(last_traded_dt):
                 return pd.NaT
@@ -621,7 +533,7 @@ class DataPortal:
             found_dt = dt
             while True:
                 try:
-                    value = reader.get_value(sid=asset.sid, dt=found_dt, field="close")
+                    value = self._data_reader.get_value(sid=asset.sid, dt=found_dt, field="close")
                     if not isnull(value):
                         if dt == found_dt:
                             return value
@@ -638,7 +550,7 @@ class DataPortal:
         elif column in self._fields:
             # don't forward fill
             try:
-                return reader.get_value(sid=asset.sid, dt=dt, field=column)
+                return self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
             except NoDataOnDate:
                 return np.nan
 

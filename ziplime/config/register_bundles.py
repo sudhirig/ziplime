@@ -1,8 +1,5 @@
 import datetime
 
-from lime_trader.models.market import Period
-
-from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS, FUNDAMENTAL_DATA_COLUMN_NAMES
 from ziplime.data.bundles.lime import register_lime_equities_bundle
 
 
@@ -11,7 +8,7 @@ def register_lime_symbol_list_equities_bundle(bundle_name: str,
                                               end_session: datetime.datetime | None,
                                               symbols: list[str],
                                               frequency: datetime.timedelta,
-                                              fundamental_data_list: set[str] = FUNDAMENTAL_DATA_COLUMN_NAMES,
+                                              fundamental_data_list: set[str],
                                               calendar_name: str = "NYSE"
                                               ):
     register_lime_equities_bundle(

@@ -3,7 +3,6 @@ import logging
 import pandas as pd
 
 from exchange_calendars import ExchangeCalendar
-from lime_trader.models.market import Period
 from zipline.assets import AssetDBWriter
 from ziplime.data.adjustments import SQLiteAdjustmentWriter
 from zipline.utils.cache import dataframe_cache
@@ -16,7 +15,6 @@ import numpy as np
 
 from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
-from ziplime.domain.data_frequency import DataFrequency
 from ziplime.utils.calendar_utils import normalize_daily_start_end_session
 
 logger = logging.getLogger(__name__)
@@ -42,13 +40,9 @@ def gen_asset_metadata(data: pd.DataFrame, show_progress: bool):
 
 def parse_pricing_and_vol(data: pd.DataFrame, sessions: pd.IndexSlice, symbol_map: pd.Series):
     for asset_id, symbol in symbol_map.items():
-        # try:
         asset_data = (
             data.xs(symbol, level=1).infer_objects(copy=False).fillna(0.0)
         )
-        # except KeyError as e:
-        #     df = pd.DataFrame()
-        #     yield asset_id, df
         yield asset_id, asset_data
 
 

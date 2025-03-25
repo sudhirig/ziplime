@@ -1,14 +1,13 @@
 import datetime
 import errno
 import logging
-import os
 
 import pandas as pd
 from zipline.__main__ import ipython_only
 
 from zipline.utils.calendar_utils import get_calendar
 
-from ziplime.constants.default_columns import OHLCV_COLUMNS_POLARS, DEFAULT_COLUMNS_POLARS
+from ziplime.constants.default_columns import OHLCV_COLUMNS_POLARS
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
 from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
 from ziplime.domain.benchmark_spec import BenchmarkSpec
@@ -19,7 +18,6 @@ import click
 from ziplime.data import bundles as bundles_module
 
 from click import DateTime
-from lime_trader.models.market import Period
 from zipline.utils.cli import Timestamp
 
 from ziplime.config.register_bundles import register_lime_symbol_list_equities_bundle
@@ -57,8 +55,6 @@ def main(ctx):
 
 
 @main.command(context_settings=dict(
-    # ignore_unknown_options=True,
-    # allow_extra_args=True,
 ))
 @click.option(
     "-b",

@@ -15,8 +15,6 @@ from toolz import (
 
 import numpy as np
 
-
-
 from .domain.asset import Asset
 from .domain.continuous_future import ContinuousFuture
 from .domain.equity import Equity
@@ -27,7 +25,6 @@ def make_asset_array(size, asset):
     out = np.empty([size], dtype=object)
     out.fill(asset)
     return out
-
 
 
 log = logging.getLogger("assets.py")
@@ -155,8 +152,20 @@ def _filter_kwargs(names, dict_):
     return {k: v for k, v in dict_.items() if k in names and v is not None}
 
 
-_filter_future_kwargs = _filter_kwargs(Future._kwargnames)
-_filter_equity_kwargs = _filter_kwargs(Equity._kwargnames)
+asset_args = frozenset({
+    'sid',
+    'symbol',
+    'asset_name',
+    'start_date',
+    'end_date',
+    'first_traded',
+    'auto_close_date',
+    'tick_size',
+    'multiplier',
+    'exchange_info',
+})
+_filter_future_kwargs = _filter_kwargs(asset_args)
+_filter_equity_kwargs = _filter_kwargs(asset_args)
 
 
 def _convert_asset_timestamp_fields(dict_):
@@ -199,8 +208,6 @@ def _encode_continuous_future_sid(root_symbol, offset, roll_style, adjustment_st
 
 
 Lifetimes = namedtuple("Lifetimes", "sid start end")
-
-
 
 
 class AssetConvertible(ABC):

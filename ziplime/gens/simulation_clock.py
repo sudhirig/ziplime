@@ -1,30 +1,12 @@
-#
-# Copyright 2015 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import datetime
 from zoneinfo import ZoneInfo
 
 import polars as pl
 
-BAR = 0
-SESSION_START = 1
-SESSION_END = 2
-EMISSION_RATE_END = 3
-BEFORE_TRADING_START_BAR = 4
+from ziplime.gens.domain.simulation_event import SimulationEvent
 
 
-class MinuteSimulationClock:
+class SimulationClock:
     def __init__(self,
                  sessions: pl.Series,
                  market_opens: pl.Series,
@@ -55,14 +37,14 @@ class MinuteSimulationClock:
 
     def __iter__(self):
         for idx, session in enumerate(self.sessions):
-            yield session, SESSION_START
+            yield session, SimulationEvent.SESSION_START
 
             bts_minute = self.before_trading_start_minutes[idx]
             regular_minutes = self.minutes_by_session[session]
 
-            yield bts_minute, BEFORE_TRADING_START_BAR
+            yield bts_minute, SimulationEvent.BEFORE_TRADING_START_BAR
             for minute in regular_minutes:
-                yield minute, BAR
-                yield minute, EMISSION_RATE_END
+                yield minute, SimulationEvent.BAR
+                yield minute, SimulationEvent.EMISSION_RATE_END
 
-            yield regular_minutes[-1], SESSION_END
+            yield regular_minutes[-1], SimulationEvent.SESSION_END

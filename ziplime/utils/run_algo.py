@@ -5,10 +5,9 @@ import os
 import sys
 
 from exchange_calendars import ExchangeCalendar
-from zipline.utils.paths import data_path
+from ziplime.utils.paths import data_path
 
 from ziplime.algorithm_live import LiveTradingAlgorithm
-from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.finance.blotter.simulation_blotter import SimulationBlotter
 from ziplime.finance.metrics import default_metrics

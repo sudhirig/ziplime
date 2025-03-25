@@ -1,5 +1,4 @@
 import logging
-from datetime import time
 import os.path
 import pandas as pd
 from ziplime.algorithm import TradingAlgorithm
@@ -11,10 +10,6 @@ from ziplime.utils.api_support import (
     ZiplineAPI,
     api_method,
     allowed_only_in_before_trading_start)
-
-from ziplime.utils.serialization_utils import load_context, store_context
-
-from ziplime.utils.calendar_utils import days_at_time
 
 
 class LiveAlgorithmExecutor(AlgorithmSimulator):
@@ -48,17 +43,9 @@ class LiveTradingAlgorithm(TradingAlgorithm):
 
         with ZiplineAPI(self):
             super(self.__class__, self).initialize(*args, **kwargs)
-            store_context(self.state_filename,
-                          context=self,
-                          checksum=self.algo_filename,
-                          include_list=[])
 
     def handle_data(self, data):
         super(self.__class__, self).handle_data(data)
-        store_context(self.state_filename,
-                      context=self,
-                      checksum=self.algo_filename,
-                      include_list=[])
 
     def _create_clock(self):
         minutely_emission = False

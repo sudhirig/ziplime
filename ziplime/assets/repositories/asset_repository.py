@@ -78,7 +78,6 @@ class AssetRepository:
     :class:`zipline.assets.AssetDBWriter`
     """
 
-    # @preprocess(engine=coerce_string_to_eng(require_exists=True))
     def __init__(self, engine: Engine, future_chain_predicates=CHAIN_PREDICATES):
         self.engine = engine
         metadata_obj = sa.MetaData()

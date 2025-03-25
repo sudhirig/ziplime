@@ -1,22 +1,8 @@
-#
-# Copyright 2014 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import abc
 import logging
 from datetime import datetime
 
-import pandas as pd
+import structlog
 
 from ziplime.errors import (
     AccountControlViolation,
@@ -27,7 +13,6 @@ from zipline.utils.input_validation import (
     expect_types,
 )
 
-log = logging.getLogger("TradingControl")
 
 
 class TradingControl(metaclass=abc.ABCMeta):
@@ -41,6 +26,7 @@ class TradingControl(metaclass=abc.ABCMeta):
         """
         self.on_error = on_error
         self.__fail_args = kwargs
+        self._logger =structlog.get_logger(__name__)
 
     @abc.abstractmethod
     def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
@@ -78,7 +64,7 @@ class TradingControl(metaclass=abc.ABCMeta):
                 asset=asset, amount=amount, datetime=datetime, constraint=constraint
             )
         elif self.on_error == "log":
-            log.error(
+            self._logger.error(
                 "Order for %(amount)s shares of %(asset)s at %(dt)s "
                 "violates trading constraint %(constraint)s",
                 dict(amount=amount, asset=asset, dt=datetime, constraint=constraint),

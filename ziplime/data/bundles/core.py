@@ -27,7 +27,7 @@ from zipline.utils.cache import (
 )
 from zipline.utils.compat import ExitStack, mappingproxy
 from zipline.utils.input_validation import ensure_timestamp, optionally
-import zipline.utils.paths as pth
+import ziplime.utils.paths as pth
 from zipline.utils.preprocess import preprocess
 
 from ziplime.data.abstract_data_bundle import AbstractDataBundle

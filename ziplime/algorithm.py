@@ -1,27 +1,10 @@
-#
-# Copyright 2015 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import datetime
-from collections.abc import Iterable
 from collections import namedtuple
 from copy import copy
 import warnings
-from datetime import tzinfo, time, timezone
 import logging
 from typing import Callable
 import polars as pl
-import pytz
 import pandas as pd
 import numpy as np
 
@@ -29,9 +12,8 @@ from itertools import chain, repeat
 
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.blotter.blotter import Blotter
-from zipline.utils.calendar_utils import get_calendar, days_at_time
+from zipline.utils.calendar_utils import get_calendar
 
 from ziplime.protocol import handle_non_market_minutes
 from zipline.errors import (
@@ -101,13 +83,9 @@ from zipline.utils.api_support import (
 from zipline.utils.compat import ExitStack
 from zipline.utils.date_utils import make_utc_aware
 from zipline.utils.input_validation import (
-    coerce_string,
-    ensure_upper_case,
     error_keywords,
     expect_dtypes,
     expect_types,
-    optional,
-    optionally,
 )
 from zipline.utils.numpy_utils import int64_dtype
 from zipline.utils.cache import ExpiringCache
@@ -126,12 +104,11 @@ from zipline.utils.math_utils import (
     tolerant_equals,
     round_if_near_integer,
 )
-from zipline.utils.preprocess import preprocess
 from zipline.utils.security_list import SecurityList
 
 import zipline.protocol
 
-from ziplime.gens.sim_engine import MinuteSimulationClock
+from ziplime.gens.simulation_clock import SimulationClock
 from ziplime.sources.benchmark_source import BenchmarkSource
 from zipline.zipline_warnings import ZiplineDeprecationWarning
 
@@ -364,7 +341,7 @@ class TradingAlgorithm:
 
         with handle_non_market_minutes(
                 data
-        ) if self.data_frequency == "minute" else ExitStack():
+        ) if self.data_frequency == datetime.timedelta(minutes=1) else ExitStack():
             self._before_trading_start(self, data)
 
         self._in_before_trading_start = False
@@ -386,50 +363,10 @@ class TradingAlgorithm:
             self.trading_calendar.tz))
         market_opens = pl.Series(self.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
             self.trading_calendar.tz))
-        # minutely_emission = False
 
-        # if self.sim_params.data_frequency == dateti:
-        #     minutely_emission = self.sim_params.emission_rate == DataFrequency.MINUTE
-        #
-        #     # The calendar's execution times are the minutes over which we
-        #     # actually want to run the clock. Typically the execution times
-        #     # simply adhere to the market open and close times. In the case of
-        #     # the futures calendar, for example, we only want to simulate over
-        #     # a subset of the full 24 hour calendar, so the execution times
-        #     # dictate a market open time of 6:31am US/Eastern and a close of
-        #     # 5:00pm US/Eastern.
-        #     if self.trading_calendar.name == "us_futures":
-        #         execution_opens = self.trading_calendar.execution_time_from_open(
-        #             market_opens
-        #         )
-        #         execution_closes = self.trading_calendar.execution_time_from_close(
-        #             market_closes
-        #         )
-        #     else:
-        #         execution_opens = market_opens
-        #         execution_closes = market_closes
-        # else:
-        #     # in daily mode, we want to have one bar per session, timestamped
-        #     # as the last minute of the session.
-        #     if self.trading_calendar.name == "us_futures":
-        #         execution_closes = self.trading_calendar.execution_time_from_close(
-        #             market_closes
-        #         )
-        #         execution_opens = execution_closes
-        #     else:
-        #         execution_closes = market_closes
-        #         execution_opens = market_closes
-
-        # FIXME generalize these values
-        # before_trading_start_minutes = days_at_time(
-        #     self.sim_params.sessions,
-        #     time(8, 45),
-        #     "US/Eastern",
-        #     day_offset=0,
-        # )
         before_trading_start_minutes = market_opens - datetime.timedelta(minutes=46)
 
-        return MinuteSimulationClock(
+        return SimulationClock(
             sessions=self.sim_params.sessions,
             market_opens=market_opens,
             market_closes=market_closes,
@@ -1844,11 +1781,6 @@ class TradingAlgorithm:
     ##############
     @api_method
     @require_not_initialized(AttachPipelineAfterInitialize())
-    @expect_types(
-        pipeline=Pipeline,
-        name=str,
-        chunks=(int, Iterable, type(None)),
-    )
     def attach_pipeline(self, pipeline, name, chunks=None, eager=True):
         """Register a pipeline to be computed at the start of each day.
 

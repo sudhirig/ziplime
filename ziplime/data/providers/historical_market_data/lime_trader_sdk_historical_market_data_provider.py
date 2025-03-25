@@ -9,7 +9,6 @@ from click import progressbar
 from exchange_calendars import ExchangeCalendar
 from joblib import Parallel, delayed
 from lime_trader import LimeClient
-from lime_trader.models.market import Period
 
 from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
 from ziplime.domain.lime_quote import LimeQuote

@@ -43,18 +43,6 @@ class Asset:
         ``end_date``.
     """
 
-    _kwargnames = frozenset({
-        'sid',
-        'symbol',
-        'asset_name',
-        'start_date',
-        'end_date',
-        'first_traded',
-        'auto_close_date',
-        'tick_size',
-        'multiplier',
-        'exchange_info',
-    })
 
     def __init__(self,
                  sid, # sid is required
@@ -99,40 +87,6 @@ class Asset:
 
     def __hash__(self):
         return self.sid
-
-    # def __richcmp__(self, x, y, op):
-    #     """
-    #     Cython rich comparison method.  This is used in place of various
-    #     equality checkers in pure python.
-    #     """
-    #     try:
-    #         x_as_int = PyNumber_Index(x)
-    #     except (TypeError, OverflowError):
-    #         return NotImplemented
-    #
-    #     try:
-    #         y_as_int = PyNumber_Index(y)
-    #     except (TypeError, OverflowError):
-    #         return NotImplemented
-    #
-    #     compared = x_as_int - y_as_int
-    #
-    #     # Handle == and != first because they're significantly more common
-    #     # operations.
-    #     if op == Py_EQ:
-    #         return compared == 0
-    #     elif op == Py_NE:
-    #         return compared != 0
-    #     elif op == Py_LT:
-    #         return compared < 0
-    #     elif op == Py_LE:
-    #         return compared <= 0
-    #     elif op == Py_GT:
-    #         return compared > 0
-    #     elif op == Py_GE:
-    #         return compared >= 0
-    #     else:
-    #         raise AssertionError('%d is not an operator' % op)
 
     def __repr__(self):
         if self.symbol:

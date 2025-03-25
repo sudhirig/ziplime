@@ -3,13 +3,7 @@ from typing import Callable
 
 import pandas as pd
 
-from ziplime.gens.sim_engine import (
-    BAR,
-    SESSION_START,
-    SESSION_END,
-    EMISSION_RATE_END,
-    BEFORE_TRADING_START_BAR
-)
+from ziplime.gens.domain.simulation_event import SimulationEvent
 
 
 class RealtimeClock:
@@ -54,7 +48,7 @@ class RealtimeClock:
             delta = pd.Timedelta(days=1)
         else:
             delta = pd.Timedelta(minutes=1)
-        yield self.sessions[0], SESSION_START
+        yield self.sessions[0], SimulationEvent.SESSION_START
 
         # current = pd.to_datetime('now', utc=True) - pd.Timedelta(days=3)
         # current_times = []
@@ -79,24 +73,24 @@ class RealtimeClock:
                 # this just calls initialize, so we can emit bar event immediately
                 # self._last_emit = server_time
                 self._before_trading_start_bar_yielded[current_session_index] = True
-                yield server_time, BEFORE_TRADING_START_BAR
+                yield server_time, SimulationEvent.BEFORE_TRADING_START_BAR
             elif server_time < self.execution_opens.iloc[current_session_index]:
                 sleep(1)
             elif self.execution_opens.iloc[current_session_index] <= server_time < self.execution_closes.iloc[
                 current_session_index]:
                 if self._last_emit is None or server_time - self._last_emit >= delta:
                     self._last_emit = server_time
-                    yield server_time, BAR
+                    yield server_time, SimulationEvent.BAR
                     if self.minute_emission:
-                        yield server_time, EMISSION_RATE_END
+                        yield server_time, SimulationEvent.EMISSION_RATE_END
                 else:
                     sleep(1)
             elif server_time == self.execution_closes.iloc[current_session_index]:
                 self._last_emit = server_time
-                yield server_time, BAR
+                yield server_time, SimulationEvent.BAR
                 if self.minute_emission:
-                    yield server_time, EMISSION_RATE_END
-                yield server_time, SESSION_END
+                    yield server_time, SimulationEvent.EMISSION_RATE_END
+                yield server_time, SimulationEvent.SESSION_END
             elif server_time > self.execution_closes.iloc[current_session_index]:
                 # Return with no yield if the algo is started in after hours
                 # just continue

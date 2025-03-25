@@ -1,10 +1,10 @@
 from typing import Any
 
 import pandas as pd
-from ziplime.protocol import BarData
 
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
+from ziplime.domain.bar_data import BarData
 
 
 def get_fundamental_data(

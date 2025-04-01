@@ -1,7 +1,7 @@
 import datetime
 from dataclasses import dataclass
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.domain.position import Position
 
 

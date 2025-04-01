@@ -1,7 +1,6 @@
-from ziplime.assets.domain.asset import Asset
 
 
-class Future(Asset):
+class Future:
     """Asset subclass representing ownership of a futures contract.
     """
 

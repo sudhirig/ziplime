@@ -3,7 +3,7 @@ from copy import copy
 import pandas as pd
 from zipline.protocol import DATASOURCE_TYPE
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 
 
 class Transaction:

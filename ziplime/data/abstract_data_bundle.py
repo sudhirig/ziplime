@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.domain.column_specification import ColumnSpecification
 from ziplime.domain.data_frequency import DataFrequency
 import polars as pl

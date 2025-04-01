@@ -15,11 +15,12 @@ from toolz import (
 
 import numpy as np
 
-from .domain.asset import Asset
 from .domain.continuous_future import ContinuousFuture
 from .domain.equity import Equity
 from .domain.future import Future
 
+from alembic.config import Config
+from alembic import command
 
 def make_asset_array(size, asset):
     out = np.empty([size], dtype=object)
@@ -210,38 +211,38 @@ def _encode_continuous_future_sid(root_symbol, offset, roll_style, adjustment_st
 Lifetimes = namedtuple("Lifetimes", "sid start end")
 
 
-class AssetConvertible(ABC):
-    """
-    ABC for types that are convertible to integer-representations of
-    Assets.
-
-    Includes Asset, str, and Integral
-    """
-
-    pass
-
-
-AssetConvertible.register(Integral)
-AssetConvertible.register(Asset)
-AssetConvertible.register(str)
-
-
-class NotAssetConvertible(ValueError):
-    pass
-
-
-class PricingDataAssociable(ABC):
-    """ABC for types that can be associated with pricing data.
-
-    Includes Asset, Future, ContinuousFuture
-    """
-
-    pass
-
-
-PricingDataAssociable.register(Asset)
-PricingDataAssociable.register(Future)
-PricingDataAssociable.register(ContinuousFuture)
+# class AssetConvertible(ABC):
+#     """
+#     ABC for types that are convertible to integer-representations of
+#     Assets.
+#
+#     Includes Asset, str, and Integral
+#     """
+#
+#     pass
+#
+#
+# AssetConvertible.register(Integral)
+# AssetConvertible.register(Asset)
+# AssetConvertible.register(str)
+#
+#
+# class NotAssetConvertible(ValueError):
+#     pass
+#
+#
+# class PricingDataAssociable(ABC):
+#     """ABC for types that can be associated with pricing data.
+#
+#     Includes Asset, Future, ContinuousFuture
+#     """
+#
+#     pass
+#
+#
+# PricingDataAssociable.register(Asset)
+# PricingDataAssociable.register(Future)
+# PricingDataAssociable.register(ContinuousFuture)
 
 
 def was_active(reference_date_value, asset):
@@ -284,3 +285,12 @@ def only_active_assets(reference_date_value, assets):
         List of the active assets from `assets` on the requested date.
     """
     return [a for a in assets if was_active(reference_date_value, a)]
+
+
+
+async def execute_migrations():
+    alembic_cfg = Config("../alembic/alembic.ini")
+    # Optionally, set the script location if it's not the default
+    # alembic_cfg.set_main_option("script_location", "path/to/your/migrations")
+    # Run the migrations
+    command.upgrade(alembic_cfg, "head")  # Upgrades to the latest version

@@ -1,3 +1,4 @@
+import datetime
 from collections import namedtuple, OrderedDict
 
 import logging
@@ -8,7 +9,7 @@ from zipline.assets import Future
 import zipline.protocol as zp
 from zipline.utils.sentinel import sentinel
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.data.data_portal import DataPortal
 from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.domain.order import Order
@@ -54,7 +55,7 @@ class Ledger:
     """
 
     def __init__(self, trading_sessions: pd.DatetimeIndex, capital_base: float, data_portal: DataPortal,
-                 data_frequency: DataFrequency):
+                 data_frequency: datetime.timedelta):
         if len(trading_sessions):
             start = trading_sessions[0]
         else:
@@ -285,10 +286,10 @@ class Ledger:
         held_sids = set(position_tracker.positions)
         if held_sids:
             cash_dividends = adjustment_reader.get_dividends_with_ex_date(
-                held_sids, next_session, self._data_portal.asset_repository
+                held_sids, next_session, self._data_portal._bundle_data.asset_repository
             )
             stock_dividends = adjustment_reader.get_stock_dividends_with_ex_date(
-                held_sids, next_session, self._data_portal.asset_repository
+                held_sids, next_session, self._data_portal._bundle_data.asset_repository
             )
 
             # Earning a dividend just marks that we need to get paid out on

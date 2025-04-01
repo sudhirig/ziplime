@@ -13,7 +13,7 @@ from lime_trader import LimeClient
 from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from zipline.finance.execution import (MarketOrder,
                                        LimitOrder,
                                        ExecutionStyle)

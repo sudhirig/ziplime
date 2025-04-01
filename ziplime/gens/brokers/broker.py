@@ -1,6 +1,6 @@
 from abc import abstractmethod
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from zipline.finance.order import Order as ZPOrder
 
 from ziplime.domain.position import Position

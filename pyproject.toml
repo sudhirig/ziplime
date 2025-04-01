@@ -19,6 +19,10 @@ polars = "^1.24.0"
 pyarrow = "^19.0.1"
 orjson = "^3.10.15"
 structlog = "^25.1.0"
+aiofiles = "^24.1.0"
+asyncclick = "^8.1.8"
+sqlalchemy = "^2.0.40"
+aiosqlite = "^0.21.0"
 
 [tool.poetry.scripts]
 ziplime = "ziplime.__main__:main"

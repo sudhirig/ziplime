@@ -7,9 +7,9 @@ import numpy as np
 import polars as pl
 import pandas as pd
 from pandas import isnull
-from functools import reduce
+from functools import reduce, lru_cache
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.equity import Equity
 from ziplime.assets.domain.future import Future
 
@@ -23,7 +23,6 @@ from zipline.assets.roll_finder import (
     VolumeRollFinder,
 )
 
-from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
 
 from zipline.data.resample import (
@@ -31,14 +30,12 @@ from zipline.data.resample import (
     ReindexMinuteBarReader,
     ReindexSessionBarReader,
 )
-from ziplime.data.history_loader import (
-    PolarsHistoryLoader,
-)
 from zipline.data.bar_reader import NoDataOnDate
 
 from zipline.utils.memoize import remember_last
 from zipline.errors import HistoryWindowStartsBeforeData
 
+from ziplime.data.domain.bundle_data import BundleData
 from ziplime.domain.data_frequency import DataFrequency
 
 
@@ -51,7 +48,7 @@ class DataPortal:
 
     Parameters
     ----------
-    asset_repository : ziplime.assets.repositories.asset_repository.AssetRepository
+    asset_repository : ziplime.assets.repositories.sqlite_asset_repository.SqliteAssetRepository
         The AssetFinder instance used to resolve assets.
     trading_calendar: zipline.utils.calendar.exchange_calendar.TradingCalendar
         The calendar instance used to provide minute->session information.
@@ -82,76 +79,36 @@ class DataPortal:
 
     def __init__(
             self,
-            asset_repository: AssetRepository,
-            trading_calendar,
-            first_trading_day,
-            fields: list[str],
+            bundle_data: BundleData,
             fundamental_data_reader,
             historical_data_reader: AbstractDataBundle,
             future_daily_reader=None,
             future_minute_reader=None,
-            adjustment_reader=None,
-            last_available_session=None,
-            last_available_minute=None,
     ):
         self._data_reader = historical_data_reader
-        self.trading_calendar = trading_calendar
-
-        self.asset_repository = asset_repository
-
-        self._adjustment_reader = adjustment_reader
-        self._fields = fields
+        self._bundle_data = bundle_data
         # caches of sid -> adjustment list
         self._splits_dict = {}
         self._mergers_dict = {}
         self._dividends_dict = {}
-
+        first_trading_day = min(bundle_data.data["date"]).date()
+        last_trading_date = max(bundle_data.data["date"])
         self._first_available_session = first_trading_day
 
-        if last_available_session:
-            self._last_available_session = last_available_session
-        else:
-            # Infer the last session from the provided readers.
-            last_sessions = [
-                reader.last_available_dt
-                for reader in [historical_data_reader, future_daily_reader]
-                if reader is not None
-            ]
-            if last_sessions:
-                self._last_available_session = min(last_sessions)
-            else:
-                self._last_available_session = None
+        self._last_available_session = last_trading_date.date()
 
-        if last_available_minute:
-            self._last_available_minute = last_available_minute
-        else:
-            # Infer the last minute from the provided readers.
-            last_minutes = [
-                reader.last_available_dt
-                for reader in [historical_data_reader, future_minute_reader]
-                if reader is not None
-            ]
-            if last_minutes:
-                self._last_available_minute = max(last_minutes)
-            else:
-                self._last_available_minute = None
 
-        aligned_equity_minute_reader = self._ensure_reader_aligned(historical_data_reader)
-        aligned_equity_session_reader = self._ensure_reader_aligned(historical_data_reader)
+        self._last_available_minute = last_trading_date
+
         aligned_future_minute_reader = self._ensure_reader_aligned(future_minute_reader)
         aligned_future_session_reader = self._ensure_reader_aligned(future_daily_reader)
 
         self._roll_finders = {
-            "calendar": CalendarRollFinder(self.trading_calendar, self.asset_repository),
+            "calendar": CalendarRollFinder(self._bundle_data.trading_calendar, self._bundle_data.asset_repository),
         }
 
         aligned_minute_readers = {}
         aligned_session_readers = {}
-
-        if aligned_equity_minute_reader is not None:
-            aligned_minute_readers[Equity] = aligned_equity_minute_reader
-        if aligned_equity_session_reader is not None:
-            aligned_session_readers[Equity] = aligned_equity_session_reader
 
         if aligned_future_minute_reader is not None:
             aligned_minute_readers[Future] = aligned_future_minute_reader
@@ -163,8 +120,8 @@ class DataPortal:
         if aligned_future_session_reader is not None:
             aligned_session_readers[Future] = aligned_future_session_reader
             self._roll_finders["volume"] = VolumeRollFinder(
-                self.trading_calendar,
-                self.asset_repository,
+                self._bundle_data.trading_calendar,
+                self._bundle_data.asset_repository,
                 aligned_future_session_reader,
             )
             aligned_session_readers[
@@ -175,61 +132,50 @@ class DataPortal:
             )
 
         self._daily_aggregator = DailyHistoryAggregator(
-            self.trading_calendar.first_minutes,
+            self._bundle_data.trading_calendar.first_minutes,
             self._data_reader,
-            self.trading_calendar,
-        )
-        self._history_loader = PolarsHistoryLoader(
-            self.trading_calendar,
-            self._data_reader,
-            self._adjustment_reader,
-            self.asset_repository,
-            self._fields,
-            self._roll_finders,
+            self._bundle_data.trading_calendar,
         )
 
         self._first_trading_day = first_trading_day
 
         # Get the first trading minute
-        self._first_trading_minute = (
-            self.trading_calendar.session_first_minute(self._first_trading_day)
-            if self._first_trading_day is not None
-            else (None, None)
-        )
+        # self._first_trading_minute = (
+        #     self._bundle_data.trading_calendar.session_first_minute(self._first_trading_day)
+        #     if self._first_trading_day is not None
+        #     else (None, None)
+        # )
 
-        # Store the locs of the first day and first minute
-        self._first_trading_day_loc = (
-            self.trading_calendar.sessions.get_loc(self._first_trading_day)
-            if self._first_trading_day is not None
-            else None
-        )
+        # # Store the locs of the first day and first minute
+        # self._first_trading_day_loc = (
+        #     self._bundle_data.trading_calendar.sessions.get_loc(self._first_trading_day)
+        #     if self._first_trading_day is not None
+        #     else None
+        # )
 
     def _ensure_reader_aligned(self, reader):
         if reader is None:
             return
 
-        if reader.trading_calendar.name == self.trading_calendar.name:
+        if reader.trading_calendar.name == self._bundle_data.trading_calendar.name:
             return reader
         elif reader.data_frequency == "minute":
             return ReindexMinuteBarReader(
-                self.trading_calendar,
+                self._bundle_data.trading_calendar,
                 reader,
                 self._first_available_session,
                 self._last_available_session,
             )
         elif reader.data_frequency == "session":
             return ReindexSessionBarReader(
-                self.trading_calendar,
+                self._bundle_data.trading_calendar,
                 reader,
                 self._first_available_session,
                 self._last_available_session,
             )
 
-    def _reindex_extra_source(self, df, source_date_index):
-        return df.reindex(index=source_date_index, method="ffill")
-
-    def _get_pricing_reader(self, data_frequency: DataFrequency):
-        return self._pricing_readers[data_frequency]
+    # def _get_pricing_reader(self, data_frequency: DataFrequency):
+    #     return self._pricing_readers[data_frequency]
 
     def get_last_traded_dt(self, asset, dt, data_frequency: DataFrequency):
         """Given an asset and dt, returns the last traded dt from the viewpoint
@@ -318,7 +264,7 @@ class DataPortal:
             ``field`` is 'volume' the value will be a int. If the ``field`` is
             'last_traded' the value will be a Timestamp.
         """
-        df_raw = self._data_reader.load_raw_arrays_limit(
+        df_raw = self.load_raw_arrays_limit(
             fields=fields,
             limit=1,
             end_date=dt,
@@ -326,6 +272,44 @@ class DataPortal:
             assets=assets,
             include_end_date=True,
         )
+        return df_raw
+
+    @lru_cache
+    def get_dataframe(self) -> pl.DataFrame:
+        # df = pl.read_parquet(source=self.data_path)
+
+        # df = df.with_columns(pl.col("date").dt.convert_time_zone(self.trading_calendar.tz.key))
+        df = self._bundle_data.data
+        return df
+
+
+    def load_raw_arrays_limit(self, fields: list[str], limit: int,
+                              end_date: datetime.datetime,
+                              frequency: datetime.timedelta,
+                              assets: list[Asset],
+                              include_end_date: bool,
+                              ) -> pl.DataFrame:
+
+        total_bar_count = limit
+        if self._bundle_data.frequency < frequency:
+            multiplier = int(frequency / self._bundle_data.frequency)
+            total_bar_count = limit * multiplier
+
+        cols = list(set(fields + ["date", "sid"]))
+        if include_end_date:
+            df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
+                pl.col("date") <= end_date,
+                pl.col("sid").is_in([asset.sid for asset in assets])
+            ).group_by(pl.col("sid")).tail(total_bar_count).sort(by="date")
+        else:
+            df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
+                pl.col("date") < end_date,
+                pl.col("sid").is_in([asset.sid for asset in assets])).group_by(pl.col("sid")).tail(
+                total_bar_count).sort(by="date")
+        if self._bundle_data.frequency < frequency:
+            df = df_raw.group_by_dynamic(
+                index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields)
+            return df
         return df_raw
 
 
@@ -429,7 +413,7 @@ class DataPortal:
 
     def get_adjusted_value(
             self, asset: Asset, field: str, dt: datetime.datetime, perspective_dt: datetime.datetime,
-            data_frequency: DataFrequency,
+            data_frequency: datetime.timedelta,
             spot_value: float = None
     ):
         """Returns a scalar value representing the value
@@ -461,15 +445,7 @@ class DataPortal:
             is 'last_traded' the value will be a Timestamp.
         """
         if spot_value is None:
-            # if this a fetcher field, we want to use perspective_dt (not dt)
-            # because we want the new value as of midnight (fetcher only works
-            # on a daily basis, all timestamps are on midnight)
-            # if self._is_extra_source(asset, field, self._augmented_sources_map, fields=self._fields):
-            #     spot_value = self.get_spot_value(
-            #         assets=[asset], field=field, dt=perspective_dt, data_frequency=data_frequency
-            #     )
-            # else:
-            spot_value = self.get_spot_value(assets=[asset], field=field, dt=dt, data_frequency=data_frequency)
+            spot_value = self.get_spot_value(assets=[asset], fields=[field], dt=dt, data_frequency=data_frequency)
 
         if isinstance(asset, Equity):
             ratio = self.get_adjustments(assets=[asset], field=field, dt=dt, perspective_dt=perspective_dt)[0]
@@ -477,86 +453,10 @@ class DataPortal:
 
         return spot_value
 
-    def _get_minute_spot_value(self, asset: Asset, column: str, dt: datetime.datetime, ffill: bool = False):
-
-        if not ffill:
-            try:
-                return self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
-            except NoDataOnDate:
-                if column != "volume":
-                    return np.nan
-                else:
-                    return 0
-
-        # At this point the pairing of column='close' and ffill=True is
-        # assumed.
-        try:
-            # Optimize the best case scenario of a liquid asset
-            # returning a valid price.
-            result = self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
-            if not pd.isnull(result):
-                return result
-        except NoDataOnDate:
-            # Handling of no data for the desired date is done by the
-            # forward filling logic.
-            # The last trade may occur on a previous day.
-            pass
-        # If forward filling, we want the last minute with values (up to
-        # and including dt).
-        query_dt = self._data_reader.get_last_traded_dt(asset=asset, dt=dt)
-
-        if pd.isnull(query_dt):
-            # no last traded dt, bail
-            return np.nan
-
-        result = self._data_reader.get_value(sid=asset.sid, dt=query_dt, field=column)
-
-        if (dt == query_dt) or (dt.date() == query_dt.date()):
-            return result
-
-        # the value we found came from a different day, so we have to
-        # adjust the data if there are any adjustments on that day barrier
-        return self.get_adjusted_value(
-            asset=asset, field=column, dt=query_dt, perspective_dt=dt, data_frequency="minute", spot_value=result
-        )
-
-    def _get_daily_spot_value(self, asset: Asset, column: str, dt: datetime.datetime):
-
-        if column == "last_traded":
-            last_traded_dt = self._data_reader.get_last_traded_dt(asset=asset, dt=dt)
-
-            if isnull(last_traded_dt):
-                return pd.NaT
-            else:
-                return last_traded_dt
-        elif column == "price":
-            found_dt = dt
-            while True:
-                try:
-                    value = self._data_reader.get_value(sid=asset.sid, dt=found_dt, field="close")
-                    if not isnull(value):
-                        if dt == found_dt:
-                            return value
-                        else:
-                            # adjust if needed
-                            return self.get_adjusted_value(
-                                asset=asset, field=column, dt=found_dt, perspective_dt=dt, data_frequency="minute",
-                                spot_value=value
-                            )
-                    else:
-                        found_dt -= self.trading_calendar.day
-                except NoDataOnDate:
-                    return np.nan
-        elif column in self._fields:
-            # don't forward fill
-            try:
-                return self._data_reader.get_value(sid=asset.sid, dt=dt, field=column)
-            except NoDataOnDate:
-                return np.nan
 
     @remember_last
     def _get_days_for_window(self, end_date: datetime.datetime, bar_count: int):
-        tds = self.trading_calendar.sessions
+        tds = self._bundle_data.trading_calendar.sessions
         end_loc = tds.get_loc(end_date)
         start_loc = end_loc - bar_count + 1
         if start_loc < self._first_trading_day_loc:
@@ -568,104 +468,6 @@ class DataPortal:
             )
         return tds[start_loc: end_loc + 1]
 
-    def _get_history_daily_window(
-            self,
-            assets: list[Asset],
-            end_dt: datetime.datetime,
-            bar_count: int,
-            fields: list[str],
-            data_frequency: DataFrequency
-    ):
-        """Internal method that returns a dataframe containing history bars
-        of daily frequency for the given sids.
-        """
-        session = self.trading_calendar.minute_to_session(end_dt)  # .tz_localize(self.trading_calendar.tz)
-        days_for_window = self._get_days_for_window(end_date=session, bar_count=bar_count)
-
-        if len(assets) == 0:
-            return pd.DataFrame(None, index=days_for_window, columns=None)
-
-        if data_frequency == "daily":
-            # two cases where we use daily data for the whole range:
-            # 1) the history window ends at midnight utc.
-            # 2) the last desired day of the window is after the
-            # last trading day, use daily data for the whole range.
-            return self._data_reader.load_raw_arrays(
-                fields=fields,
-                start_date=days_for_window[0],
-                end_date=days_for_window[-1],
-                assets=assets,
-            )
-
-            #     self._get_daily_window_data(
-            #     assets=assets, fields=field_to_use, days_in_window=days_for_window, extra_slot=False
-            # )
-
-        else:
-            # minute mode, requesting '1d'
-            data = self._get_daily_window_data(
-                assets=assets, fields=field_to_use, days_in_window=days_for_window[0:-1], extra_slot=True
-            )
-
-            if field_to_use == "open":
-                minute_value = self._daily_aggregator.opens(assets, end_dt)
-            elif field_to_use == "high":
-                minute_value = self._daily_aggregator.highs(assets, end_dt)
-            elif field_to_use == "low":
-                minute_value = self._daily_aggregator.lows(assets, end_dt)
-            elif field_to_use == "close":
-                minute_value = self._daily_aggregator.closes(assets, end_dt)
-            elif field_to_use == "volume":
-                minute_value = self._daily_aggregator.volumes(assets, end_dt)
-            elif field_to_use == "sid":
-                minute_value = [
-                    int(self._get_current_contract(asset, end_dt)) for asset in assets
-                ]
-
-            # append the partial day.
-            data[-1] = minute_value
-
-        return pd.DataFrame(data, index=days_for_window, columns=assets)
-
-    def _handle_minute_history_out_of_bounds(self, bar_count):
-        cal = self.trading_calendar
-
-        first_trading_minute_loc = (
-            cal.minutes.get_loc(self._first_trading_minute)
-            if self._first_trading_minute is not None
-            else None
-        )
-
-        suggested_start_day = cal.minute_to_session(
-            cal.minutes[first_trading_minute_loc + bar_count] + cal.day
-        )
-
-        raise HistoryWindowStartsBeforeData(
-            first_trading_day=self._first_trading_day.date(),
-            bar_count=bar_count,
-            suggested_start_day=suggested_start_day.date(),
-        )
-
-    def _get_history_minute_window(self, assets, end_dt, bar_count, field_to_use):
-        """Internal method that returns a dataframe containing history bars
-        of minute frequency for the given sids.
-        """
-        # get all the minutes for this window
-        try:
-            minutes_for_window = self.trading_calendar.minutes_window(
-                end_dt, -bar_count
-            ).tz_convert(self.trading_calendar.tz)
-        except KeyError:
-            self._handle_minute_history_out_of_bounds(bar_count)
-
-        if minutes_for_window[0] < self._first_trading_minute:
-            self._handle_minute_history_out_of_bounds(bar_count)
-
-        asset_minute_data = self._minute_history_loader.history(
-            assets, minutes_for_window, field_to_use, False
-        )
-
-        return pd.DataFrame(asset_minute_data, index=minutes_for_window, columns=assets)
 
     def get_history_window(
             self, assets: list[Asset],
@@ -707,7 +509,7 @@ class DataPortal:
         """
         if bar_count < 1:
             raise ValueError(f"bar_count must be >= 1, but got {bar_count}")
-        df_raw = self._data_reader.load_raw_arrays_limit(
+        df_raw = self.load_raw_arrays_limit(
             fields=fields,
             limit=bar_count,
             frequency=frequency,
@@ -716,65 +518,6 @@ class DataPortal:
             include_end_date=False
         )
         return df_raw
-
-    def _get_daily_window_data(self, assets: list[Asset], fields: list[str], days_in_window, extra_slot: bool = True):
-        """Internal method that gets a window of adjusted daily data for a sid
-        and specified date range.  Used to support the history API method for
-        daily bars.
-
-        Parameters
-        ----------
-        asset : Asset
-            The asset whose data is desired.
-
-        start_dt: pandas.Timestamp
-            The start of the desired window of data.
-
-        bar_count: int
-            The number of days of data to return.
-
-        field: string
-            The specific field to return.  "open", "high", "close_price", etc.
-
-        extra_slot: boolean
-            Whether to allocate an extra slot in the returned numpy array.
-            This extra slot will hold the data for the last partial day.  It's
-            much better to create it here than to create a copy of the array
-            later just to add a slot.
-
-        Returns
-        -------
-        A numpy array with requested values.  Any missing slots filled with
-        nan.
-
-        """
-        # bar_count = len(days_in_window)
-        # create an np.array of size bar_count
-        # dtype = float64 if field != "sid" else int64
-        # if extra_slot:
-        #     return_array = np.zeros((bar_count + 1, len(assets)), dtype=dtype)
-        # else:
-        #     return_array = np.zeros((bar_count, len(assets)), dtype=dtype)
-        #
-        # if field != "volume":
-        #     # volumes default to 0, so we don't need to put NaNs in the array
-        #     return_array = return_array.astype(float64)
-        #     return_array[:] = np.nan
-        # if bar_count != 0:
-        data = self._data_reader.load_raw_arrays(
-            columns=fields,
-            start_date=days_in_window[0],
-            end_date=days_in_window[-1],
-            assets=assets,
-        )
-        # data = self._history_loader.history(
-        #     assets=assets, dts=days_in_window, field=field, is_perspective_after=extra_slot
-        # )
-        # if extra_slot:
-        #     return_array[: len(return_array) - 1, :] = data
-        # else:
-        #     return_array[: len(data)] = data
-        return data
 
     def _get_adjustment_list(self, asset: Asset, adjustments_dict: dict[str, Any], table_name: str):
         """Internal method that returns a list of adjustments for the given sid.
@@ -796,17 +539,17 @@ class DataPortal:
             A list of [multiplier, datetime.datetime], earliest first
 
         """
-        if self._adjustment_reader is None:
+        if self._bundle_data.adjustment_repository is None:
             return []
 
-        sid = int(asset)
+        sid = asset.sid
 
         try:
             adjustments = adjustments_dict[sid]
         except KeyError:
             adjustments = adjustments_dict[
                 sid
-            ] = self._adjustment_reader.get_adjustments_for_sid(table_name, sid)
+            ] = self._bundle_data.adjustment_repository.get_adjustments_for_sid(table_name, sid)
 
         return adjustments
 
@@ -826,20 +569,20 @@ class DataPortal:
         splits : list[(asset, float)]
             List of splits, where each split is a (asset, ratio) tuple.
         """
-        if self._adjustment_reader is None or not assets:
+        if self._bundle_data.adjustment_repository is None or not assets:
             return []
 
         # convert dt to # of seconds since epoch, because that's what we use
         # in the adjustments db
         # seconds = int(dt.value / 1e9)
 
-        splits = self._adjustment_reader.conn.execute(
+        splits = self._bundle_data.adjustment_repository.conn.execute(
             "SELECT sid, ratio FROM SPLITS WHERE effective_date = ?", (dt,)
         ).fetchall()
 
         splits = [split for split in splits if split[0] in assets]
         splits = [
-            (self.asset_repository.retrieve_asset(split[0]), split[1]) for split in splits
+            (self._bundle_data.asset_repository.retrieve_asset(split[0]), split[1]) for split in splits
         ]
 
         return splits
@@ -937,13 +680,13 @@ class DataPortal:
             is the next upcoming contract and so on.
         """
         rf = self._roll_finders[continuous_future.roll_style]
-        session = self.trading_calendar.minute_to_session(dt)
+        session = self._bundle_data.trading_calendar.minute_to_session(dt)
         contract_center = rf.get_contract_center(
             continuous_future.root_symbol, session, continuous_future.offset
         )
-        oc = self.asset_repository.get_ordered_contracts(continuous_future.root_symbol)
+        oc = self._bundle_data.asset_repository.get_ordered_contracts(continuous_future.root_symbol)
         chain = oc.active_chain(contract_center, session.value)
-        return self.asset_repository.retrieve_all(sids=chain)
+        return self._bundle_data.asset_repository.retrieve_all(sids=chain)
 
     def _get_current_contract(self, continuous_future: ContinuousFuture, dt: datetime.datetime):
         rf = self._roll_finders[continuous_future.roll_style]
@@ -952,8 +695,5 @@ class DataPortal:
         )
         if contract_sid is None:
             return None
-        return self.asset_repository.retrieve_asset(sid=contract_sid)
+        return self._bundle_data.asset_repository.retrieve_asset(sid=contract_sid)
 
-    @property
-    def adjustment_reader(self):
-        return self._adjustment_reader

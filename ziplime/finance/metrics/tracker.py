@@ -8,7 +8,7 @@ from ziplime.finance.domain.ledger import Ledger
 from ..domain.order import Order
 
 from ..domain.transaction import Transaction
-from ...assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ...data.data_portal import DataPortal
 from ...domain.data_frequency import DataFrequency
 from ziplime.domain.event import Event
@@ -242,7 +242,7 @@ class MetricsTracker:
         ledger = self._ledger
         ledger.start_of_session(session_label=session_label)
 
-        adjustment_reader = data_portal.adjustment_reader
+        adjustment_reader = data_portal._bundle_data.adjustment_repository
         if adjustment_reader is not None:
             # this is None when running with a dataframe source
             ledger.process_dividends(

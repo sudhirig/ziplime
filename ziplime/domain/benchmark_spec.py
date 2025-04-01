@@ -7,7 +7,7 @@ from zipline.data.benchmarks import get_benchmark_returns_from_file
 
 from zipline.errors import SymbolNotFound
 
-from ziplime.assets.repositories.asset_repository import AssetRepository
+from ziplime.assets.repositories.sqlite_asset_repository import SqliteAssetRepository
 from ziplime.utils.run_algo import _RunAlgoError
 
 
@@ -49,7 +49,7 @@ class BenchmarkSpec:
         self.benchmark_symbol = benchmark_symbol
         self.no_benchmark = no_benchmark
 
-    def resolve(self, asset_repository: AssetRepository, start_date: datetime.date, end_date: datetime.date):
+    def resolve(self, asset_repository: SqliteAssetRepository, start_date: datetime.date, end_date: datetime.date):
         """
         Resolve inputs into values to be passed to TradingAlgorithm.
 

@@ -1,14 +1,9 @@
-import datetime
 import os
 
-from ziplime.utils.paths import data_root
 
 from ziplime.data.providers.historical_market_data.lime_trader_sdk_historical_market_data_provider import \
     LimeTraderSdkHistoricalMarketDataProvider
 from ziplime.gens.brokers.lime_trader_sdk_broker import LimeTraderSdkBroker
-from ziplime.config.register_bundles import register_lime_symbol_list_equities_bundle
-from ziplime.constants.bundles import DEFAULT_BUNDLE
-from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMN_NAMES
 from ziplime.data.providers.fundamental_data.limex_hub_fundamental_data_provider import LimexHubFundamentalDataProvider
 from ziplime.data.providers.historical_market_data.limex_hub_historical_market_data_provider import \
     LimexHubHistoricalMarketDataProvider
@@ -16,23 +11,23 @@ from ziplime.data.providers.live_market_data.lime_trader_sdk_live_market_data_pr
     LimeTraderSdkLiveMarketDataProvider
 
 
-def register_default_bundles(calendar_name: str = "NYSE",
-                             fundamental_data_list: set[str] = FUNDAMENTAL_DATA_COLUMN_NAMES):
-    data_path = data_root()
-    if not next(os.walk(data_path), None):
-        lime_bundle_names = []
-    else:
-        lime_bundle_names = [x for x in [x for x in next(os.walk(data_path), [])][1] if x.startswith(DEFAULT_BUNDLE)]
-    for bundle in lime_bundle_names:
-        register_lime_symbol_list_equities_bundle(
-            bundle_name=bundle,
-            symbols=[],
-            start_session=None,
-            end_session=None,
-            frequency=datetime.timedelta(days=1),
-            calendar_name=calendar_name,
-            fundamental_data_list=fundamental_data_list
-        )
+# def register_default_bundles(calendar_name: str = "NYSE",
+#                              fundamental_data_list: set[str] = FUNDAMENTAL_DATA_COLUMN_NAMES):
+#     data_path = data_root()
+#     if not next(os.walk(data_path), None):
+#         lime_bundle_names = []
+#     else:
+#         lime_bundle_names = [x for x in [x for x in next(os.walk(data_path), [])][1] if x.startswith(DEFAULT_BUNDLE)]
+#     for bundle in lime_bundle_names:
+#         register_lime_symbol_list_equities_bundle(
+#             bundle_name=bundle,
+#             symbols=[],
+#             start_session=None,
+#             end_session=None,
+#             frequency=datetime.timedelta(days=1),
+#             calendar_name=calendar_name,
+#             fundamental_data_list=fundamental_data_list
+#         )
 
 
 def get_historical_market_data_provider(code: str):

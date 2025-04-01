@@ -5,7 +5,9 @@ import os
 import sys
 
 from exchange_calendars import ExchangeCalendar
-from ziplime.utils.paths import data_path
+
+from ziplime.data.services.bundle_registry import BundleRegistry
+from ziplime.data.services.bundle_service import BundleService
 
 from ziplime.algorithm_live import LiveTradingAlgorithm
 from ziplime.finance.blotter.blotter_live import BlotterLive
@@ -26,9 +28,7 @@ except ImportError:
     PYGMENTS = False
 import logging
 
-from ziplime.data import bundles
 from ziplime.data.data_portal import DataPortal
-from zipline.finance import metrics
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from zipline.pipeline.data import USEquityPricing
 from zipline.pipeline.loaders import USEquityPricingLoader
@@ -66,12 +66,12 @@ class _RunAlgoError(click.ClickException, ValueError):
 
 # TODO: simplify
 # flake8: noqa: C901
-def run_algorithm(
+async def run_algorithm(
         algofile: str,
         algotext: str,
         emission_rate: datetime.timedelta,
         capital_base: float,
-        bundle: str,
+        bundle_name: str,
         bundle_timestamp,
         start_date: datetime.datetime,
         end_date: datetime.datetime,
@@ -83,6 +83,7 @@ def run_algorithm(
         benchmark_spec,
         broker: Broker,
         market_data_provider: AbstractLiveMarketDataProvider,
+        bundle_registry: BundleRegistry,
 ):
     """Run a backtest for the given algorithm.
 
@@ -90,18 +91,21 @@ def run_algorithm(
     """
     # benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
 
-    bundle_data = bundles.load(
-        name=bundle,
-        timestamp=bundle_timestamp,
-        frequency=emission_rate,
-    )
+    # bundle_data = bundles.load(
+    #     name=bundle,
+    #     timestamp=bundle_timestamp,
+    #     frequency=emission_rate,
+    # )
+    bundle_service = BundleService(bundle_registry=bundle_registry)
 
+    data_portal = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
     # date parameter validation
     if not broker and trading_calendar.sessions_distance(start_date, end_date) < 1:
         raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
 
+
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
-        asset_repository=bundle_data.asset_repository,
+        asset_repository=data_portal._bundle_data.asset_repository,
         start_date=start_date.date(),
         end_date=end_date.date(),
     )
@@ -117,7 +121,6 @@ def run_algorithm(
         else:
             click.echo(algotext)
 
-    first_trading_day = bundle_data.historical_data_reader.first_trading_day
 
     state_filename = None
     realtime_bar_target = None
@@ -136,25 +139,25 @@ def run_algorithm(
             fundamental_data_reader=bundle_data.fundamental_data_reader,
             fields=bundle_data.historical_data_reader.get_fields()
         )
-        state_filename = f"{data_path(['state'])}"
-        realtime_bar_target = f"{data_path(['realtime'])}"
+        # state_filename = f"{data_path(['state'])}"
+        # realtime_bar_target = f"{data_path(['realtime'])}"
         # emission_rate = 'minute'
-    else:
-        data_portal = DataPortal(
-            bundle_data.asset_repository,
-            trading_calendar=trading_calendar,
-            first_trading_day=first_trading_day,
-            historical_data_reader=bundle_data.historical_data_reader,
-            fundamental_data_reader=bundle_data.fundamental_data_reader,
-            adjustment_reader=bundle_data.adjustment_reader,
-            future_minute_reader=bundle_data.historical_data_reader,
-            future_daily_reader=bundle_data.historical_data_reader,
-            fields=bundle_data.historical_data_reader.get_fields()
-        )
+    # else:
+    #     data_portal = DataPortal(
+    #         bundle_data.asset_repository,
+    #         trading_calendar=trading_calendar,
+    #         first_trading_day=first_trading_day,
+    #         historical_data_reader=bundle_data.historical_data_reader,
+    #         fundamental_data_reader=bundle_data.fundamental_data_reader,
+    #         adjustment_reader=bundle_data.adjustment_reader,
+    #         future_minute_reader=bundle_data.historical_data_reader,
+    #         future_daily_reader=bundle_data.historical_data_reader,
+    #         fields=bundle_data.historical_data_reader.get_fields()
+    #     )
 
     pipeline_loader = USEquityPricingLoader.without_fx(
-        bundle_data.historical_data_reader,
-        bundle_data.adjustment_reader,
+        data_portal._bundle_data.historical_data_reader,
+        data_portal._bundle_data.adjustment_repository,
     )
 
     def choose_loader(column):
@@ -222,9 +225,9 @@ def run_algorithm(
                 algo_filename=algofile,
                 script=algotext,
             )
-        tr.bundle_data = bundle_data
-        tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
-        perf = tr.run()
+        # tr.bundle_data = bundle_data
+        # tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
+        perf = await tr.run()
     except NoBenchmark:
         raise _RunAlgoError(
             (

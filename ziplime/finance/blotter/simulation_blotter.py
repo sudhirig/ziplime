@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from copy import copy
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from zipline.finance.execution import ExecutionStyle
 
 from .blotter import Blotter
@@ -50,6 +50,7 @@ class SimulationBlotter(Blotter):
         self.max_shares = int(1e11)
 
         self.slippage_models = {
+            Asset: equity_slippage or FixedBasisPointsSlippage(),
             Equity: equity_slippage or FixedBasisPointsSlippage(),
             Future: future_slippage
                     or VolatilityVolumeShare(
@@ -57,6 +58,7 @@ class SimulationBlotter(Blotter):
             ),
         }
         self.commission_models = {
+            Asset: equity_commission or PerShare(),
             Equity: equity_commission or PerShare(),
             Future: future_commission
                     or PerContract(
@@ -64,6 +66,23 @@ class SimulationBlotter(Blotter):
                 exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
             ),
         }
+
+
+        # self.slippage_models = {
+        #     Equity: equity_slippage or FixedBasisPointsSlippage(),
+        #     Future: future_slippage
+        #             or VolatilityVolumeShare(
+        #         volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
+        #     ),
+        # }
+        # self.commission_models = {
+        #     Equity: equity_commission or PerShare(),
+        #     Future: future_commission
+        #             or PerContract(
+        #         cost=DEFAULT_PER_CONTRACT_COST,
+        #         exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
+        #     ),
+        # }
 
     def __repr__(self):
         return """

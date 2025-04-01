@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.data.data_portal import DataPortal
 from ziplime.errors import (
     InvalidBenchmarkAsset,
@@ -44,9 +44,9 @@ class BenchmarkSource:
             all_bars = pl.from_pandas(
                 trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(trading_calendar.tz)
             )
-            self._precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
+            self._precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
                 index_column="date", every=self.timedelta_period
-            ).agg(pl.col("value").sum())
+            ).agg(pl.col("close").sum())
         else:
             raise Exception(
                 "Must provide either benchmark_asset or " "benchmark_returns."
@@ -219,9 +219,9 @@ class BenchmarkSource:
             trading_calendar.sessions_minutes(start=self.sessions[0], end=self.sessions[-1]).tz_convert(
                 trading_calendar.tz)
         )
-        precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
-            index_column="date", every=self.timedelta_period
-        ).agg(pl.col("value").sum())
+        # precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
+        #     index_column="date", every=self.timedelta_period
+        # ).agg(pl.col("value").sum())
 
         benchmark_series = data_portal.get_history_window(
             assets=[asset],

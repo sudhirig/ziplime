@@ -283,7 +283,11 @@ def minute_annual_volatility(date_labels,
 
             # variance /= day_ix  # day_count - 1 for ddof=1
             variance = variance/day_ix
-
-        out[ix] = sqrt(variance) * annualization_factor
+        print(ix, sqrt(variance) * annualization_factor)
+        res = sqrt(variance) * annualization_factor
+        if np.isnan(res):
+            out[ix] = 0
+        else:
+            out[ix] = res
 
     return out

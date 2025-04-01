@@ -7,7 +7,7 @@ from typing import Callable
 import polars as pl
 import pandas as pd
 import numpy as np
-
+import ziplime
 from itertools import chain, repeat
 
 from exchange_calendars import ExchangeCalendar
@@ -60,7 +60,7 @@ from zipline.finance.asset_restrictions import (
     StaticRestrictions,
     SecurityListRestrictions,
 )
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.future import Future
 from ziplime.assets.domain.equity import Equity
 from ziplime.data.data_portal import DataPortal
@@ -91,7 +91,7 @@ from zipline.utils.numpy_utils import int64_dtype
 from zipline.utils.cache import ExpiringCache
 
 import zipline.utils.events
-from zipline.utils.events import (
+from ziplime.utils.events import (
     EventManager,
     make_eventrule,
     date_rules,
@@ -282,8 +282,8 @@ class TradingAlgorithm:
         self._analyze = self.namespace.get("analyze")
 
         self.event_manager.add_event(
-            zipline.utils.events.Event(
-                zipline.utils.events.Always(),
+            ziplime.utils.events.Event(
+                ziplime.utils.events.Always(),
                 # We pass handle_data.__func__ to get the unbound method.
                 # We will explicitly pass the algorithm to bind it again.
                 self.handle_data.__func__,
@@ -318,18 +318,18 @@ class TradingAlgorithm:
         if get_loader is not None:
             self.engine = SimplePipelineEngine(
                 get_loader,
-                self.data_portal.asset_repository,
+                self.data_portal._bundle_data.asset_repository,
                 self.default_pipeline_domain(self.trading_calendar),
             )
         else:
             self.engine = ExplodingPipelineEngine()
 
-    def initialize(self, *args, **kwargs):
+    async def initialize(self, *args, **kwargs):
         """Call self._initialize with `self` made available to Zipline API
         functions.
         """
         with ZiplineAPI(self):
-            self._initialize(self, *args, **kwargs)
+            await self._initialize(self, *args, **kwargs)
 
     def before_trading_start(self, data):
         self.compute_eager_pipelines()
@@ -346,9 +346,9 @@ class TradingAlgorithm:
 
         self._in_before_trading_start = False
 
-    def handle_data(self, data):
+    async def handle_data(self, data):
         if self._handle_data:
-            self._handle_data(self, data)
+            await self._handle_data(self, data)
 
     def analyze(self, perf):
         if self._analyze is None:
@@ -375,7 +375,7 @@ class TradingAlgorithm:
             timezone=self.sim_params.trading_calendar.tz
         )
 
-    def _create_generator(self):
+    async def _create_generator(self):
         self.metrics_tracker = MetricsTracker(
             data_portal=self.data_portal,
             trading_calendar=self.trading_calendar,
@@ -391,7 +391,7 @@ class TradingAlgorithm:
         self.on_dt_changed(dt=self.sim_params.start_session)
 
         if not self.initialized:
-            self.initialize(**self.initialize_kwargs)
+            await self.initialize(**self.initialize_kwargs)
             self.initialized = True
 
         self.trading_client = AlgorithmSimulator(
@@ -412,12 +412,12 @@ class TradingAlgorithm:
             if pipe.eager:
                 self.pipeline_output(name)
 
-    def get_generator(self):
+    async def get_generator(self):
         """Override this method to add new logic to the construction
         of the generator. Overrides can use the _create_generator
         method to get a standard construction generator.
         """
-        return self._create_generator()
+        return await self._create_generator()
 
     def _calculate_universe(self):
         # this exists to provide backwards compatibility for older,
@@ -425,9 +425,9 @@ class TradingAlgorithm:
         # BarData (ie, 'for sid in data`).
 
         # our universe is all the assets passed into `run`.
-        return self.data_portal.asset_repository.retrieve_all(sids=self.data_portal.asset_repository.sids)
+        return self.data_portal._bundle_data.asset_repository.retrieve_all(sids=self.data_portal._bundle_data.asset_repository.sids)
 
-    def run(self):
+    async def run(self):
         """Run the algorithm."""
         self._logger.info("Running algorithm")
         # HACK: I don't think we really want to support passing a data portal
@@ -438,7 +438,7 @@ class TradingAlgorithm:
         # Each iteration returns a perf dictionary
         try:
             perfs = []
-            for perf in self.get_generator():
+            async for perf in await self.get_generator():
                 perfs.append(perf)
 
             # convert perf dict to pandas dataframe
@@ -538,7 +538,7 @@ class TradingAlgorithm:
             The function to execute when the rule is triggered.
         """
         self.event_manager.add_event(
-            event=zipline.utils.events.Event(rule=rule, callback=callback),
+            event=ziplime.utils.events.Event(rule=rule, callback=callback),
         )
 
     @api_method
@@ -668,7 +668,7 @@ class TradingAlgorithm:
         continuous_future : zipline.assets.ContinuousFuture
             The continuous future specifier.
         """
-        return self.data_portal.asset_repository.create_continuous_future(
+        return self.data_portal._bundle_data.asset_repository.create_continuous_future(
             root_symbol_str,
             offset,
             roll,
@@ -676,7 +676,7 @@ class TradingAlgorithm:
         )
 
     @api_method
-    def symbol(self, symbol_str: str, country_code: str | None = None):
+    async def symbol(self, symbol_str: str, country_code: str | None = None):
         """Lookup an Equity by its ticker symbol.
 
         Parameters
@@ -708,12 +708,12 @@ class TradingAlgorithm:
             if self._symbol_lookup_date is not None
             else pd.Timestamp(self.sim_params.end_session).to_pydatetime().date()
         )
-
-        return self.data_portal.asset_repository.lookup_symbol(
-            symbol_str,
-            as_of_date=_lookup_date,
-            country_code=country_code,
-        )
+        return await self.data_portal._bundle_data.asset_repository.get_asset_by_symbol(symbol=symbol_str)
+        # return self.data_portal._bundle_data.asset_repository.lookup_symbol(
+        #     symbol_str,
+        #     as_of_date=_lookup_date,
+        #     country_code=country_code,
+        # )
 
     @api_method
     def symbols(self, *args, **kwargs):
@@ -763,7 +763,7 @@ class TradingAlgorithm:
         SidsNotFound
             When a requested ``sid`` does not map to any asset.
         """
-        return self.data_portal.asset_repository.retrieve_asset(sid)
+        return self.data_portal._bundle_data.asset_repository.retrieve_asset(sid)
 
     @api_method
     def future_symbol(self, symbol: str):
@@ -784,7 +784,7 @@ class TradingAlgorithm:
         SymbolNotFound
             Raised when no contract named 'symbol' is found.
         """
-        return self.data_portal.asset_repository.lookup_future_symbol(symbol)
+        return self.data_portal._bundle_data.asset_repository.lookup_future_symbol(symbol)
 
     def _calculate_order_value_amount(self, asset: Asset, value: float):
         """Calculates how many shares/contracts to order based on the type of

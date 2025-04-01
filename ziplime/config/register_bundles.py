@@ -1,22 +1,22 @@
-import datetime
+# import datetime
 
-from ziplime.data.bundles.lime import register_lime_equities_bundle
-
-
-def register_lime_symbol_list_equities_bundle(bundle_name: str,
-                                              start_session: datetime.datetime | None,
-                                              end_session: datetime.datetime | None,
-                                              symbols: list[str],
-                                              frequency: datetime.timedelta,
-                                              fundamental_data_list: set[str],
-                                              calendar_name: str = "NYSE"
-                                              ):
-    register_lime_equities_bundle(
-        bundle_name=bundle_name,
-        start_session=start_session,
-        end_session=end_session,
-        symbol_list=symbols,
-        frequency=frequency,
-        calendar_name=calendar_name,
-        fundamental_data_list=fundamental_data_list,
-    )
+# from ziplime.data.bundles.lime import register_lime_equities_bundle
+#
+#
+# def register_lime_symbol_list_equities_bundle(bundle_name: str,
+#                                               start_session: datetime.datetime | None,
+#                                               end_session: datetime.datetime | None,
+#                                               symbols: list[str],
+#                                               frequency: datetime.timedelta,
+#                                               fundamental_data_list: set[str],
+#                                               calendar_name: str = "NYSE"
+#                                               ):
+#     register_lime_equities_bundle(
+#         bundle_name=bundle_name,
+#         start_session=start_session,
+#         end_session=end_session,
+#         symbol_list=symbols,
+#         frequency=frequency,
+#         calendar_name=calendar_name,
+#         fundamental_data_list=fundamental_data_list,
+#     )

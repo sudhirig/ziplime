@@ -1,31 +1,31 @@
+import asyncio
 import datetime
 import errno
 import logging
+from pathlib import Path
 
+import asyncclick as click
 import pandas as pd
 from zipline.__main__ import ipython_only
 
-from zipline.utils.calendar_utils import get_calendar
-
-from ziplime.constants.default_columns import OHLCV_COLUMNS_POLARS
+from ziplime.assets.repositories.sqlite_adjustments_repository import SQLiteAdjustmentRepository
+from ziplime.assets.repositories.sqlite_asset_repository import SqliteAssetRepository
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
-from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
+from ziplime.data.services.bundle_service import BundleService
+from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
+from ziplime.data.services.limex_hub_data_source import LimexHubDataSource
+from ziplime.data.services.file_system_parquet_bundle_storage import FileSystemParquetBundleStorage
 from ziplime.domain.benchmark_spec import BenchmarkSpec
 from ziplime.domain.data_frequency import DataFrequency
 from ziplime.utils.run_algo import run_algorithm
+from exchange_calendars import get_calendar as ec_get_calendar
 
-import click
-from ziplime.data import bundles as bundles_module
-
-from click import DateTime
-from zipline.utils.cli import Timestamp
-
-from ziplime.config.register_bundles import register_lime_symbol_list_equities_bundle
+from asyncclick import DateTime
+from ziplime.utils.cli import Timestamp
 
 from zipline import __main__ as zipline__main__
 
-from ziplime.utils.bundle_utils import register_default_bundles, get_historical_market_data_provider, \
-    get_fundamental_data_provider, get_live_market_data_provider, get_broker
+from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_broker
 
 DEFAULT_BUNDLE = "lime"
 
@@ -41,7 +41,7 @@ def validate_date_range(date_min: datetime.datetime, date_max: datetime.datetime
 
 @click.group()
 @click.pass_context
-def main(ctx):
+async def main(ctx):
     """Top level ziplime entry point."""
     # install a logging handler before performing any other operations
 
@@ -51,7 +51,7 @@ def main(ctx):
         datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
 
-    register_default_bundles()
+    # register_default_bundles()
 
 
 @main.command(context_settings=dict(
@@ -59,19 +59,13 @@ def main(ctx):
 @click.option(
     "-b",
     "--bundle",
-    default=DEFAULT_BUNDLE,
-    metavar="BUNDLE-NAME",
-    show_default=True,
     help="The data bundle to ingest.",
 )
 @click.option(
     "-c",
-    "--calendar",
-    default="NYSE",
-    show_default=True,
+    "--trading-calendar",
     help="Default calendar to use.",
 )
-@click.option('--new-bundle-name', default=None)
 @click.option(
     "--start-date",
     type=DateTime(),
@@ -102,12 +96,6 @@ def main(ctx):
 @click.option("-s", '--symbols')
 @click.option('--fundamental-data')
 @click.option(
-    "--assets-version",
-    type=int,
-    multiple=True,
-    help="Version of the assets db to which to downgrade.",
-)
-@click.option(
     "--show-progress/--no-show-progress",
     default=True,
     help="Print progress information to the terminal.",
@@ -132,46 +120,31 @@ def main(ctx):
     is_flag=True,
     help="If passed, fundamental data won't be ingested.",
 )
+@click.option(
+    "--bundle-storage-path",
+    default=Path(Path.home(), ".ziplime", "data"),
+    show_default=True,
+    help="Path to the bundle storage on filesystem.",
+)
 @click.pass_context
-def ingest(ctx, bundle, new_bundle_name, start_date, end_date, frequency, symbols, fundamental_data, show_progress,
-           assets_version, calendar,
-           historical_market_data_provider,
-           fundamental_data_provider,
-           skip_fundamental_data
-           ):
+async def ingest(ctx, bundle, start_date, end_date, frequency, symbols, fundamental_data, show_progress,
+                 trading_calendar,
+                 historical_market_data_provider,
+                 fundamental_data_provider,
+                 skip_fundamental_data,
+                 bundle_storage_path,
+                 ):
     """Top level ziplime entry point."""
     symbols_parsed = symbols.split(',') if symbols else None
     if skip_fundamental_data:
         fundamental_data_list = set()
     else:
         fundamental_data_list = fundamental_data.split(",") if fundamental_data else None
-
-    if new_bundle_name:
-        bundle_name = f"{DEFAULT_BUNDLE}-{new_bundle_name}"
-        ctx.args = ['-b', new_bundle_name] + ctx.args
-    else:
-        bundle_name = bundle
-        ctx.args = ['-b', bundle] + ctx.args
     # install a logging handler before performing any other operations
     fundamental_data_list_cols = fundamental_data_list if fundamental_data_list is not None else [
         col.name for col in
         FUNDAMENTAL_DATA_COLUMNS
     ]
-    register_lime_symbol_list_equities_bundle(
-        bundle_name=bundle_name,
-        symbols=symbols_parsed,
-        start_session=start_date,
-        end_session=end_date,
-        frequency=DataFrequency(frequency).to_timedelta(),
-        calendar_name=calendar,
-        fundamental_data_list=fundamental_data_list_cols,
-    )
-
-    new_params = dict(**ctx.params)
-
-    # clean up lime only params and set new bundle name
-    new_params["bundle"] = bundle_name
-
     fundamental_data_provider_instance = get_fundamental_data_provider(code=fundamental_data_provider)
     fundamental_data_column_names = fundamental_data_provider_instance.get_fundamental_data_column_names(
         fundamental_data_fields=set(fundamental_data_list_cols))
@@ -184,18 +157,33 @@ def ingest(ctx, bundle, new_bundle_name, start_date, end_date, frequency, symbol
         if fundamental_data_list is not None
         else FUNDAMENTAL_DATA_COLUMNS
     )
-    bundles_module.ingest(
-        name=bundle_name,
-        timestamp=pd.Timestamp.utcnow(),
-        assets_version=assets_version,
-        show_progress=show_progress,
-        historical_market_data_provider=get_historical_market_data_provider(code=historical_market_data_provider),
-        fundamental_data_provider=fundamental_data_provider_instance,
-        data_bundle_writer_class=PolarsDataBundle,
-        fundamental_data_writer_class=PolarsDataBundle,
-        market_data_fields=OHLCV_COLUMNS_POLARS,
-        fundamental_data_fields=fundamental_data_cols,
-        frequency=DataFrequency(frequency).to_timedelta()
+    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
+    bundle_service = BundleService(bundle_registry=bundle_registry)
+    bundle_storage = FileSystemParquetBundleStorage(base_data_path=bundle_storage_path, compression_level=5)
+    bundle_data_source = LimexHubDataSource.from_env()
+
+    calendar = ec_get_calendar(trading_calendar, start=start_date - datetime.timedelta(days=30))
+
+    bundle_version = str(int(datetime.datetime.now(tz=calendar.tz).timestamp()))
+    assets_repository = SqliteAssetRepository(base_storage_path=bundle_storage_path,
+                                              bundle_name=bundle,
+                                              bundle_version=bundle_version)
+    adjustments_repository = SQLiteAdjustmentRepository(base_storage_path=bundle_storage_path,
+                                                        bundle_name=bundle,
+                                                        bundle_version=bundle_version)
+
+    await bundle_service.ingest_bundle(
+        date_start=start_date.replace(tzinfo=calendar.tz),
+        date_end=end_date.replace(tzinfo=calendar.tz),
+        bundle_storage=bundle_storage,
+        bundle_data_source=bundle_data_source,
+        frequency=DataFrequency(frequency).to_timedelta(),
+        symbols=symbols_parsed,
+        name=bundle,
+        bundle_version=bundle_version,
+        trading_calendar=calendar,
+        assets_repository=assets_repository,
+        adjustments_repository=adjustments_repository,
     )
 
 
@@ -245,25 +233,19 @@ def clean(ctx, bundle, before, after, keep_last):
     ignore_unknown_options=True,
     allow_extra_args=True,
 ))
+@click.option(
+    "--bundle-storage-path",
+    default=Path(Path.home(), ".ziplime", "data"),
+    show_default=True,
+    help="Path to the bundle storage on filesystem.",
+)
 @click.pass_context
-def bundles(ctx):
+async def bundles(ctx, bundle_storage_path):
     """Top level ziplime entry point."""
-    for bundle in sorted(bundles_module.bundles.keys()):
-        if bundle.startswith("."):
-            # hide the test data
-            continue
-        try:
-            ingestions = list(map(str, bundles_module.ingestions_for_bundle(bundle)))
-        except OSError as e:
-            if e.errno != errno.ENOENT:
-                raise
-            ingestions = []
+    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
-        # If we got no ingestions, either because the directory didn't exist or
-        # because there were no entries, print a single message indicating that
-        # no ingestions have yet been made.
-        for timestamp in ingestions or ["<no ingestions>"]:
-            click.echo("%s %s" % (bundle, timestamp))
+    for bundle in await bundle_registry.list_bundles():
+        click.echo(f"{bundle["name"]} {bundle["version"]} - {bundle['timestamp']}")
 
 
 @main.command()
@@ -386,8 +368,14 @@ def bundles(ctx):
         help="Should the algorithm methods be " "resolved in the local namespace.",
     )
 )
+@click.option(
+    "--bundle-storage-path",
+    default=Path(Path.home(), ".ziplime", "data"),
+    show_default=True,
+    help="Path to the bundle storage on filesystem.",
+)
 @click.pass_context
-def run(
+async def run(
         ctx,
         algofile,
         emission_rate,
@@ -405,11 +393,12 @@ def run(
         print_algo,
         metrics_set,
         local_namespace,
+        bundle_storage_path,
         broker: str | None,
         live_market_data_provider: str | None,
 ):
     """Run a backtest for the given algorithm."""
-    trading_calendar = get_calendar(trading_calendar)
+    calendar = ec_get_calendar(trading_calendar, start=start_date - datetime.timedelta(days=30))
 
     benchmark_spec = BenchmarkSpec(
         benchmark_returns=None,
@@ -421,21 +410,22 @@ def run(
     algotext = None
     if algofile is not None:
         algotext = algofile.read()
+    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
     if broker is not None:
         start_date = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)  # - pd.Timedelta(days=3)
         end_date = start_date + pd.Timedelta('5 day')
-    return run_algorithm(
+    return await run_algorithm(
         algofile=getattr(algofile, "name", "<algorithm>"),
         algotext=algotext,
         emission_rate=DataFrequency(emission_rate).to_timedelta(),
         capital_base=capital_base,
-        bundle=bundle,
+        bundle_name=bundle,
         bundle_timestamp=bundle_timestamp,
         start_date=start_date,
         end_date=end_date,
         output=output,
-        trading_calendar=trading_calendar,
+        trading_calendar=calendar,
         print_algo=print_algo,
         metrics_set=metrics_set,
         benchmark_spec=benchmark_spec,
@@ -443,8 +433,9 @@ def run(
         broker=get_broker(broker) if broker is not None else None,
         market_data_provider=get_live_market_data_provider(
             live_market_data_provider) if live_market_data_provider is not None else None,
+        bundle_registry=bundle_registry
     )
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

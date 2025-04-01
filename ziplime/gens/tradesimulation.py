@@ -1,10 +1,11 @@
 import datetime
+from contextlib import AsyncExitStack
 from copy import copy
 
 import pandas as pd
 import structlog
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.data.data_portal import DataPortal
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
@@ -54,20 +55,19 @@ class AlgorithmSimulator:
 
         self.benchmark_source = benchmark_source
 
-
     def get_simulation_dt(self) -> pd.Timestamp:
         return self.simulation_dt
 
     # TODO: simplify
     # flake8: noqa: C901
-    def transform(self):
+    async def transform(self):
         """
         Main generator work loop.
         """
 
         emission_rate = self.algo.metrics_tracker.emission_rate
 
-        def every_bar(
+        async def every_bar(
                 dt_to_use: pd.Timestamp,
                 current_data: BarData,
                 handle_data,
@@ -101,7 +101,7 @@ class AlgorithmSimulator:
             for commission in new_commissions:
                 self.algo.metrics_tracker.process_commission(commission=commission)
 
-            handle_data(context=self.algo, data=current_data, dt=dt_to_use)
+            await handle_data(context=self.algo, data=current_data, dt=dt_to_use)
 
             # grab any new orders from the blotter, then clear the list.
             # this includes cancelled orders.
@@ -151,7 +151,7 @@ class AlgorithmSimulator:
             self.algo = None
             self.benchmark_source = self.current_data = self.data_portal = None
 
-        with ExitStack() as stack:
+        async with AsyncExitStack() as stack:
             stack.callback(on_exit)
             stack.enter_context(ZiplineAPI(algo_instance=self.algo))
 
@@ -163,9 +163,7 @@ class AlgorithmSimulator:
                 def calculate_minute_capital_changes(dt: pd.Timestamp):
                     # process any capital changes that came between the last
                     # and current minutes
-                    return self.algo.calculate_capital_changes(
-                        dt, emission_rate=emission_rate, is_interday=False
-                    )
+                    return self.algo.calculate_capital_changes(dt, emission_rate=emission_rate, is_interday=False)
 
             elif self.algo.data_frequency == datetime.timedelta(days=1):
 
@@ -185,8 +183,8 @@ class AlgorithmSimulator:
 
             for dt, action in self.clock:
                 if action == SimulationEvent.BAR:
-                    for capital_change_packet in every_bar(dt_to_use=dt, current_data=self.current_data,
-                                                           handle_data=self.algo.event_manager.handle_data):
+                    async for capital_change_packet in every_bar(dt_to_use=dt, current_data=self.current_data,
+                                                                 handle_data=self.algo.event_manager.handle_data):
                         yield capital_change_packet
                 elif action == SimulationEvent.SESSION_START:
                     for capital_change_packet in once_a_day(midnight_dt=dt):
@@ -194,7 +192,10 @@ class AlgorithmSimulator:
                 elif action == SimulationEvent.SESSION_END:
                     # End of the session.
                     positions = self.algo.metrics_tracker.positions
-                    position_assets = self.algo.data_portal.asset_repository.retrieve_all(sids=[a.sid for a in positions])
+                    position_assets = await self.algo.data_portal._bundle_data.asset_repository.retrieve_all(
+                        sids=[a.sid for a in positions]
+                    )
+
                     self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
 
                     execute_order_cancellation_policy()

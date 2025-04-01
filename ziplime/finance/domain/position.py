@@ -22,7 +22,7 @@ import logging
 
 from zipline.data.adjustments import Dividend
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.future import Future
 
 class Position:

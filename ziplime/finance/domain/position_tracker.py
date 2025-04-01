@@ -15,7 +15,7 @@ from ziplime.finance.finance_ext import (
     update_position_last_sale_prices,
 )
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.data.data_portal import DataPortal
 from ziplime.domain.data_frequency import DataFrequency
 

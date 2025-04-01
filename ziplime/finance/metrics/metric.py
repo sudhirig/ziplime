@@ -157,6 +157,7 @@ class BenchmarkReturnsAndVolatility:
             sessions[0].date(),
             sessions[-1].date(),
         )
+        daily_returns = daily_returns.fill_nan(0.0)
         daily_returns_series = daily_returns.select("pct_change")
         self._daily_returns = daily_returns_array = daily_returns_series
         self._daily_cumulative_returns = np.cumprod(1 + daily_returns_array["pct_change"]) - 1
@@ -179,7 +180,14 @@ class BenchmarkReturnsAndVolatility:
             open_ = trading_calendar.session_open(sessions[0]).tz_convert(trading_calendar.tz).to_pydatetime()
             close = trading_calendar.session_close(sessions[-1]).tz_convert(trading_calendar.tz).to_pydatetime()
             returns = benchmark_source.get_range(start_dt=open_, end_dt=close)
-            rrs = (1 + returns["pct_change"].to_pandas()).cumprod() - 1
+            returns = returns.with_columns(
+                pl.lit(0).alias("sid"),
+                pl.lit(0.0).alias("close"),
+                pl.lit(0).alias("pct_change"),
+                pl.col("date")
+            )
+
+            # rrs = (1 + returns["pct_change"].to_pandas()).cumprod() - 1
             self._minute_cumulative_returns = (
                 returns.select(pl.col("date"), pl.col("sid"), (1 + pl.col("pct_change")).cum_prod() - 1))
             min_annual_volatility = minute_annual_volatility(

@@ -26,9 +26,8 @@ class DataPortalLive(DataPortal):
                            assets,
                            end_dt: pd.Timestamp,
                            bar_count: int,
-                           frequency: str,
+                           frequency: datetime.timedelta,
                            field: str,
-                           data_frequency: DataFrequency,
                            ffill: bool = True):
         # This method is responsible for merging the ingested historical data
         # with the real-time collected data through the Broker.

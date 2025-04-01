@@ -3,14 +3,12 @@ import logging
 import pandas as pd
 
 from exchange_calendars import ExchangeCalendar
-from zipline.assets import AssetDBWriter
+from ziplime.assets.asset_writer import AssetDBWriter
 from ziplime.data.adjustments import SQLiteAdjustmentWriter
-from zipline.utils.cache import dataframe_cache
-from zipline.utils.calendar_utils import register_calendar_alias
 
 from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider
 from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
-from ziplime.data.bundles import register
+from ziplime.data.bundles.core import register
 import numpy as np
 
 from ziplime.data.storages.polars_data_bundle import PolarsDataBundle
@@ -46,13 +44,8 @@ def parse_pricing_and_vol(data: pd.DataFrame, sessions: pd.IndexSlice, symbol_ma
         yield asset_id, asset_data
 
 
-def create_equities_bundle(
-        bundle_name: str,
-        frequency: datetime.timedelta,
-        fundamental_data_list: set[str],
-        symbol_list: list[str] = None,
-):
-    def ingest(
+
+def ingest(
             historical_market_data_provider: AbstractHistoricalMarketDataProvider,
             fundamental_data_provider: AbstractFundamentalDataProvider,
             asset_db_writer: AssetDBWriter,
@@ -62,12 +55,9 @@ def create_equities_bundle(
             calendar: ExchangeCalendar,
             start_session: pd.Timestamp,
             end_session: pd.Timestamp,
-            cache: dataframe_cache,
             show_progress: bool,
             market_data_fields: list[ColumnSpecification],
             fundamental_data_fields: list[ColumnSpecification],
-            output_dir: str,
-            **kwargs
     ):
         date_from = start_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc)
         date_to = end_session.to_pydatetime().replace(tzinfo=datetime.timezone.utc)
@@ -151,34 +141,33 @@ def create_equities_bundle(
             f"and symbols {symbol_list} Completed"
         )
 
-    return ingest
 
 
-def register_lime_equities_bundle(
-        bundle_name: str,
-        start_session: datetime.datetime | None,
-        end_session: datetime.datetime | None,
-        symbol_list: list[str],
-        frequency: datetime.timedelta,
-        calendar_name: str,
-        fundamental_data_list: set[str],
-):
-    if start_session and end_session:
-        start_session, end_session = normalize_daily_start_end_session(
-            calendar_name=calendar_name, start_session=start_session, end_session=end_session
-        )
-    register(
-        name=bundle_name,
-        f=create_equities_bundle(
-            bundle_name=bundle_name,
-            symbol_list=symbol_list,
-            fundamental_data_list=fundamental_data_list,
-            frequency=frequency
-        ),
-        start_session=start_session,
-        end_session=end_session,
-        calendar_name=calendar_name,
-    )
+# def register_lime_equities_bundle(
+#         bundle_name: str,
+#         start_session: datetime.datetime | None,
+#         end_session: datetime.datetime | None,
+#         symbol_list: list[str],
+#         frequency: datetime.timedelta,
+#         calendar_name: str,
+#         fundamental_data_list: set[str],
+# ):
+#     if start_session and end_session:
+#         start_session, end_session = normalize_daily_start_end_session(
+#             calendar_name=calendar_name, start_session=start_session, end_session=end_session
+#         )
+#     register(
+#         name=bundle_name,
+#         f=create_equities_bundle(
+#             bundle_name=bundle_name,
+#             symbol_list=symbol_list,
+#             fundamental_data_list=fundamental_data_list,
+#             frequency=frequency
+#         ),
+#         start_session=start_session,
+#         end_session=end_session,
+#         calendar_name=calendar_name,
+#     )
 
 
-register_calendar_alias("LIME", "NYSE")
+# register_calendar_alias("LIME", "NYSE")

@@ -4,7 +4,7 @@ import numpy as np
 from pandas import isnull
 from toolz import merge
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.equity import Equity
 from ziplime.assets.domain.future import Future
 from ziplime.domain.bar_data import BarData

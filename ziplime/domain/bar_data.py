@@ -5,12 +5,12 @@ import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.data.data_portal import DataPortal
 
 from contextlib import contextmanager
 import numpy as np
 
-from ziplime.assets.utils import Asset
 
 
 

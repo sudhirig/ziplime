@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from zipline.finance.cancel_policy import NeverCancel
 from zipline.finance.execution import ExecutionStyle
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.finance.domain.transaction import Transaction
 from ziplime.domain.bar_data import BarData
 

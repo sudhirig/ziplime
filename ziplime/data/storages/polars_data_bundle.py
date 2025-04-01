@@ -8,7 +8,7 @@ from exchange_calendars import ExchangeCalendar
 from zipline.data._minute_bar_internal import find_position_of_minute
 import polars as pl
 
-from ziplime.assets.domain.asset import Asset
+from ziplime.assets.domain.db.asset import Asset
 from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.domain.column_specification import ColumnSpecification
 
@@ -19,9 +19,7 @@ import pandas as pd
 
 from zipline.data.bar_reader import NoDataAfterDate, NoDataBeforeDate, NoDataOnDate
 from zipline.utils.calendar_utils import get_calendar
-from zipline.utils.cli import maybe_show_progress
-
-from ziplime.domain.data_frequency import DataFrequency
+from ziplime.utils.cli import maybe_show_progress
 
 
 class PolarsDataBundle(AbstractDataBundle):
@@ -140,40 +138,8 @@ class PolarsDataBundle(AbstractDataBundle):
                         pl.col("sid").is_in([asset.sid for asset in assets]))
         return res
 
-    def load_raw_arrays_limit(self, fields: list[str], limit: int,
-                              end_date: datetime.datetime,
-                              frequency: datetime.timedelta,
-                              assets: list[Asset],
-                              include_end_date: bool,
-                              ) -> pl.DataFrame:
 
-        total_bar_count = limit
-        if self.frequency < frequency:
-            multiplier = int(frequency / self.frequency)
-            total_bar_count = limit * multiplier
 
-        cols = list(set(fields + ["date", "sid"]))
-        if include_end_date:
-            df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
-                pl.col("date") <= end_date,
-                pl.col("sid").is_in([asset.sid for asset in assets])
-            ).group_by(pl.col("sid")).tail(total_bar_count).sort(by="date")
-        else:
-            df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
-                pl.col("date") < end_date,
-                pl.col("sid").is_in([asset.sid for asset in assets])).group_by(pl.col("sid")).tail(
-                total_bar_count).sort(by="date")
-        if self.frequency < frequency:
-            df = df_raw.group_by_dynamic(
-                index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields)
-            return df
-        return df_raw
-
-    @lru_cache
-    def get_dataframe(self) -> pl.DataFrame:
-        df = pl.read_parquet(source=self.data_path)
-        df = df.with_columns(pl.col("date").dt.convert_time_zone(self.trading_calendar.tz.key))
-        return df
 
     def _spot_col(self, colname):
         """Get the colname from daily_bar_table and read all of it into memory,

@@ -1,8 +1,6 @@
 import datetime
 from abc import abstractmethod
 
-from lime_trader.models.market import Period
-
 
 
 class AbstractFundamentalDataProvider:

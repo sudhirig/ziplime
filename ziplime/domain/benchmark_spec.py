@@ -61,9 +61,9 @@ class BenchmarkSpec:
         ----------
         asset_repository : zipline.assets.AssetFinder
             Asset finder for the algorithm to be run.
-        start_date : pd.Timestamp
+        start_date : datetime.datetime
             Start date of the algorithm to be run.
-        end_date : pd.Timestamp
+        end_date : datetime.datetime
             End date of the algorithm to be run.
 
         Returns

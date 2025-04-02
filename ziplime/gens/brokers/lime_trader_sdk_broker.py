@@ -260,9 +260,9 @@ class LimeTraderSdkBroker(Broker):
             logging.error(e)
             return
 
-    def get_last_traded_dt(self, asset) -> pd.Timestamp:
+    def get_last_traded_dt(self, asset) -> datetime.datetime:
         quote = self._lime_sdk_client.market.get_current_quote(asset.symbol)
-        return pd.Timestamp(quote.date)
+        return quote.date
 
     def get_spot_value(self, assets, field, dt, data_frequency):
         assert (field in (

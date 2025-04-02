@@ -54,7 +54,7 @@ from zipline.finance.execution import (
     StopOrder, ExecutionStyle,
 )
 from zipline.finance.asset_restrictions import Restrictions
-from zipline.finance.cancel_policy import NeverCancel, CancelPolicy
+from zipline.finance.cancel_policy import CancelPolicy
 from zipline.finance.asset_restrictions import (
     NoRestrictions,
     StaticRestrictions,
@@ -66,7 +66,7 @@ from ziplime.assets.domain.equity import Equity
 from ziplime.data.data_portal import DataPortal
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.gens.tradesimulation import AlgorithmSimulator
-from ziplime.finance.metrics import MetricsTracker, load as load_metrics_set
+from ziplime.finance.metrics import MetricsTracker
 from zipline.pipeline import Pipeline
 import zipline.pipeline.domain as domain
 from zipline.pipeline.engine import (
@@ -471,7 +471,7 @@ class TradingAlgorithm:
         return daily_stats
 
     def calculate_capital_changes(
-            self, dt: pd.Timestamp, emission_rate: float, is_interday: bool, portfolio_value_adjustment: float = 0.0
+            self, dt: datetime.datetime, emission_rate: float, is_interday: bool, portfolio_value_adjustment: float = 0.0
     ):
         """If there is a capital change for a given dt, this means the the change
         occurs before `handle_data` on the given dt. In the case of the
@@ -796,7 +796,7 @@ class TradingAlgorithm:
         normalized_date = add_tz_info(self.trading_calendar.minute_to_session(self.datetime),
                                       tzinfo=datetime.timezone.utc)
 
-        if normalized_date < add_tz_info(asset.start_date, tzinfo=datetime.timezone.utc):
+        if normalized_date < asset.start_date:
             raise CannotOrderDelistedAsset(
                 msg=f"Cannot order {asset.symbol}, as it started trading on {asset.start_date}"
             )
@@ -1026,7 +1026,7 @@ class TradingAlgorithm:
     def recorded_vars(self):
         return copy(self._recorded_vars)
 
-    def _sync_last_sale_prices(self, dt: pd.Timestamp = None):
+    def _sync_last_sale_prices(self, dt: datetime.datetime = None):
         """Sync the last sale prices on the metrics tracker to a given
         datetime.
 
@@ -1894,7 +1894,7 @@ class TradingAlgorithm:
 
         Returns
         -------
-        (data, valid_until) : tuple (pd.DataFrame, pd.Timestamp)
+        (data, valid_until) : tuple (pd.DataFrame, datetime.datetime)
 
         See Also
         --------

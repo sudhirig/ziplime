@@ -22,9 +22,9 @@ class MetricsTracker:
     ----------
     trading_calendar : TradingCalendar
         The trading calendar used in the simulation.
-    first_session : pd.Timestamp
+    first_session : datetime.datetime
         The label of the first trading session in the simulation.
-    last_session : pd.Timestamp
+    last_session : datetime.datetime
         The label of the last trading session in the simulation.
     capital_base : float
         The starting capital for the simulation.
@@ -37,7 +37,7 @@ class MetricsTracker:
     """
 
     @staticmethod
-    def _execution_open_and_close(calendar: ExchangeCalendar, session: pd.Timestamp):
+    def _execution_open_and_close(calendar: ExchangeCalendar, session: datetime.datetime):
         # if session.tzinfo is not None:
         #     session = session.tz_localize(None)
 
@@ -154,7 +154,7 @@ class MetricsTracker:
             asset: Asset,
             amount: float | None = None,
             last_sale_price: float | None = None,
-            last_sale_date: pd.Timestamp | None = None,
+            last_sale_date: datetime.datetime | None = None,
             cost_basis: float | None = None,
     ):
         self._ledger.position_tracker.update_position(
@@ -177,19 +177,19 @@ class MetricsTracker:
     def process_commission(self, commission: Event) -> None:
         self._ledger.process_commission(commission=commission)
 
-    def process_close_position(self, asset: Asset, dt: pd.Timestamp) -> None:
-        self._ledger.close_position(asset=asset, dt=dt, data_frequency=self.data_frequency)
+    def process_close_position(self, asset: Asset, dt: datetime.datetime) -> None:
+        self._ledger.close_position(asset=asset, dt=dt)
 
     def capital_change(self, amount: float) -> None:
         self._ledger.capital_change(change_amount=amount)
 
-    def sync_last_sale_prices(self, dt: pd.Timestamp, handle_non_market_minutes: bool = False) -> None:
+    def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False) -> None:
         self._ledger.sync_last_sale_prices(
             dt=dt,
             handle_non_market_minutes=handle_non_market_minutes,
         )
 
-    def handle_minute_close(self, dt: pd.Timestamp):
+    def handle_minute_close(self, dt: datetime.datetime):
         """Handles the close of the given minute in minute emission.
 
         Parameters
@@ -229,7 +229,7 @@ class MetricsTracker:
         )
         return packet
 
-    def handle_market_open(self, session_label: pd.Timestamp, data_portal: DataPortal) -> None:
+    def handle_market_open(self, session_label: datetime.datetime, data_portal: DataPortal) -> None:
         """Handles the start of each session.
 
         Parameters
@@ -260,7 +260,7 @@ class MetricsTracker:
 
         self.start_of_session(ledger=ledger, session=session_label, data_portal=data_portal)
 
-    def handle_market_close(self, dt: pd.Timestamp, data_portal: DataPortal):
+    def handle_market_close(self, dt: datetime.datetime, data_portal: DataPortal):
         """Handles the close of the given day.
 
         Parameters

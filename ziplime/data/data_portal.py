@@ -3,10 +3,8 @@ from operator import mul
 
 from typing import Any
 
-import numpy as np
 import polars as pl
 import pandas as pd
-from pandas import isnull
 from functools import reduce, lru_cache
 
 from ziplime.assets.domain.db.asset import Asset

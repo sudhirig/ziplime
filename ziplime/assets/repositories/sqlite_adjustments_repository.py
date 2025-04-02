@@ -1,9 +1,7 @@
 import logging
 import sqlite3
 from collections import namedtuple
-from errno import ENOENT
 from functools import lru_cache
-from os import remove
 from pathlib import Path
 from typing import Self, Any
 

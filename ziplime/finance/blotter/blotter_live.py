@@ -6,7 +6,6 @@ from zipline.finance.blotter import Blotter
 from ziplime.assets.domain.db.asset import Asset
 from zipline.finance.order import Order as ZPOrder
 
-from ziplime.domain.data_frequency import DataFrequency
 from ziplime.gens.brokers.broker import Broker
 
 

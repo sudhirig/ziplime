@@ -131,7 +131,7 @@ class ContinuousFuture:
 
         Parameters
         ----------
-        session_label: pd.Timestamp
+        session_label: datetime.datetime
             The desired session label to check. (midnight UTC)
 
         Returns
@@ -148,7 +148,7 @@ class ContinuousFuture:
 
         Parameters
         ----------
-        dt_minute: pd.Timestamp (UTC, tz-aware)
+        dt_minute: datetime.datetime (UTC, tz-aware)
             The minute to check.
 
         Returns

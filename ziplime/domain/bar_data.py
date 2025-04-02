@@ -111,7 +111,7 @@ class BarData:
         The return type of this function depends on the types of its inputs:
 
         - If a single asset and a single field are requested, the returned
-          value is a scalar (either a float or a ``pd.Timestamp`` depending on
+          value is a scalar (either a float or a ``datetime.datetime`` depending on
           the field).
 
         - If a single asset and a list of fields are requested, the returned
@@ -237,7 +237,7 @@ class BarData:
         ]
         return pd.Series(data=tradeable, index=assets, dtype=bool)
 
-    def _can_trade_for_asset(self, asset: Asset, dt: pd.Timestamp, adjusted_dt: pd.Timestamp) -> bool:
+    def _can_trade_for_asset(self, asset: Asset, dt: datetime.datetime, adjusted_dt: datetime.datetime) -> bool:
         session_label = None
         dt_to_use_for_exchange_check = None
 

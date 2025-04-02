@@ -10,11 +10,10 @@ from exchange_calendars import ExchangeCalendar
 from joblib import Parallel, delayed
 from lime_trader import LimeClient
 
-from ziplime.data.abstract_historical_market_data_provider import AbstractHistoricalMarketDataProvider
 from ziplime.domain.lime_quote import LimeQuote
 
 
-class LimeTraderSdkHistoricalMarketDataProvider(AbstractHistoricalMarketDataProvider):
+class LimeTraderSdkHistoricalMarketDataProvider:
     def __init__(self, lime_sdk_credentials_file: str):
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)

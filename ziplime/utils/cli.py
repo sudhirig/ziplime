@@ -1,5 +1,6 @@
+import datetime
+
 import asyncclick as click
-import pandas as pd
 
 from zipline.utils.context_tricks import CallbackManager
 
@@ -41,7 +42,8 @@ class _DatetimeParam(click.ParamType):
         self.tz = tz
 
     def parser(self, value):
-        return pd.Timestamp(value, tz=self.tz)
+        return value
+        return datetime.datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=self.tz)
 
     @property
     def name(self):
@@ -104,18 +106,3 @@ class Time(_DatetimeParam):
     def parser(self, value):
         return super(Time, self).parser(value).time()
 
-
-class Timedelta(_DatetimeParam):
-    """A click parameter that parses values into pd.Timedelta objects.
-
-    Parameters
-    ----------
-    unit : {'D', 'h', 'm', 's', 'ms', 'us', 'ns'}, optional
-        Denotes the unit of the input if the input is an integer.
-    """
-
-    def __init__(self, unit="ns"):
-        self.unit = unit
-
-    def parser(self, value):
-        return pd.Timedelta(value, unit=self.unit)

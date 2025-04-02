@@ -1,6 +1,6 @@
+import datetime
 from copy import copy
 
-import pandas as pd
 from zipline.protocol import DATASOURCE_TYPE
 
 from ziplime.assets.domain.db.asset import Asset
@@ -8,7 +8,7 @@ from ziplime.assets.domain.db.asset import Asset
 
 class Transaction:
 
-    def __init__(self, asset: Asset, amount: int, dt: pd.Timestamp, price: float, order_id: str,
+    def __init__(self, asset: Asset, amount: int, dt: datetime.datetime, price: float, order_id: str,
                  commission: float | None = None):
         self.asset = asset
         self.amount = amount

@@ -28,7 +28,6 @@ except ImportError:
     PYGMENTS = False
 import logging
 
-from ziplime.data.data_portal import DataPortal
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from zipline.pipeline.data import USEquityPricing
 from zipline.pipeline.loaders import USEquityPricingLoader

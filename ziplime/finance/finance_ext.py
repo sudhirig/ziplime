@@ -15,7 +15,7 @@ def update_position_last_sale_prices(positions, get_price, dt):
         The positions to update.
     get_price : callable[Asset, float]
         The function to retrieve the price for the asset.
-    dt : pd.Timestamp
+    dt : datetime.datetime
         The dt to set as the last sale date if the price is not nan.
     """
 

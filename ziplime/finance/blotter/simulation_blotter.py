@@ -68,22 +68,6 @@ class SimulationBlotter(Blotter):
         }
 
 
-        # self.slippage_models = {
-        #     Equity: equity_slippage or FixedBasisPointsSlippage(),
-        #     Future: future_slippage
-        #             or VolatilityVolumeShare(
-        #         volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-        #     ),
-        # }
-        # self.commission_models = {
-        #     Equity: equity_commission or PerShare(),
-        #     Future: future_commission
-        #             or PerContract(
-        #         cost=DEFAULT_PER_CONTRACT_COST,
-        #         exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
-        #     ),
-        # }
-
     def __repr__(self):
         return """
 {class_name}(

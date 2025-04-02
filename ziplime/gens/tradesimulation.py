@@ -2,7 +2,6 @@ import datetime
 from contextlib import AsyncExitStack
 from copy import copy
 
-import pandas as pd
 import structlog
 
 from ziplime.assets.domain.db.asset import Asset
@@ -11,7 +10,6 @@ from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.domain.bar_data import BarData
 from zipline.utils.api_support import ZiplineAPI
-from zipline.utils.compat import ExitStack
 
 from ziplime.gens.domain.simulation_event import SimulationEvent
 
@@ -55,7 +53,7 @@ class AlgorithmSimulator:
 
         self.benchmark_source = benchmark_source
 
-    def get_simulation_dt(self) -> pd.Timestamp:
+    def get_simulation_dt(self) -> datetime.datetime:
         return self.simulation_dt
 
     # TODO: simplify
@@ -68,7 +66,7 @@ class AlgorithmSimulator:
         emission_rate = self.algo.metrics_tracker.emission_rate
 
         async def every_bar(
-                dt_to_use: pd.Timestamp,
+                dt_to_use: datetime.datetime,
                 current_data: BarData,
                 handle_data,
         ):
@@ -160,7 +158,7 @@ class AlgorithmSimulator:
                 def execute_order_cancellation_policy():
                     self.algo.blotter.execute_cancel_policy(SimulationEvent.SESSION_END)
 
-                def calculate_minute_capital_changes(dt: pd.Timestamp):
+                def calculate_minute_capital_changes(dt: datetime.datetime):
                     # process any capital changes that came between the last
                     # and current minutes
                     return self.algo.calculate_capital_changes(dt, emission_rate=emission_rate, is_interday=False)
@@ -170,7 +168,7 @@ class AlgorithmSimulator:
                 def execute_order_cancellation_policy():
                     self.algo.blotter.execute_daily_cancel_policy(SimulationEvent.SESSION_END)
 
-                def calculate_minute_capital_changes(dt: pd.Timestamp):
+                def calculate_minute_capital_changes(dt: datetime.datetime):
                     return []
 
             else:
@@ -178,7 +176,7 @@ class AlgorithmSimulator:
                 def execute_order_cancellation_policy():
                     pass
 
-                def calculate_minute_capital_changes(dt: pd.Timestamp):
+                def calculate_minute_capital_changes(dt: datetime.datetime):
                     return []
 
             for dt, action in self.clock:
@@ -216,7 +214,7 @@ class AlgorithmSimulator:
             risk_message = self.algo.metrics_tracker.handle_simulation_end()
             yield risk_message
 
-    def _cleanup_expired_assets(self, dt: pd.Timestamp, position_assets):
+    def _cleanup_expired_assets(self, dt: datetime.datetime, position_assets):
         """
         Clear out any assets that have expired before starting a new sim day.
 
@@ -269,7 +267,7 @@ class AlgorithmSimulator:
                 metrics_tracker.process_order(order=order)
                 blotter.new_orders.remove(order=order)
 
-    def _get_daily_message(self, dt: pd.Timestamp):
+    def _get_daily_message(self, dt: datetime.datetime):
         """
         Get a perf message for the given datetime.
         """
@@ -280,7 +278,7 @@ class AlgorithmSimulator:
         perf_message["daily_perf"]["recorded_vars"] = self.algo.recorded_vars
         return perf_message
 
-    def _get_minute_message(self, dt: pd.Timestamp):
+    def _get_minute_message(self, dt: datetime.datetime):
         """
         Get a perf message for the given datetime.
         """

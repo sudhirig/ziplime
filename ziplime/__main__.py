@@ -1,12 +1,9 @@
 import asyncio
 import datetime
-import errno
 import logging
 from pathlib import Path
 
 import asyncclick as click
-import pandas as pd
-from zipline.__main__ import ipython_only
 
 from ziplime.assets.repositories.sqlite_adjustments_repository import SQLiteAdjustmentRepository
 from ziplime.assets.repositories.sqlite_asset_repository import SqliteAssetRepository
@@ -23,11 +20,8 @@ from exchange_calendars import get_calendar as ec_get_calendar
 from asyncclick import DateTime
 from ziplime.utils.cli import Timestamp
 
-from zipline import __main__ as zipline__main__
 
 from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_broker
-
-DEFAULT_BUNDLE = "lime"
 
 
 def validate_date_range(date_min: datetime.datetime, date_max: datetime.datetime):
@@ -44,14 +38,12 @@ def validate_date_range(date_min: datetime.datetime, date_max: datetime.datetime
 async def main(ctx):
     """Top level ziplime entry point."""
     # install a logging handler before performing any other operations
-
     logging.basicConfig(
         format="[%(asctime)s-%(levelname)s][%(name)s]\n %(message)s",
         level=logging.INFO,
         datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
 
-    # register_default_bundles()
 
 
 @main.command(context_settings=dict(
@@ -192,9 +184,14 @@ async def ingest(ctx, bundle, start_date, end_date, frequency, symbols, fundamen
     allow_extra_args=True,
 ))
 @click.option(
+    "--bundle-storage-path",
+    default=Path(Path.home(), ".ziplime", "data"),
+    show_default=True,
+    help="Path to the bundle storage on filesystem.",
+)
+@click.option(
     "-b",
     "--bundle",
-    default=DEFAULT_BUNDLE,
     metavar="BUNDLE-NAME",
     show_default=True,
     help="The data bundle to clean.",
@@ -222,12 +219,14 @@ async def ingest(ctx, bundle, start_date, end_date, frequency, symbols, fundamen
          " This may not be passed with -e / --before or -a / --after",
 )
 @click.pass_context
-def clean(ctx, bundle, before, after, keep_last):
+async def clean(ctx, bundle_storage_path, bundle, before, after, keep_last):
     """Top level ziplime entry point."""
 
-    func = getattr(zipline__main__, "clean")
-    ctx.forward(func)
+    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
+    bundle_service = BundleService(bundle_registry=bundle_registry)
+    bundle_service.clean(bundle_name=bundle, after=after, before=before,
+                         keep_last=keep_last)
 
 @main.command(context_settings=dict(
     ignore_unknown_options=True,
@@ -276,7 +275,7 @@ async def bundles(ctx, bundle_storage_path):
 @click.option(
     "--bundle-timestamp",
     type=Timestamp(),
-    default=pd.Timestamp.utcnow(),
+    default=datetime.datetime.now(tz=datetime.timezone.utc),
     show_default=False,
     help="The date to lookup data on or before.\n" "[default: <current-time>]",
 )
@@ -358,15 +357,6 @@ async def bundles(ctx, bundle_storage_path):
     type=click.Choice(['lime-trader-sdk']),
     default=None,
     help="Market data provider for live trading",
-    # show_default=True,
-)
-@ipython_only(
-    click.option(
-        "--local-namespace/--no-local-namespace",
-        is_flag=True,
-        default=None,
-        help="Should the algorithm methods be " "resolved in the local namespace.",
-    )
 )
 @click.option(
     "--bundle-storage-path",
@@ -392,7 +382,6 @@ async def run(
         trading_calendar,
         print_algo,
         metrics_set,
-        local_namespace,
         bundle_storage_path,
         broker: str | None,
         live_market_data_provider: str | None,
@@ -413,8 +402,8 @@ async def run(
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
     if broker is not None:
-        start_date = pd.Timestamp.now(tz=datetime.timezone.utc).replace(tzinfo=None)  # - pd.Timedelta(days=3)
-        end_date = start_date + pd.Timedelta('5 day')
+        start_date = datetime.datetime.now(tz=datetime.timezone.utc)
+        end_date = start_date + datetime.timedelta(days=5)
     return await run_algorithm(
         algofile=getattr(algofile, "name", "<algorithm>"),
         algotext=algotext,

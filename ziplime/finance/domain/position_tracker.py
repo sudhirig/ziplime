@@ -1,3 +1,4 @@
+import datetime
 from collections import  OrderedDict
 from functools import partial
 from math import isnan
@@ -174,7 +175,7 @@ class PositionTracker:
                     div_owed,
                 ]
 
-    def pay_dividends(self, next_trading_day: pd.Timestamp):
+    def pay_dividends(self, next_trading_day: datetime.datetime):
         """
         Returns a cash payment based on the dividends that should be paid out
         according to the accumulated bookkeeping of earned, unpaid, and stock
@@ -222,7 +223,7 @@ class PositionTracker:
 
         return net_cash_payment
 
-    def maybe_create_close_position_transaction(self, asset: Asset, dt: pd.Timestamp):
+    def maybe_create_close_position_transaction(self, asset: Asset, dt: datetime.datetime):
         if not self.positions.get(asset):
             return None
 
@@ -258,7 +259,7 @@ class PositionTracker:
             pos.to_dict() for asset, pos in self.positions.items() if pos.amount != 0
         ]
 
-    def sync_last_sale_prices(self, dt: pd.Timestamp, handle_non_market_minutes: bool = False):
+    def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False):
         self._dirty_stats = True
 
         if handle_non_market_minutes:

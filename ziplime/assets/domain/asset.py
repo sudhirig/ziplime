@@ -27,14 +27,14 @@
 #         Information about the exchange this asset is listed on.
 #     country_code : str
 #         Two character code indicating the country in which the asset trades.
-#     start_date : pd.Timestamp
+#     start_date : datetime.datetime
 #         Date on which the asset first traded.
-#     end_date : pd.Timestamp
+#     end_date : datetime.datetime
 #         Last date on which the asset traded. On Quantopian, this value is set
 #         to the current (real time) date for assets that are still trading.
 #     tick_size : float
 #         Minimum amount that the price can change for this asset.
-#     auto_close_date : pd.Timestamp
+#     auto_close_date : datetime.datetime
 #         Date on which positions in this asset will be automatically liquidated
 #         to cash during a simulation. By default, this is three days after
 #         ``end_date``.
@@ -146,7 +146,7 @@
 #
 #         Parameters
 #         ----------
-#         session_label: pd.Timestamp
+#         session_label: datetime.datetime
 #             The desired session label to check. (midnight UTC)
 #
 #         Returns
@@ -162,7 +162,7 @@
 #         """
 #         Parameters
 #         ----------
-#         dt_minute: pd.Timestamp (UTC, tz-aware)
+#         dt_minute: datetime.datetime (UTC, tz-aware)
 #             The minute to check.
 #
 #         Returns

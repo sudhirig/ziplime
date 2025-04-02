@@ -52,7 +52,7 @@ class BenchmarkSource:
                 "Must provide either benchmark_asset or " "benchmark_returns."
             )
 
-    def get_value(self, dt: pd.Timestamp) -> pd.Series:
+    def get_value(self, dt: datetime.datetime) -> pd.Series:
         """Look up the returns for a given dt.
 
         Parameters

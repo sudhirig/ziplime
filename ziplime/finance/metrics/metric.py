@@ -473,15 +473,15 @@ class _ClassicRiskMetrics:
 
         Parameters
         ----------
-        start_session : pd.Timestamp
+        start_session : datetime.datetime
             Start of period (inclusive) to produce metrics on
-        end_session : pd.Timestamp
+        end_session : datetime.datetime
             End of period (inclusive) to produce metrics on
-        algorithm_returns : pd.Series(pd.Timestamp -> float)
+        algorithm_returns : pd.Series(datetime.datetime -> float)
             Series of algorithm returns as of the end of each session
-        benchmark_returns : pd.Series(pd.Timestamp -> float)
+        benchmark_returns : pd.Series(datetime.datetime -> float)
             Series of benchmark returns as of the end of each session
-        algorithm_leverages : pd.Series(pd.Timestamp -> float)
+        algorithm_leverages : pd.Series(datetime.datetime -> float)
             Series of algorithm leverages as of the end of each session
 
 

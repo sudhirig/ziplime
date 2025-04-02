@@ -1,6 +1,4 @@
-from abc import ABC
 from collections import namedtuple
-from numbers import Integral
 
 import logging
 import pandas as pd
@@ -16,11 +14,7 @@ from toolz import (
 import numpy as np
 
 from .domain.continuous_future import ContinuousFuture
-from .domain.equity import Equity
-from .domain.future import Future
 
-from alembic.config import Config
-from alembic import command
 
 def make_asset_array(size, asset):
     out = np.empty([size], dtype=object)
@@ -210,87 +204,3 @@ def _encode_continuous_future_sid(root_symbol, offset, roll_style, adjustment_st
 
 Lifetimes = namedtuple("Lifetimes", "sid start end")
 
-
-# class AssetConvertible(ABC):
-#     """
-#     ABC for types that are convertible to integer-representations of
-#     Assets.
-#
-#     Includes Asset, str, and Integral
-#     """
-#
-#     pass
-#
-#
-# AssetConvertible.register(Integral)
-# AssetConvertible.register(Asset)
-# AssetConvertible.register(str)
-#
-#
-# class NotAssetConvertible(ValueError):
-#     pass
-#
-#
-# class PricingDataAssociable(ABC):
-#     """ABC for types that can be associated with pricing data.
-#
-#     Includes Asset, Future, ContinuousFuture
-#     """
-#
-#     pass
-#
-#
-# PricingDataAssociable.register(Asset)
-# PricingDataAssociable.register(Future)
-# PricingDataAssociable.register(ContinuousFuture)
-
-
-def was_active(reference_date_value, asset):
-    """Whether or not `asset` was active at the time corresponding to
-    `reference_date_value`.
-
-    Parameters
-    ----------
-    reference_date_value : int
-        Date, represented as nanoseconds since EPOCH, for which we want to know
-        if `asset` was alive.  This is generally the result of accessing the
-        `value` attribute of a pandas Timestamp.
-    asset : Asset
-        The asset object to check.
-
-    Returns
-    -------
-    was_active : bool
-        Whether or not the `asset` existed at the specified time.
-    """
-    return asset.start_date.value <= reference_date_value <= asset.end_date.value
-
-
-def only_active_assets(reference_date_value, assets):
-    """Filter an iterable of Asset objects down to just assets that were alive at
-    the time corresponding to `reference_date_value`.
-
-    Parameters
-    ----------
-    reference_date_value : int
-        Date, represented as nanoseconds since EPOCH, for which we want to know
-        if `asset` was alive.  This is generally the result of accessing the
-        `value` attribute of a pandas Timestamp.
-    assets : iterable[Asset]
-        The assets to filter.
-
-    Returns
-    -------
-    active_assets : list
-        List of the active assets from `assets` on the requested date.
-    """
-    return [a for a in assets if was_active(reference_date_value, a)]
-
-
-
-async def execute_migrations():
-    alembic_cfg = Config("../alembic/alembic.ini")
-    # Optionally, set the script location if it's not the default
-    # alembic_cfg.set_main_option("script_location", "path/to/your/migrations")
-    # Run the migrations
-    command.upgrade(alembic_cfg, "head")  # Upgrades to the latest version

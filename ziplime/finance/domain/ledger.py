@@ -151,7 +151,7 @@ class Ledger:
         # save the daily returns time-series
         self.daily_returns_series.iloc[session_ix] = self.todays_returns
 
-    def sync_last_sale_prices(self, dt: pd.Timestamp, handle_non_market_minutes: bool = False):
+    def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False):
         self.position_tracker.sync_last_sale_prices(
             dt=dt,
             handle_non_market_minutes=handle_non_market_minutes,
@@ -264,7 +264,7 @@ class Ledger:
         self.position_tracker.handle_commission(asset, cost)
         self._cash_flow(-cost)
 
-    def close_position(self, asset: Asset, dt: pd.Timestamp):
+    def close_position(self, asset: Asset, dt: datetime.datetime):
         txn = self.position_tracker.maybe_create_close_position_transaction(
             asset=asset,
             dt=dt,
@@ -321,7 +321,7 @@ class Ledger:
 
         Parameters
         ----------
-        dt : pd.Timestamp or None, optional
+        dt : datetime.datetime or None, optional
             The particular datetime to look up transactions for. If not passed,
             or None is explicitly passed, all of the transactions will be
             returned.
@@ -347,7 +347,7 @@ class Ledger:
 
         Parameters
         ----------
-        dt : pd.Timestamp or None, optional
+        dt : datetime.datetime or None, optional
             The particular datetime to look up order for. If not passed, or
             None is explicitly passed, all of the orders will be returned.
 

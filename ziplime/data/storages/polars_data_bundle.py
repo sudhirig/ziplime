@@ -222,7 +222,7 @@ class PolarsDataBundle(AbstractDataBundle):
             )
         return ix
 
-    def get_value(self, sid: int, dt: pd.Timestamp, field: str):
+    def get_value(self, sid: int, dt: datetime.datetime, field: str):
         """
 
         Parameters
@@ -280,7 +280,7 @@ class PolarsDataBundle(AbstractDataBundle):
         return value if value is None else str(value[0])
 
     def write(
-            self, data, calendar: ExchangeCalendar, start_session: pd.Timestamp, end_session: pd.Timestamp,
+            self, data, calendar: ExchangeCalendar, start_session: datetime.datetime, end_session: datetime.datetime,
             cols: list[ColumnSpecification],
             validate_sessions: bool,
             frequency: datetime.timedelta,
@@ -324,7 +324,7 @@ class PolarsDataBundle(AbstractDataBundle):
                                         )
 
     def _write_internal(self, iterator, assets,
-                        calendar: ExchangeCalendar, start_session: pd.Timestamp, end_session: pd.Timestamp,
+                        calendar: ExchangeCalendar, start_session: datetime.datetime, end_session: datetime.datetime,
                         show_progress,
                         cols: list[ColumnSpecification],
                         validate_sessions: bool,

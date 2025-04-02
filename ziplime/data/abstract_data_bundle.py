@@ -1,6 +1,5 @@
 import datetime
 
-import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.db.asset import Asset
@@ -11,7 +10,7 @@ import polars as pl
 
 class AbstractDataBundle:
     def write(
-            self, data, calendar: ExchangeCalendar, start_session: pd.Timestamp, end_session: pd.Timestamp,
+            self, data, calendar: ExchangeCalendar, start_session: datetime.datetime, end_session: datetime.datetime,
             cols: list[ColumnSpecification],
             validate_sessions: bool,
             data_frequency: DataFrequency,

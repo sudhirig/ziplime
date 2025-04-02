@@ -24,7 +24,7 @@ class DataPortalLive(DataPortal):
 
     def get_history_window(self,
                            assets,
-                           end_dt: pd.Timestamp,
+                           end_dt: datetime.datetime,
                            bar_count: int,
                            frequency: datetime.timedelta,
                            field: str,

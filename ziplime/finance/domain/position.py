@@ -20,9 +20,8 @@ from math import copysign
 import numpy as np
 import logging
 
-from zipline.data.adjustments import Dividend
-
 from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.domain.db.dividend import Dividend
 from ziplime.assets.domain.future import Future
 
 class Position:

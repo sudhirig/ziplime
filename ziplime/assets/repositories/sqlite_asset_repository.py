@@ -10,13 +10,12 @@ import pathlib
 import pandas as pd
 import sqlalchemy as sa
 from alembic import config, command
-from sqlalchemy import Table, Engine, select
+from sqlalchemy import Table, select
 from toolz import (
     compose,
     concat,
     merge,
     partition_all,
-    valmap,
 )
 
 from zipline.errors import (
@@ -34,13 +33,10 @@ from zipline.errors import (
 from zipline.utils.functional import invert
 from zipline.utils.memoize import lazyval
 from zipline.utils.numpy_utils import as_column
-from zipline.utils.sqlite_utils import group_into_chunks, check_and_create_engine
+from zipline.utils.sqlite_utils import group_into_chunks
 
-from zipline.assets.asset_db_schema import ASSET_DB_VERSION
 from zipline.assets.asset_writer import (
     SQLITE_MAX_VARIABLE_NUMBER,
-    asset_db_table_names,
-    check_version_info,
     split_delimited_symbol,
     symbol_columns as SYMBOL_COLUMNS,
 )
@@ -48,7 +44,6 @@ from zipline.assets.asset_writer import (
 from zipline.assets.exchange_info import ExchangeInfo
 
 import numpy as np
-from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from ziplime.assets.domain.db.asset import Asset
@@ -756,7 +751,7 @@ class SqliteAssetRepository(AssetRepository):
             as_of_date,
         )
 
-    def lookup_symbols(self, symbols: list[str], as_of_date: pd.Timestamp,
+    def lookup_symbols(self, symbols: list[str], as_of_date: datetime.datetime,
                        country_code: str | None = None):
         """Lookup a list of equities by symbol.
 
@@ -770,7 +765,7 @@ class SqliteAssetRepository(AssetRepository):
         ----------
         symbols : sequence[str]
             Sequence of ticker symbols to resolve.
-        as_of_date : pd.Timestamp
+        as_of_date : datetime.datetime
             Forwarded to ``lookup_symbol``.
         country_code : str or None, optional
             The country to limit searches to. If not provided, the search will
@@ -840,7 +835,7 @@ class SqliteAssetRepository(AssetRepository):
             raise SymbolNotFound(symbol=symbol)
         return self.retrieve_asset(sid=data["sid"])
 
-    def lookup_by_supplementary_field(self, field_name: str, value: float, as_of_date: pd.Timestamp):
+    def lookup_by_supplementary_field(self, field_name: str, value: float, as_of_date: datetime.datetime):
         try:
             owners = self.equity_supplementary_map[
                 field_name,
@@ -880,7 +875,7 @@ class SqliteAssetRepository(AssetRepository):
         # no equity held the value on the given asof date
         raise ValueNotFoundForField(field=field_name, value=value)
 
-    def get_supplementary_field(self, sid: int, field_name: str, as_of_date: pd.Timestamp):
+    def get_supplementary_field(self, sid: int, field_name: str, as_of_date: datetime.datetime):
         """Get the value of a supplementary field for an asset.
 
         Parameters
@@ -889,7 +884,7 @@ class SqliteAssetRepository(AssetRepository):
             The sid of the asset to query.
         field_name : str
             Name of the supplementary field.
-        as_of_date : pd.Timestamp, None
+        as_of_date : datetime.datetime, None
             The last known value on this date is returned. If None, a
             value is returned only if we've only ever had one value for
             this sid. If None and we've had multiple values,
@@ -1028,7 +1023,7 @@ class SqliteAssetRepository(AssetRepository):
     def sids(self) -> list[int]:
         return self._get_sids("asset_router")
 
-    def _lookup_generic_scalar(self, obj: Asset, as_of_date: pd.Timestamp, country_code: str, matches: list[Asset],
+    def _lookup_generic_scalar(self, obj: Asset, as_of_date: datetime.datetime, country_code: str, matches: list[Asset],
                                missing: list[Asset]):
         """
         Convert asset_convertible to an asset.
@@ -1046,7 +1041,7 @@ class SqliteAssetRepository(AssetRepository):
         else:
             missing.append(obj)
 
-    def _lookup_generic_scalar_helper(self, obj: Asset, as_of_date: pd.Timestamp, country_code: str):
+    def _lookup_generic_scalar_helper(self, obj: Asset, as_of_date: datetime.datetime, country_code: str):
         if isinstance(obj, (Asset, ContinuousFuture)):
             return obj
 

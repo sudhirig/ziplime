@@ -16,11 +16,6 @@ import numpy as np
 from .domain.continuous_future import ContinuousFuture
 
 
-def make_asset_array(size, asset):
-    out = np.empty([size], dtype=object)
-    out.fill(asset)
-    return out
-
 
 log = logging.getLogger("assets.py")
 

@@ -3,20 +3,15 @@ import datetime
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.domain.bar_data import BarData
 
-from ziplime.utils.bundle_utils import register_default_bundles
 
 
-
-register_default_bundles()
-
-
-def initialize(context):
-    context.assets = [context.symbol('AAPL')]
-    context.assett = context.symbol("AMZN")  # Apple and Amazon
+async def initialize(context):
+    context.assets = [await context.symbol('AAPL')]
+    context.assett = await context.symbol("AMZN")  # Apple and Amazon
     context.counter = 0
 
 
-def handle_data(context: TradingAlgorithm, data: BarData):
+async def handle_data(context: TradingAlgorithm, data: BarData):
     context.counter += 1
     print(f"Handle data for: {context.datetime}")
 
@@ -29,6 +24,7 @@ def handle_data(context: TradingAlgorithm, data: BarData):
                 frequency=datetime.timedelta(minutes=3)
             )
             asset_series = long_mavg_df.filter(long_mavg_df["sid"] == asset.sid)["close"]
+            print(asset_series.head(1))
             context.order(asset=asset, amount=10)
             # print(asset_series)
 #

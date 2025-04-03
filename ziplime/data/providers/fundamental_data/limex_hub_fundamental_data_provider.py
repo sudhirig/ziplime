@@ -6,7 +6,6 @@ import limexhub
 import numpy
 import pandas as pd
 from joblib import Parallel, delayed
-from lime_trader.models.market import Period
 
 from ziplime.constants.fundamental_data import FundamentalData
 from ziplime.data.abstract_fundamendal_data_provider import AbstractFundamentalDataProvider

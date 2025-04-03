@@ -5,10 +5,9 @@ from lime_trader.models.market import Period
 from zipline.data.bar_reader import NoDataOnDate
 
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
-from ziplime.data.data_portal import DataPortal
 
 
-class DataPortalLive(DataPortal):
+class DataPortalLive:
     def __init__(self, broker, market_data_provider: AbstractLiveMarketDataProvider, *args, **kwargs):
         self.broker = broker
         self.market_data_provider = market_data_provider
@@ -97,3 +96,16 @@ class DataPortalLive(DataPortal):
             results.ffill(inplace=True)
             results.bfill(inplace=True)
         return results
+
+    def _get_days_for_window(self, end_date: datetime.datetime, bar_count: int):
+        tds = self._bundle_data.trading_calendar.sessions
+        end_loc = tds.get_loc(end_date)
+        start_loc = end_loc - bar_count + 1
+        if start_loc < self._first_trading_day_loc:
+            raise HistoryWindowStartsBeforeData(
+                first_trading_day=self._first_trading_day.date(),
+                max_bar_count=self._first_trading_day_loc - start_loc,
+                bar_count=bar_count,
+                suggested_start_day=tds[min(self._first_trading_day_loc + bar_count, end_loc)].date(),
+            )
+        return tds[start_loc: end_loc + 1]

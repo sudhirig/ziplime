@@ -2,7 +2,7 @@ import datetime
 
 import asyncclick as click
 
-from zipline.utils.context_tricks import CallbackManager
+from ziplime.utils.context_tricks import CallbackManager
 
 
 def maybe_show_progress(it, show_progress, **kwargs):

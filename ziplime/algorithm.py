@@ -14,10 +14,10 @@ from exchange_calendars import ExchangeCalendar
 
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.blotter.blotter import Blotter
-from zipline.utils.calendar_utils import get_calendar
+from ziplime.utils.calendar_utils import get_calendar
 
 from ziplime.protocol import handle_non_market_minutes
-from zipline.errors import (
+from ziplime.errors import (
     AttachPipelineAfterInitialize,
     CannotOrderDelistedAsset,
     DuplicatePipelineName,
@@ -67,28 +67,28 @@ from ziplime.assets.domain.equity import Equity
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.gens.tradesimulation import AlgorithmSimulator
 from ziplime.finance.metrics import MetricsTracker
-from zipline.pipeline import Pipeline
+from ziplime.pipeline import Pipeline
 import zipline.pipeline.domain as domain
-from zipline.pipeline.engine import (
+from ziplime.pipeline.engine import (
     ExplodingPipelineEngine,
     SimplePipelineEngine,
 )
-from zipline.utils.api_support import (
+from ziplime.utils.api_support import (
     api_method,
     require_initialized,
     require_not_initialized,
     ZiplineAPI,
     disallowed_in_before_trading_start,
 )
-from zipline.utils.compat import ExitStack
-from zipline.utils.date_utils import make_utc_aware
-from zipline.utils.input_validation import (
+from ziplime.utils.compat import ExitStack
+from ziplime.utils.date_utils import make_utc_aware
+from ziplime.utils.input_validation import (
     error_keywords,
     expect_dtypes,
     expect_types,
 )
-from zipline.utils.numpy_utils import int64_dtype
-from zipline.utils.cache import ExpiringCache
+from ziplime.utils.numpy_utils import int64_dtype
+from ziplime.utils.cache import ExpiringCache
 
 import zipline.utils.events
 from ziplime.utils.events import (
@@ -100,11 +100,11 @@ from ziplime.utils.events import (
     AfterOpen,
     BeforeClose, EventRule,
 )
-from zipline.utils.math_utils import (
+from ziplime.utils.math_utils import (
     tolerant_equals,
     round_if_near_integer,
 )
-from zipline.utils.security_list import SecurityList
+from ziplime.utils.security_list import SecurityList
 
 import zipline.protocol
 
@@ -1926,31 +1926,10 @@ class TradingAlgorithm:
         """
         return _DEFAULT_DOMAINS.get(calendar.name, domain.GENERIC)
 
-    @staticmethod
-    def default_fetch_csv_country_code(calendar):
-        """Get a default country_code to use for fetch_csv symbol lookups.
-
-        This will be used to disambiguate symbol lookups for fetch_csv calls if
-        our asset db contains entries with the same ticker spread across
-        multiple
-        """
-        return _DEFAULT_FETCH_CSV_COUNTRY_CODES.get(calendar.name)
-
     ##################
     # End Pipeline API
     ##################
 
-    @classmethod
-    def all_api_methods(cls):
-        """Return a list of all the TradingAlgorithm API methods."""
-        return [fn for fn in vars(cls).values() if getattr(fn, "is_api_method", False)]
-
 
 # Map from calendar name to default domain for that calendar.
 _DEFAULT_DOMAINS = {d.calendar_name: d for d in domain.BUILT_IN_DOMAINS}
-# Map from calendar name to default country code for that calendar.
-_DEFAULT_FETCH_CSV_COUNTRY_CODES = {
-    d.calendar_name: d.country_code for d in domain.BUILT_IN_DOMAINS
-}
-# Include us_futures, which doesn't have a pipeline domain.
-_DEFAULT_FETCH_CSV_COUNTRY_CODES["us_futures"] = "US"

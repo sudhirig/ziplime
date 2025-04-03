@@ -1,6 +1,5 @@
 import datetime
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any
 
 import pandas as pd
@@ -12,7 +11,6 @@ from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.db.equity import Equity
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 from ziplime.assets.repositories.asset_repository import AssetRepository
-from ziplime.data.abstract_data_bundle import AbstractDataBundle
 
 
 @dataclass
@@ -27,9 +25,6 @@ class BundleData:
     timestamp: datetime.datetime
     asset_repository: AssetRepository
     adjustment_repository: AdjustmentRepository
-
-    historical_data_reader: AbstractDataBundle
-    fundamental_data_reader: AbstractDataBundle
 
     data: pl.DataFrame
 
@@ -412,4 +407,68 @@ class BundleData:
         if contract_sid is None:
             return None
         return self.asset_repository.retrieve_asset(sid=contract_sid)
+
+
+    def get_adjustments(self, assets: list[Asset], field: str, dt: datetime.datetime, perspective_dt: datetime.datetime):
+        """Returns a list of adjustments between the dt and perspective_dt for the
+        given field and list of assets
+
+        Parameters
+        ----------
+        assets : list of type Asset, or Asset
+            The asset, or assets whose adjustments are desired.
+        field : {'open', 'high', 'low', 'close', 'volume', \
+                 'price', 'last_traded'}
+            The desired field of the asset.
+        dt : datetime.datetime
+            The timestamp for the desired value.
+        perspective_dt : datetime.datetime
+            The timestamp from which the data is being viewed back from.
+
+        Returns
+        -------
+        adjustments : list[Adjustment]
+            The adjustments to that field.
+        """
+        adjustment_ratios_per_asset = []
+
+        def split_adj_factor(x):
+            return x if field != "volume" else 1.0 / x
+
+        for asset in assets:
+            adjustments_for_asset = []
+            split_adjustments = self._get_adjustment_list(
+                asset, self._splits_dict, "SPLITS"
+            )
+            for adj_dt, adj in split_adjustments:
+                if dt < adj_dt.tz_localize(dt.tzinfo) <= perspective_dt:
+                    adjustments_for_asset.append(split_adj_factor(adj))
+                elif adj_dt.tz_localize(dt.tzinfo) > perspective_dt:
+                    break
+
+            if field != "volume":
+                merger_adjustments = self._get_adjustment_list(
+                    asset, self._mergers_dict, "MERGERS"
+                )
+                for adj_dt, adj in merger_adjustments:
+                    if dt < adj_dt <= perspective_dt:
+                        adjustments_for_asset.append(adj)
+                    elif adj_dt > perspective_dt:
+                        break
+
+                dividend_adjustments = self._get_adjustment_list(
+                    asset,
+                    self._dividends_dict,
+                    "DIVIDENDS",
+                )
+                for adj_dt, adj in dividend_adjustments:
+                    if dt < adj_dt.tz_localize(dt.tzinfo) <= perspective_dt:
+                        adjustments_for_asset.append(adj)
+                    elif adj_dt.tz_localize(dt.tzinfo) > perspective_dt:
+                        break
+
+            ratio = reduce(mul, adjustments_for_asset, 1.0)
+            adjustment_ratios_per_asset.append(ratio)
+
+        return adjustment_ratios_per_asset
 

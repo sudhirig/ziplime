@@ -1,6 +1,6 @@
 import empyrical
 
-from zipline.utils.deprecate import deprecated
+from ziplime.utils.deprecate import deprecated
 
 from .core import (
     metrics_sets,

@@ -7,7 +7,7 @@ from ziplime.errors import (
     AccountControlViolation,
     TradingControlViolation,
 )
-from zipline.utils.input_validation import (
+from ziplime.utils.input_validation import (
     expect_bounded,
     expect_types,
 )

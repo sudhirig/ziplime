@@ -20,7 +20,6 @@ from exchange_calendars import get_calendar as ec_get_calendar
 from asyncclick import DateTime
 from ziplime.utils.cli import Timestamp
 
-
 from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_broker
 
 
@@ -43,7 +42,6 @@ async def main(ctx):
         level=logging.INFO,
         datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
-
 
 
 @main.command(context_settings=dict(
@@ -225,8 +223,9 @@ async def clean(ctx, bundle_storage_path, bundle, before, after, keep_last):
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
     bundle_service = BundleService(bundle_registry=bundle_registry)
-    bundle_service.clean(bundle_name=bundle, after=after, before=before,
-                         keep_last=keep_last)
+    await bundle_service.clean(bundle_name=bundle, after=after, before=before,
+                               keep_last=keep_last)
+
 
 @main.command(context_settings=dict(
     ignore_unknown_options=True,

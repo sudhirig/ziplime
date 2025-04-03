@@ -2,7 +2,7 @@ import datetime
 import logging
 from decimal import Decimal
 
-from zipline.errors import SymbolNotFound
+from ziplime.errors import SymbolNotFound
 
 from ziplime.domain.portfolio import Portfolio as ZpPortfolio
 from ziplime.domain.position import Position as ZpPosition

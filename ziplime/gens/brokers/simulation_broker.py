@@ -7,12 +7,7 @@ from ziplime.domain.position import Position
 from ziplime.domain.portfolio import Portfolio
 from ziplime.domain.account import Account
 
-class Broker:
-    def subscribe_to_market_data(self, asset):
-        return []
-
-    def get_subscribed_assets(self):
-        return []
+class SimulationBroker:
 
     @abstractmethod
     def get_positions(self) -> dict[Asset, Position]:

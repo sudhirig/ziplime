@@ -12,9 +12,9 @@ from ziplime.errors import HistoryWindowStartsBeforeData
 from zipline.finance.constants import ROOT_SYMBOL_TO_ETA, DEFAULT_ETA
 from zipline.finance.shared import AllowedAssetMarker, FinancialModelMeta
 from zipline.finance.transaction import create_transaction
-from zipline.utils.cache import ExpiringCache
-from zipline.utils.dummy import DummyMapping
-from zipline.utils.input_validation import (
+from ziplime.utils.cache import ExpiringCache
+from ziplime.utils.dummy import DummyMapping
+from ziplime.utils.input_validation import (
     expect_bounded,
     expect_strictly_bounded,
 )

@@ -1,4 +1,3 @@
-import logging
 from collections import defaultdict
 from copy import copy
 
@@ -24,12 +23,13 @@ from ziplime.domain.bar_data import BarData
 from ziplime.finance.domain.order import Order
 from ziplime.assets.domain.equity import Equity
 from ziplime.assets.domain.future import Future
-
+from ...gens.brokers.broker import Broker
 
 
 class SimulationBlotter(Blotter):
     def __init__(
             self,
+            broker: Broker = None,
             equity_slippage: float | None = None,
             future_slippage: float | None = None,
             equity_commission: float | None = None,
@@ -38,12 +38,11 @@ class SimulationBlotter(Blotter):
     ):
         super().__init__(cancel_policy=cancel_policy)
         self._logger = structlog.get_logger(__name__)
+        self.broker = broker
         # these orders are aggregated by asset
         self.open_orders = defaultdict(list)
-
         # keep a dict of orders by their own id
         self.orders = {}
-
         # holding orders that have come in since the last event.
         self.new_orders = []
 
@@ -120,6 +119,10 @@ class SimulationBlotter(Blotter):
             limit=style.get_limit_price(is_buy),
             id=order_id,
         )
+
+        order = self.broker.submit_order(order=order)
+
+        self.new_orders.append(order)
 
         self.open_orders[order.asset].append(order)
         self.orders[order.id] = order
@@ -217,40 +220,27 @@ class SimulationBlotter(Blotter):
                     if warn:
                         if order.filled > 0:
                             self._logger.warn(
-                                "Your order for {order_amt} shares of "
-                                "{order_sym} has been partially filled. "
-                                "{order_filled} shares were successfully "
-                                "purchased. {order_failed} shares were not "
-                                "filled by the end of day and "
-                                "were canceled.".format(
-                                    order_amt=order.amount,
-                                    order_sym=order.asset.symbol,
-                                    order_filled=order.filled,
-                                    order_failed=order.amount - order.filled,
-                                )
+                                f"Your order for {order.amount} shares of "
+                                f"{order.asset.symbol} has been partially filled. "
+                                f"{order.filled} shares were successfully "
+                                f"purchased. {order.amount - order.filled} shares were not "
+                                f"filled by the end of day and "
+                                f"were canceled."
                             )
                         elif order.filled < 0:
                             self._logger.warn(
-                                "Your order for {order_amt} shares of "
-                                "{order_sym} has been partially filled. "
-                                "{order_filled} shares were successfully "
-                                "sold. {order_failed} shares were not "
-                                "filled by the end of day and "
-                                "were canceled.".format(
-                                    order_amt=order.amount,
-                                    order_sym=order.asset.symbol,
-                                    order_filled=-1 * order.filled,
-                                    order_failed=-1 * (order.amount - order.filled),
-                                )
+                                f"Your order for {order.amount} shares of "
+                                f"{order.asset.symbol} has been partially filled. "
+                                f"{-1 * order.filled} shares were successfully "
+                                f"sold. {-1 * (order.amount - order.filled)} shares were not "
+                                f"filled by the end of day and "
+                                f"were canceled."
                             )
                         else:
                             self._logger.warn(
-                                "Your order for {order_amt} shares of "
-                                "{order_sym} failed to fill by the end of day "
-                                "and was canceled.".format(
-                                    order_amt=order.amount,
-                                    order_sym=order.asset.symbol,
-                                )
+                                f"Your order for {order.amount} shares of "
+                                f"{order.asset.symbol} failed to fill by the end of day "
+                                f"and was canceled."
                             )
 
     def execute_cancel_policy(self, event):

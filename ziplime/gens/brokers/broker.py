@@ -6,6 +6,8 @@ from zipline.finance.order import Order as ZPOrder
 from ziplime.domain.position import Position
 from ziplime.domain.portfolio import Portfolio
 from ziplime.domain.account import Account
+from ziplime.finance.domain.order import Order
+
 
 class Broker:
     def subscribe_to_market_data(self, asset):
@@ -31,7 +33,7 @@ class Broker:
         pass
 
     @abstractmethod
-    def order(self, asset, amount, style):
+    def submit_order(self, order: Order):
         pass
 
     def is_alive(self):

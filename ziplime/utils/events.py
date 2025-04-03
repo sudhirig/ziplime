@@ -22,11 +22,11 @@ import numpy as np
 import pandas as pd
 import pytz
 from toolz import curry
-from zipline.utils.context_tricks import nop_context
+from ziplime.utils.context_tricks import nop_context
 
-from zipline.utils.input_validation import preprocess
-from zipline.utils.memoize import lazyval
-from zipline.utils.sentinel import sentinel
+from ziplime.utils.input_validation import preprocess
+from ziplime.utils.memoize import lazyval
+from ziplime.utils.sentinel import sentinel
 
 
 __all__ = [

@@ -1,4 +1,4 @@
-from zipline.utils.calendar_utils import get_calendar
+from ziplime.utils.calendar_utils import get_calendar
 
 
 class ContinuousFuture:

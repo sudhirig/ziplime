@@ -7,7 +7,7 @@ import pandas as pd
 
 from zipline.assets import Future
 import zipline.protocol as zp
-from zipline.utils.sentinel import sentinel
+from ziplime.utils.sentinel import sentinel
 
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.data.domain.bundle_data import BundleData

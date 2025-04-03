@@ -1,6 +1,6 @@
 from textwrap import dedent
 
-from zipline.utils.memoize import lazyval
+from ziplime.utils.memoize import lazyval
 
 
 class ZiplineError(Exception):

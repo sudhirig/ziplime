@@ -1,6 +1,5 @@
 import datetime
 
-import pandas as pd
 import structlog
 from exchange_calendars import ExchangeCalendar
 

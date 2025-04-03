@@ -3,7 +3,6 @@ from typing import Any
 import pandas as pd
 
 from ziplime.algorithm import TradingAlgorithm
-from ziplime.data.abstract_data_bundle import AbstractDataBundle
 from ziplime.domain.bar_data import BarData
 
 
@@ -23,7 +22,7 @@ def get_fundamental_data(
     end_date = pd.to_datetime(bar_data.current_session)
     start_date = end_date - pd.Timedelta(days=max_days_per_quarter * bar_count)
 
-    fundamental_data_bundle: AbstractDataBundle = context.fundamental_data_bundle
+    fundamental_data_bundle = context.fundamental_data_bundle
     first_date = fundamental_data_bundle.first_trading_day
 
     start_date_array = start_date

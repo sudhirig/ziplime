@@ -5,7 +5,7 @@ import structlog
 
 from zipline.data.benchmarks import get_benchmark_returns_from_file
 
-from zipline.errors import SymbolNotFound
+from ziplime.errors import SymbolNotFound
 
 from ziplime.assets.repositories.sqlite_asset_repository import SqliteAssetRepository
 from ziplime.utils.run_algo import _RunAlgoError

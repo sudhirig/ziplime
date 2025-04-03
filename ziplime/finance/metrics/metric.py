@@ -10,7 +10,7 @@ import pandas as pd
 import polars as pl
 from exchange_calendars import ExchangeCalendar
 
-from zipline.utils.exploding_object import NamedExplodingObject
+from ziplime.utils.exploding_object import NamedExplodingObject
 
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.domain.ledger import Ledger

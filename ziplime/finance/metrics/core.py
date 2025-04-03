@@ -1,6 +1,6 @@
 from functools import partial
 
-from zipline.utils.compat import mappingproxy
+from ziplime.utils.compat import mappingproxy
 
 
 def _make_metrics_set_core():

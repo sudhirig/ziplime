@@ -9,7 +9,7 @@ from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.domain.bar_data import BarData
-from zipline.utils.api_support import ZiplineAPI
+from ziplime.utils.api_support import ZiplineAPI
 
 from ziplime.gens.domain.simulation_event import SimulationEvent
 

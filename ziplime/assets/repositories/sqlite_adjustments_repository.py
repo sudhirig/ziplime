@@ -10,16 +10,16 @@ import pandas as pd
 from numpy import integer as any_integer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from zipline.utils.functional import keysorted
-from zipline.utils.numpy_utils import (
+from ziplime.utils.functional import keysorted
+from ziplime.utils.numpy_utils import (
     datetime64ns_dtype,
     float64_dtype,
     int64_dtype,
     uint32_dtype,
     uint64_dtype,
 )
-from zipline.utils.pandas_utils import empty_dataframe
-from zipline.utils.sqlite_utils import group_into_chunks
+from ziplime.utils.pandas_utils import empty_dataframe
+from ziplime.utils.sqlite_utils import group_into_chunks
 
 from zipline.data._adjustments import load_adjustments_from_sqlite
 

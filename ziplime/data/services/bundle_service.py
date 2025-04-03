@@ -155,8 +155,6 @@ class BundleService:
                                  frequency=frequency,
                                  asset_repository=asset_repository,
                                  adjustment_repository=None,  # TODO: add
-                                 historical_data_reader=None,
-                                 fundamental_data_reader=None,
                                  data=None,
                                  timestamp=timestamp,
                                  version=bundle_metadata["version"]

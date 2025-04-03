@@ -1,7 +1,7 @@
 from functools import wraps
 
 import zipline.api
-from zipline.utils.algo_instance import get_algo_instance, set_algo_instance
+from ziplime.utils.algo_instance import get_algo_instance, set_algo_instance
 
 
 class ZiplineAPI(object):

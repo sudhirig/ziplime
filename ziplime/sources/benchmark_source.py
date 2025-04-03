@@ -100,7 +100,7 @@ class BenchmarkSource:
            This method expects minute inputs if ``emission_rate == 'minute'``
            and session labels when ``emission_rate == 'daily``.
         """
-        return self._precalculated_series.filter(pl.col("date").is_between(start_dt,end_dt))
+        return self._precalculated_series.filter(pl.col("date").is_between(start_dt, end_dt))
 
     def daily_returns(self, start: datetime.datetime, end: datetime.datetime | None = None) -> pd.Series:
         """Returns the daily returns for the given period.
@@ -223,13 +223,13 @@ class BenchmarkSource:
         #     index_column="date", every=self.timedelta_period
         # ).agg(pl.col("value").sum())
 
-        benchmark_series = bundle_data.get_history_window(
-            assets=[asset],
-            end_dt=all_bars[-1],
-            bar_count=len(all_bars) + 1,
-            frequency=self.timedelta_period,
+        benchmark_series = self.bundle_data.get_data_by_limit(
             fields=self.benchmark_fields,
-            ffill=True,
+            limit=len(all_bars) + 1,
+            frequency=self.timedelta_period,
+            end_date=all_bars[-1],
+            assets=[asset],
+            include_end_date=False
         )
         return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))[1:]
         return (
@@ -246,30 +246,28 @@ class BenchmarkSource:
             # last trading day of the simulation, going up to one day
             # before the simulation start day (so that we can get the %
             # change on day 1)
-            benchmark_series = data_portal.get_history_window(
-                assets=[asset],
-                end_dt=trading_days[-1],
-                bar_count=len(trading_days) + 1,
-                # frequency=DataFrequency.DAY,
-                frequency=self.emission_rate.to_timedelta(),
+            benchmark_series = self.bundle_data.get_data_by_limit(
                 fields=["price"],
-                ffill=True,
-            )[asset]
+                limit=len(trading_days) + 1,
+                frequency=self.emission_rate,
+                end_date=trading_days[-1],
+                assets=[asset],
+                include_end_date=False
+            )
 
             returns = benchmark_series.pct_change()[1:]
             return returns, returns
         elif start_date == trading_days[0]:
             # Attempt to handle case where stock data starts on first
             # day, in this case use the open to close return.
-            benchmark_series = data_portal.get_history_window(
-                assets=[asset],
-                end_dt=trading_days[-1],
-                bar_count=len(trading_days),
-                # frequency=DataFrequency.DAY,
-                frequency=self.emission_rate.to_timedelta(),
+            benchmark_series = self.bundle_data.get_data_by_limit(
                 fields=["price"],
-                ffill=True,
-            )[asset]
+                limit=len(trading_days),
+                frequency=self.emission_rate,
+                end_date=trading_days[-1],
+                assets=[asset],
+                include_end_date=False
+            )
 
             # get a minute history window of the first day
             first_open = data_portal.get_spot_value(

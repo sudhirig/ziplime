@@ -18,7 +18,7 @@ from toolz import (
     partition_all,
 )
 
-from zipline.errors import (
+from ziplime.errors import (
     EquitiesNotFound,
     FutureContractsNotFound,
     MultipleSymbolsFound,
@@ -30,10 +30,10 @@ from zipline.errors import (
     SymbolNotFound,
     ValueNotFoundForField,
 )
-from zipline.utils.functional import invert
-from zipline.utils.memoize import lazyval
-from zipline.utils.numpy_utils import as_column
-from zipline.utils.sqlite_utils import group_into_chunks
+from ziplime.utils.functional import invert
+from ziplime.utils.memoize import lazyval
+from ziplime.utils.numpy_utils import as_column
+from ziplime.utils.sqlite_utils import group_into_chunks
 
 from zipline.assets.asset_writer import (
     SQLITE_MAX_VARIABLE_NUMBER,

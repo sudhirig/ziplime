@@ -110,8 +110,6 @@ class BundleService:
                                  frequency=frequency,
                                  asset_repository=assets_repository,
                                  adjustment_repository=adjustments_repository,
-                                 historical_data_reader=None,
-                                 fundamental_data_reader=None,
                                  data=data,
                                  timestamp=datetime.datetime.now(tz=trading_calendar.tz),
                                  version=bundle_version

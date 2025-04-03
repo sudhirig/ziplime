@@ -4,7 +4,7 @@ import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.db.asset import Asset
-from ziplime.data.data_portal import DataPortal
+from ziplime.data.domain.bundle_data import BundleData
 from ziplime.errors import (
     InvalidBenchmarkAsset,
     BenchmarkAssetNotAvailableTooEarly,
@@ -19,7 +19,7 @@ class BenchmarkSource:
             benchmark_asset: Asset,
             trading_calendar: ExchangeCalendar,
             sessions: pd.DatetimeIndex,
-            data_portal: DataPortal,
+            bundle_data: BundleData,
             emission_rate: datetime.timedelta,
             timedelta_period: datetime.timedelta,
             benchmark_fields: list[str],
@@ -28,7 +28,7 @@ class BenchmarkSource:
         self.benchmark_asset = benchmark_asset
         self.sessions = sessions
         self.emission_rate = emission_rate
-        self.data_portal = data_portal
+        self.bundle_data = bundle_data
         self.timedelta_period = timedelta_period
         self.benchmark_fields = benchmark_fields
         if len(sessions) == 0:
@@ -38,7 +38,7 @@ class BenchmarkSource:
             self._validate_benchmark(benchmark_asset=benchmark_asset)
             self._precalculated_series = self._initialize_precalculated_series(
                 asset=benchmark_asset, trading_calendar=trading_calendar, trading_days=sessions,
-                data_portal=data_portal
+                bundle_data=bundle_data
             )
         elif benchmark_returns is not None:
             all_bars = pl.from_pandas(
@@ -178,7 +178,7 @@ class BenchmarkSource:
 
     def _initialize_precalculated_series(
             self, asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pd.DatetimeIndex,
-            data_portal: DataPortal
+            bundle_data: BundleData
     ):
         """
         Internal method that pre-calculates the benchmark return series for
@@ -192,7 +192,7 @@ class BenchmarkSource:
 
         trading_days: pd.DateTimeIndex
 
-        data_portal: DataPortal
+        bundle_data: BundleData
 
         Notes
         -----
@@ -223,11 +223,10 @@ class BenchmarkSource:
         #     index_column="date", every=self.timedelta_period
         # ).agg(pl.col("value").sum())
 
-        benchmark_series = data_portal.get_history_window(
+        benchmark_series = bundle_data.get_history_window(
             assets=[asset],
             end_dt=all_bars[-1],
             bar_count=len(all_bars) + 1,
-            # frequency=DataFrequency.MINUTE,
             frequency=self.timedelta_period,
             fields=self.benchmark_fields,
             ffill=True,

@@ -9,7 +9,7 @@ from ..domain.order import Order
 
 from ..domain.transaction import Transaction
 from ziplime.assets.domain.db.asset import Asset
-from ...data.data_portal import DataPortal
+from ...data.domain.bundle_data import BundleData
 from ...domain.data_frequency import DataFrequency
 from ziplime.domain.event import Event
 
@@ -51,7 +51,7 @@ class MetricsTracker:
 
     def __init__(
             self,
-            data_portal: DataPortal,
+            bundle_data: BundleData,
             trading_calendar: ExchangeCalendar,
             first_session: datetime.datetime,
             last_session: datetime.datetime,
@@ -74,7 +74,7 @@ class MetricsTracker:
             calendar=trading_calendar,
             session=first_session,
         )
-        self._data_portal = data_portal
+        self.bundle_data = bundle_data
         self._session_count = 0
 
         self._sessions = sessions = trading_calendar.sessions_in_range(
@@ -84,7 +84,7 @@ class MetricsTracker:
         self._total_session_count = len(sessions)
 
         self._ledger = Ledger(trading_sessions=sessions, capital_base=capital_base,
-                              data_portal=self._data_portal, data_frequency=data_frequency)
+                              bundle_data=self.bundle_data, data_frequency=data_frequency)
 
         # self._benchmark_source = NamedExplodingObject(
         #     "self._benchmark_source",
@@ -225,24 +225,24 @@ class MetricsTracker:
             ledger=ledger,
             session=dt,
             session_ix=self._session_count,
-            data_portal=self._data_portal,
+            bundle_data=self.bundle_data,
         )
         return packet
 
-    def handle_market_open(self, session_label: datetime.datetime, data_portal: DataPortal) -> None:
+    def handle_market_open(self, session_label: datetime.datetime, bundle_data: BundleData) -> None:
         """Handles the start of each session.
 
         Parameters
         ----------
         session_label : Timestamp
             The label of the session that is about to begin.
-        data_portal : DataPortal
+        bundle_data : BundleData
             The current data portal.
         """
         ledger = self._ledger
         ledger.start_of_session(session_label=session_label)
 
-        adjustment_reader = data_portal._bundle_data.adjustment_repository
+        adjustment_reader = bundle_data.adjustment_repository
         if adjustment_reader is not None:
             # this is None when running with a dataframe source
             ledger.process_dividends(
@@ -258,16 +258,16 @@ class MetricsTracker:
             session=session_label,
         )
 
-        self.start_of_session(ledger=ledger, session=session_label, data_portal=data_portal)
+        self.start_of_session(ledger=ledger, session=session_label, bundle_data=bundle_data)
 
-    def handle_market_close(self, dt: datetime.datetime, data_portal: DataPortal):
+    def handle_market_close(self, dt: datetime.datetime, bundle_data: BundleData):
         """Handles the close of the given day.
 
         Parameters
         ----------
         dt : Timestamp
             The most recently completed simulation datetime.
-        data_portal : DataPortal
+        bundle_data : BundleData
             The current data portal.
 
         Returns
@@ -308,7 +308,7 @@ class MetricsTracker:
             ledger=ledger,
             session=completed_session,
             session_ix=session_ix,
-            data_portal=data_portal,
+            bundle_data=bundle_data,
         )
 
         return packet
@@ -329,7 +329,7 @@ class MetricsTracker:
             ledger=self._ledger,
             trading_calendar=self._trading_calendar,
             sessions=self._sessions,
-            data_portal=self._data_portal,
+            bundle_data=self.bundle_data,
             benchmark_source=self._benchmark_source,
         )
         return packet

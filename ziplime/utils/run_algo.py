@@ -97,14 +97,14 @@ async def run_algorithm(
     # )
     bundle_service = BundleService(bundle_registry=bundle_registry)
 
-    data_portal = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
+    bundle_data = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
     # date parameter validation
     if not broker and trading_calendar.sessions_distance(start_date, end_date) < 1:
         raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
 
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
-        asset_repository=data_portal._bundle_data.asset_repository,
+        asset_repository=bundle_data.asset_repository,
         start_date=start_date.date(),
         end_date=end_date.date(),
     )
@@ -124,20 +124,20 @@ async def run_algorithm(
     state_filename = None
     realtime_bar_target = None
     # emission_rate = data_frequency
-    if broker:
-        data_portal = DataPortalLive(
-            asset_repository=bundle_data.asset_repository,
-            broker=broker,
-            trading_calendar=trading_calendar,
-            first_trading_day=first_trading_day,
-            historical_data_reader=bundle_data.historical_data_reader,
-            adjustment_reader=bundle_data.adjustment_reader,
-            future_minute_reader=bundle_data.historical_data_reader,
-            future_daily_reader=bundle_data.historical_data_reader,
-            market_data_provider=market_data_provider,
-            fundamental_data_reader=bundle_data.fundamental_data_reader,
-            fields=bundle_data.historical_data_reader.get_fields()
-        )
+    # if broker:
+    #     data_portal = DataPortalLive(
+    #         asset_repository=bundle_data.asset_repository,
+    #         broker=broker,
+    #         trading_calendar=trading_calendar,
+    #         first_trading_day=first_trading_day,
+    #         historical_data_reader=bundle_data.historical_data_reader,
+    #         adjustment_reader=bundle_data.adjustment_reader,
+    #         future_minute_reader=bundle_data.historical_data_reader,
+    #         future_daily_reader=bundle_data.historical_data_reader,
+    #         market_data_provider=market_data_provider,
+    #         fundamental_data_reader=bundle_data.fundamental_data_reader,
+    #         fields=bundle_data.historical_data_reader.get_fields()
+    #     )
         # state_filename = f"{data_path(['state'])}"
         # realtime_bar_target = f"{data_path(['realtime'])}"
         # emission_rate = 'minute'
@@ -155,8 +155,8 @@ async def run_algorithm(
     #     )
 
     pipeline_loader = USEquityPricingLoader.without_fx(
-        data_portal._bundle_data.historical_data_reader,
-        data_portal._bundle_data.adjustment_repository,
+        bundle_data.historical_data_reader,
+        bundle_data.adjustment_repository,
     )
 
     def choose_loader(column):
@@ -180,7 +180,7 @@ async def run_algorithm(
     )
 
     if benchmark_sid is not None:
-        benchmark_asset = data_portal.asset_repository.retrieve_asset(sid=benchmark_sid)
+        benchmark_asset = bundle_data.asset_repository.retrieve_asset(sid=benchmark_sid)
         benchmark_returns = None
     else:
         benchmark_asset = None
@@ -190,7 +190,7 @@ async def run_algorithm(
         benchmark_returns=benchmark_returns,
         trading_calendar=trading_calendar,
         sessions=sim_params.sessions,
-        data_portal=data_portal,
+        bundle_data=bundle_data,
         emission_rate=sim_params.emission_rate,
         timedelta_period=emission_rate,
         benchmark_fields=["close"]
@@ -199,7 +199,7 @@ async def run_algorithm(
     try:
         if broker is None:
             tr = TradingAlgorithm(
-                data_portal=data_portal,
+                bundle_data=bundle_data,
                 get_pipeline_loader=choose_loader,
                 sim_params=sim_params,
                 metrics_set=metrics_set,
@@ -215,7 +215,7 @@ async def run_algorithm(
                 broker=broker,
                 state_filename=state_filename,
                 realtime_bar_target=realtime_bar_target,
-                data_portal=data_portal,
+                bundle_data=bundle_data,
                 get_pipeline_loader=choose_loader,
                 sim_params=sim_params,
                 metrics_set=metrics_set,

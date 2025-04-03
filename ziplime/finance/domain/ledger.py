@@ -10,8 +10,7 @@ import zipline.protocol as zp
 from zipline.utils.sentinel import sentinel
 
 from ziplime.assets.domain.db.asset import Asset
-from ziplime.data.data_portal import DataPortal
-from ziplime.domain.data_frequency import DataFrequency
+from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.position_tracker import PositionTracker
 
@@ -54,13 +53,13 @@ class Ledger:
         hold a value of ``np.nan``.
     """
 
-    def __init__(self, trading_sessions: pd.DatetimeIndex, capital_base: float, data_portal: DataPortal,
+    def __init__(self, trading_sessions: pd.DatetimeIndex, capital_base: float, bundle_data: BundleData,
                  data_frequency: datetime.timedelta):
         if len(trading_sessions):
             start = trading_sessions[0]
         else:
             start = None
-        self._data_portal = data_portal
+        self.bundle_data = bundle_data
 
         # Have some fields of the portfolio changed? This should be accessed
         # through ``self._dirty_portfolio``
@@ -91,7 +90,7 @@ class Ledger:
         self._account_overrides = {}
         self._data_frequency = data_frequency
 
-        self.position_tracker = PositionTracker(data_portal=data_portal,
+        self.position_tracker = PositionTracker(bundle_data=bundle_data,
                                                 data_frequency=data_frequency)
 
         self._processed_transactions = {}
@@ -286,10 +285,10 @@ class Ledger:
         held_sids = set(position_tracker.positions)
         if held_sids:
             cash_dividends = adjustment_reader.get_dividends_with_ex_date(
-                held_sids, next_session, self._data_portal._bundle_data.asset_repository
+                held_sids, next_session, self.bundle_data.asset_repository
             )
             stock_dividends = adjustment_reader.get_stock_dividends_with_ex_date(
-                held_sids, next_session, self._data_portal._bundle_data.asset_repository
+                held_sids, next_session, self.bundle_data.asset_repository
             )
 
             # Earning a dividend just marks that we need to get paid out on

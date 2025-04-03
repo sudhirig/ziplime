@@ -12,6 +12,7 @@ from itertools import chain, repeat
 
 from exchange_calendars import ExchangeCalendar
 
+from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.blotter.blotter import Blotter
 from zipline.utils.calendar_utils import get_calendar
 
@@ -63,7 +64,6 @@ from zipline.finance.asset_restrictions import (
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.future import Future
 from ziplime.assets.domain.equity import Equity
-from ziplime.data.data_portal import DataPortal
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.gens.tradesimulation import AlgorithmSimulator
 from ziplime.finance.metrics import MetricsTracker
@@ -193,7 +193,7 @@ class TradingAlgorithm:
     def __init__(
             self,
             sim_params: SimulationParameters,
-            data_portal: DataPortal,
+            bundle_data: BundleData,
             # Algorithm API
             script: str,
             metrics_set,
@@ -220,8 +220,8 @@ class TradingAlgorithm:
         # We support passing a data_portal in `run`, but we need an asset
         # finder earlier than that to look up assets for things like
         # set_benchmark.
-        self.data_portal = data_portal
-
+        # self.data_portal = data_portal
+        self.bundle_data=bundle_data
         self.benchmark_source = benchmark_source
 
         # XXX: This is also a mess. We should remove all of this and only allow
@@ -233,7 +233,6 @@ class TradingAlgorithm:
         # it matches their sim_params. Otherwise, just use what's in their
         # sim_params.
         self.sim_params = sim_params
-        self.trading_calendar = sim_params.trading_calendar
 
         self.metrics_tracker = None
         self._last_sync_time = pd.NaT
@@ -318,8 +317,8 @@ class TradingAlgorithm:
         if get_loader is not None:
             self.engine = SimplePipelineEngine(
                 get_loader,
-                self.data_portal._bundle_data.asset_repository,
-                self.default_pipeline_domain(self.trading_calendar),
+                self.bundle_data.asset_repository,
+                self.default_pipeline_domain(self.sim_params.trading_calendar),
             )
         else:
             self.engine = ExplodingPipelineEngine()
@@ -359,10 +358,10 @@ class TradingAlgorithm:
 
     def _create_clock(self):
         """If the clock property is not set, then create one based on frequency."""
-        market_closes = pl.Series(self.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
-            self.trading_calendar.tz))
-        market_opens = pl.Series(self.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
-            self.trading_calendar.tz))
+        market_closes = pl.Series(self.sim_params.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
+            self.sim_params.trading_calendar.tz))
+        market_opens = pl.Series(self.sim_params.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
+            self.sim_params.trading_calendar.tz))
 
         before_trading_start_minutes = market_opens - datetime.timedelta(minutes=46)
 
@@ -377,8 +376,8 @@ class TradingAlgorithm:
 
     async def _create_generator(self):
         self.metrics_tracker = MetricsTracker(
-            data_portal=self.data_portal,
-            trading_calendar=self.trading_calendar,
+            bundle_data=self.bundle_data,
+            trading_calendar=self.sim_params.trading_calendar,
             first_session=self.sim_params.start_session,
             last_session=self.sim_params.end_session,
             capital_base=self.sim_params.capital_base,
@@ -396,8 +395,8 @@ class TradingAlgorithm:
 
         self.trading_client = AlgorithmSimulator(
             algo=self,
+            bundle_data=self.bundle_data,
             sim_params=self.sim_params,
-            data_portal=self.data_portal,
             clock=self._create_clock(),
             benchmark_source=self.benchmark_source,
             restrictions=self.restrictions,
@@ -600,7 +599,7 @@ class TradingAlgorithm:
         # Note that the ExchangeTradingSchedule is currently the only
         # TradingSchedule class, so this is unlikely to be hit
         if calendar is None:
-            cal = self.trading_calendar
+            cal = self.sim_params.trading_calendar
         elif calendar is calendars.US_EQUITIES:
             cal = get_calendar("XNYS")
         elif calendar is calendars.US_FUTURES:
@@ -708,7 +707,7 @@ class TradingAlgorithm:
             if self._symbol_lookup_date is not None
             else pd.Timestamp(self.sim_params.end_session).to_pydatetime().date()
         )
-        return await self.data_portal._bundle_data.asset_repository.get_asset_by_symbol(symbol=symbol_str)
+        return await self.bundle_data.asset_repository.get_asset_by_symbol(symbol=symbol_str)
         # return self.data_portal._bundle_data.asset_repository.lookup_symbol(
         #     symbol_str,
         #     as_of_date=_lookup_date,
@@ -793,7 +792,7 @@ class TradingAlgorithm:
         # Make sure the asset exists, and that there is a last price for it.
         # FIXME: we should use BarData's can_trade logic here, but I haven't
         # yet found a good way to do that.
-        normalized_date = add_tz_info(self.trading_calendar.minute_to_session(self.datetime),
+        normalized_date = add_tz_info(self.sim_params.trading_calendar.minute_to_session(self.datetime),
                                       tzinfo=datetime.timezone.utc)
 
         if normalized_date < asset.start_date:
@@ -823,7 +822,7 @@ class TradingAlgorithm:
 
     def _can_order_asset(self, asset: Asset):
         if asset.auto_close_date:
-            day = self.trading_calendar.minute_to_session(self.get_datetime()).date()
+            day = self.sim_params.trading_calendar.minute_to_session(self.get_datetime()).date()
 
             if day > min(asset.end_date, asset.auto_close_date):
                 # If we are after the asset's end date or auto close date, warn
@@ -1900,7 +1899,7 @@ class TradingAlgorithm:
         --------
         PipelineEngine.run_pipeline
         """
-        sessions = self.trading_calendar.sessions
+        sessions = self.sim_params.trading_calendar.sessions
 
         # Load data starting from the previous trading day...
         start_date_loc = sessions.get_loc(start_session)

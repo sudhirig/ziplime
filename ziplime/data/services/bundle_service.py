@@ -10,7 +10,6 @@ from ziplime.assets.domain.db.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.domain.db.exchange import Exchange
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 from ziplime.assets.repositories.asset_repository import AssetRepository
-from ziplime.data.data_portal import DataPortal
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.data.services.bundle_data_source import BundleDataSource
 from ziplime.data.services.bundle_registry import BundleRegistry
@@ -122,7 +121,7 @@ class BundleService:
 
         self._logger.info(f"Finished ingesting bundle_name={name}, bundle_version={bundle_version}")
 
-    async def load_bundle(self, bundle_name: str, bundle_version: str | None):
+    async def load_bundle(self, bundle_name: str, bundle_version: str | None) -> BundleData:
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
                                                                            bundle_version=bundle_version)
 
@@ -164,15 +163,15 @@ class BundleService:
                                  )
         data = await bundle_storage.load_bundle_data(bundle_data=bundle_data)
         bundle_data.data = data
-
-        data_portal = DataPortal(
-            bundle_data=bundle_data,
-            historical_data_reader=bundle_data.historical_data_reader,
-            fundamental_data_reader=bundle_data.fundamental_data_reader,
-            future_minute_reader=bundle_data.historical_data_reader,
-            future_daily_reader=bundle_data.historical_data_reader,
-        )
-        return data_portal
+        return bundle_data
+        # data_portal = DataPortal(
+        #     bundle_data=bundle_data,
+        #     historical_data_reader=bundle_data.historical_data_reader,
+        #     fundamental_data_reader=bundle_data.fundamental_data_reader,
+        #     future_minute_reader=bundle_data.historical_data_reader,
+        #     future_daily_reader=bundle_data.historical_data_reader,
+        # )
+        # return data_portal
 
     async def _load_bundle_without_data(self, bundle_name: str, bundle_version: str | None) -> BundleData:
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,

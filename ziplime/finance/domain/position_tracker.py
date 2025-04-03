@@ -9,6 +9,8 @@ import structlog
 
 from zipline.finance.transaction import Transaction
 import zipline.protocol as zp
+
+from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.domain.position import Position
 from ziplime.finance.finance_ext import (
     PositionStats,
@@ -17,8 +19,6 @@ from ziplime.finance.finance_ext import (
 )
 
 from ziplime.assets.domain.db.asset import Asset
-from ziplime.data.data_portal import DataPortal
-from ziplime.domain.data_frequency import DataFrequency
 
 
 
@@ -31,7 +31,7 @@ class PositionTracker:
         The data frequency of the simulation.
     """
 
-    def __init__(self, data_portal: DataPortal, data_frequency: DataFrequency):
+    def __init__(self, bundle_data: BundleData, data_frequency: datetime.timedelta):
         self.positions = OrderedDict()
 
         self._unpaid_dividends = {}
@@ -39,7 +39,7 @@ class PositionTracker:
         self._positions_store = zp.Positions()
 
         self.data_frequency = data_frequency
-        self._data_portal = data_portal
+        self.bundle_data = bundle_data
         # cache the stats until something alters our positions
         self._dirty_stats = True
         self._stats = PositionStats.new()
@@ -229,7 +229,7 @@ class PositionTracker:
 
         amount = self.positions.get(asset).amount
         # TODO: check this
-        price = self._data_portal.get_spot_value(assets=asset, field="price", dt=dt,
+        price = self.bundle_data.get_spot_value(assets=asset, field="price", dt=dt,
                                                  data_frequency=self._data_frequency)
 
         # Get the last traded price if price is no longer available
@@ -263,9 +263,9 @@ class PositionTracker:
         self._dirty_stats = True
 
         if handle_non_market_minutes:
-            previous_minute = self._data_portal.trading_calendar.previous_minute(minute=dt)
+            previous_minute = self.bundle_data.trading_calendar.previous_minute(minute=dt)
             get_price = partial(
-                self._data_portal.get_adjusted_value,
+                self.bundle_data.get_adjusted_value,
                 field="close",
                 dt=previous_minute,
                 perspective_dt=dt,
@@ -274,7 +274,7 @@ class PositionTracker:
 
         else:
             get_price = partial(
-                self._data_portal.get_scalar_asset_spot_value,
+                self.bundle_data.get_scalar_asset_spot_value,
                 field="close",
                 dt=dt,
                 frequency=self.data_frequency

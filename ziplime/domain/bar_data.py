@@ -6,12 +6,11 @@ from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
 from ziplime.assets.domain.db.asset import Asset
-from ziplime.data.data_portal import DataPortal
 
 from contextlib import contextmanager
 import numpy as np
 
-
+from ziplime.data.domain.bundle_data import BundleData
 
 
 @contextmanager
@@ -36,7 +35,7 @@ class BarData:
 
     Parameters
     ----------
-    data_portal : DataPortal
+    bundle_data : BundleData
         Provider for bar pricing data.
     simulation_dt_func : callable
         Function which returns the current simulation time.
@@ -49,12 +48,13 @@ class BarData:
         multiple sources
     """
 
-    def __init__(self, data_portal: DataPortal,
+    def __init__(self,
+                 bundle_data: BundleData,
                  simulation_dt_func: Callable,
                  data_frequency: datetime.timedelta,
                  trading_calendar: ExchangeCalendar,
                  restrictions):
-        self.data_portal = data_portal
+        self.bundle_data = bundle_data
         self.simulation_dt_func = simulation_dt_func
         self.data_frequency = data_frequency
 
@@ -153,7 +153,7 @@ class BarData:
 
         if not self._adjust_minutes:
             for field in fields:
-                return self.data_portal.get_spot_value(
+                return self.bundle_data.get_spot_value(
                         assets=assets,
                         fields=[field],
                         dt=self._get_current_minute(),
@@ -162,7 +162,7 @@ class BarData:
         else:
             for field in fields:
                 series = pd.Series(data={
-                    asset: self.data_portal.get_adjusted_value(
+                    asset: self.bundle_data.get_adjusted_value(
                         asset,
                         field,
                         self._get_current_minute(),
@@ -176,7 +176,7 @@ class BarData:
         return pd.DataFrame(data=data)
 
     def current_chain(self, continuous_future: ContinuousFuture):
-        return self.data_portal.get_current_future_chain(
+        return self.bundle_data.get_current_future_chain(
             continuous_future=continuous_future,
             dt=self.simulation_dt_func()
         )
@@ -329,13 +329,19 @@ class BarData:
         If the current simulation time is not a valid market time, we use the last market close instead.
         """
 
-        df = self.data_portal.get_history_window(assets=assets,
-                                                 end_dt=self._get_current_minute(),
-                                                 bar_count=bar_count,
-                                                 frequency=frequency,
-                                                 fields=fields,
-                                                 )
-
+        # df = self.data_portal.get_history_window(assets=assets,
+        #                                          end_dt=self._get_current_minute(),
+        #                                          bar_count=bar_count,
+        #                                          frequency=frequency,
+        #                                          fields=fields,
+        #                                          )
+        df = self.bundle_data.get_data_by_limit(assets=assets,
+                                                end_date=self._get_current_minute(),
+                                                limit=bar_count,
+                                                frequency=frequency,
+                                                fields=fields,
+                                                include_end_date=False
+                                                )
         if self._adjust_minutes:
             adjs = {
                 field: self.data_portal.get_adjustments(
@@ -355,10 +361,6 @@ class BarData:
     @property
     def current_dt(self):
         return self.simulation_dt_func()
-
-    @property
-    def fetcher_assets(self):
-        return self.data_portal.get_fetcher_assets(self.simulation_dt_func())
 
     @property
     def _handle_non_market_minutes(self):

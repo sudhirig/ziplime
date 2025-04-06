@@ -1,72 +1,36 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from copy import copy
 
 import structlog
 
 from ziplime.assets.domain.db.asset import Asset
-from zipline.finance.execution import ExecutionStyle
 
 from .blotter import Blotter
-from ziplime.finance.slippage import (
-    DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-    VolatilityVolumeShare,
-    FixedBasisPointsSlippage,
-)
-from zipline.finance.commission import (
-    DEFAULT_PER_CONTRACT_COST,
-    FUTURE_EXCHANGE_FEES_BY_SYMBOL,
-    PerContract,
-    PerShare,
-)
 
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.domain.order import Order
-from ziplime.assets.domain.equity import Equity
-from ziplime.assets.domain.future import Future
-from ...gens.brokers.broker import Broker
+from ...gens.exchanges.exchange import Exchange
 
 
-class SimulationBlotter(Blotter):
+class InMemoryBlotter(Blotter):
     def __init__(
             self,
-            broker: Broker = None,
-            equity_slippage: float | None = None,
-            future_slippage: float | None = None,
-            equity_commission: float | None = None,
-            future_commission: float | None = None,
+            exchange: Exchange,
             cancel_policy=None,
     ):
         super().__init__(cancel_policy=cancel_policy)
         self._logger = structlog.get_logger(__name__)
-        self.broker = broker
+        self.exchange = exchange
         # these orders are aggregated by asset
-        self.open_orders = defaultdict(list)
+        self.open_orders = defaultdict(dict)
         # keep a dict of orders by their own id
         self.orders = {}
         # holding orders that have come in since the last event.
-        self.new_orders = []
+        self.new_orders = OrderedDict()
 
         self.max_shares = int(1e11)
 
-        self.slippage_models = {
-            Asset: equity_slippage or FixedBasisPointsSlippage(),
-            Equity: equity_slippage or FixedBasisPointsSlippage(),
-            Future: future_slippage
-                    or VolatilityVolumeShare(
-                volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-            ),
-        }
-        self.commission_models = {
-            Asset: equity_commission or PerShare(),
-            Equity: equity_commission or PerShare(),
-            Future: future_commission
-                    or PerContract(
-                cost=DEFAULT_PER_CONTRACT_COST,
-                exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
-            ),
-        }
-
-    def order(self, asset: Asset, amount: int, style: ExecutionStyle, order_id: str | None = None):
+    def save_order(self, order: Order):
         """Place an order.
 
         Parameters
@@ -101,112 +65,32 @@ class SimulationBlotter(Blotter):
         # something could be done with amount to further divide
         # between buy by share count OR buy shares up to a dollar amount
         # numeric == share count  AND  "$dollar.cents" == cost amount
-
-        if amount == 0:
-            # Don't bother placing orders for 0 shares.
-            return None
-        elif amount > self.max_shares:
-            # Arbitrary limit of 100 billion (US) shares will never be
-            # exceeded except by a buggy algorithm.
-            raise OverflowError("Can't order more than %d shares" % self.max_shares)
-
-        is_buy = amount > 0
-        order = Order(
-            dt=self.current_dt,
-            asset=asset,
-            amount=amount,
-            stop=style.get_stop_price(is_buy),
-            limit=style.get_limit_price(is_buy),
-            id=order_id,
-        )
-
-        order = self.broker.submit_order(order=order)
-
-        self.new_orders.append(order)
-
-        self.open_orders[order.asset].append(order)
+        self.open_orders[order.asset][order.id] = order
         self.orders[order.id] = order
-        self.new_orders.append(order)
-
         return order.id
 
-    def cancel(self, order_id: str, relay_status: bool = True) -> None:
-        if order_id not in self.orders:
-            return
+    def order_cancelled(self, order: Order) -> None:
+        asset_orders = self.open_orders[order.asset]
+        asset_orders.pop(order.id, None)
 
-        cur_order = self.orders[order_id]
+    def order_rejected(self, order: Order) -> None:
+        asset_orders = self.open_orders[order.asset]
+        asset_orders.pop(order.id, None)
 
-        if cur_order.open:
-            order_list = self.open_orders[cur_order.asset]
-            if cur_order in order_list:
-                order_list.remove(cur_order)
+    def get_order_by_id(self, order_id: str) -> Order | None:
+        return self.orders.get(order_id, None)
 
-            if cur_order in self.new_orders:
-                self.new_orders.remove(cur_order)
-            cur_order.cancel()
-            cur_order.dt = self.current_dt
+    def get_open_orders_by_asset(self, asset: Asset) -> dict[str, Order] | None:
+        return self.open_orders.get(asset, None)
 
-            if relay_status:
-                # we want this order's new status to be relayed out
-                # along with newly placed orders.
-                self.new_orders.append(cur_order)
+    def get_open_orders(self) -> dict[Asset, dict[str, Order]]:
+        return self.open_orders
 
-    def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
+    def cancel_all_orders_for_asset(self, asset: Asset, relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
         """
-        # (sadly) open_orders is a defaultdict, so this will always succeed.
-        orders = self.open_orders[asset]
-
-        # We're making a copy here because `cancel` mutates the list of open
-        # orders in place.  The right thing to do here would be to make
-        # self.open_orders no longer a defaultdict.  If we do that, then we
-        # should just remove the orders once here and be done with the matter.
-        for order in orders[:]:
-            self.cancel(order_id=order.id, relay_status=relay_status)
-            if warn:
-                # Message appropriately depending on whether there's
-                # been a partial fill or not.
-                if order.filled > 0:
-                    self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} has been partially filled. "
-                        "{order_filled} shares were successfully "
-                        "purchased. {order_failed} shares were not "
-                        "filled by the end of day and "
-                        "were canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                            order_filled=order.filled,
-                            order_failed=order.amount - order.filled,
-                        )
-                    )
-                elif order.filled < 0:
-                    self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} has been partially filled. "
-                        "{order_filled} shares were successfully "
-                        "sold. {order_failed} shares were not "
-                        "filled by the end of day and "
-                        "were canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                            order_filled=-1 * order.filled,
-                            order_failed=-1 * (order.amount - order.filled),
-                        )
-                    )
-                else:
-                    self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} failed to fill by the end of day "
-                        "and was canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                        )
-                    )
-
-        assert not orders
-        del self.open_orders[asset]
+        self.open_orders.pop(asset, None)
 
     # End of day cancel for daily frequency
     def execute_daily_cancel_policy(self, event):
@@ -249,48 +133,8 @@ class SimulationBlotter(Blotter):
             for asset in copy(self.open_orders):
                 self.cancel_all_orders_for_asset(asset, warn, relay_status=False)
 
-    def reject(self, order_id, reason=""):
-        """
-        Mark the given order as 'rejected', which is functionally similar to
-        cancelled. The distinction is that rejections are involuntary (and
-        usually include a message from a broker indicating why the order was
-        rejected) while cancels are typically user-driven.
-        """
-        if order_id not in self.orders:
-            return
-
-        cur_order = self.orders[order_id]
-
-        order_list = self.open_orders[cur_order.asset]
-        if cur_order in order_list:
-            order_list.remove(cur_order)
-
-        if cur_order in self.new_orders:
-            self.new_orders.remove(cur_order)
-        cur_order.reject(reason=reason)
-        cur_order.dt = self.current_dt
-        # we want this order's new status to be relayed out
-        # along with newly placed orders.
-        self.new_orders.append(cur_order)
-
-    def hold(self, order_id, reason=""):
-        """
-        Mark the order with order_id as 'held'. Held is functionally similar
-        to 'open'. When a fill (full or partial) arrives, the status
-        will automatically change back to open/filled as necessary.
-        """
-        if order_id not in self.orders:
-            return
-
-        cur_order = self.orders[order_id]
-        if cur_order.open:
-            if cur_order in self.new_orders:
-                self.new_orders.remove(cur_order)
-            cur_order.hold(reason=reason)
-            cur_order.dt = self.current_dt
-            # we want this order's new status to be relayed out
-            # along with newly placed orders.
-            self.new_orders.append(cur_order)
+    def order_held(self, order: Order) -> None:
+        pass
 
     def process_splits(self, splits):
         """
@@ -349,10 +193,11 @@ class SimulationBlotter(Blotter):
 
         if self.open_orders:
             for asset, asset_orders in self.open_orders.items():
-                slippage = self.slippage_models[type(asset)]
+                slippage = self.exchange.get_slippage_model(asset=asset)
 
-                for order, txn in slippage.simulate(data=bar_data, assets=[asset], orders_for_asset=asset_orders):
-                    commission = self.commission_models[type(asset)]
+                for order, txn in slippage.simulate(data=bar_data, assets=[asset],
+                                                    orders_for_asset=asset_orders.values()):
+                    commission = self.exchange.get_commission_model(asset=asset)
                     additional_commission = commission.calculate(order, txn)
 
                     if additional_commission > 0:
@@ -392,13 +237,10 @@ class SimulationBlotter(Blotter):
         for order in closed_orders:
             asset = order.asset
             asset_orders = self.open_orders[asset]
-            try:
-                asset_orders.remove(order)
-            except ValueError:
-                continue
+            asset_orders.pop(order, None)
 
         # now clear out the assets from our open_orders dict that have
         # zero open orders
         for asset in list(self.open_orders.keys()):
             if len(self.open_orders[asset]) == 0:
-                del self.open_orders[asset]
+                self.open_orders.pop(asset, None)

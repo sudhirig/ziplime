@@ -1,5 +1,6 @@
 import datetime
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
+from contextlib import AsyncExitStack
 from copy import copy
 import warnings
 import logging
@@ -13,7 +14,12 @@ from itertools import chain, repeat
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.data.domain.bundle_data import BundleData
+from ziplime.domain.bar_data import BarData
 from ziplime.finance.blotter.blotter import Blotter
+from ziplime.finance.domain.order import Order
+from ziplime.finance.domain.order_status import OrderStatus
+from ziplime.gens.exchanges.exchange import Exchange
+from ziplime.gens.domain.simulation_event import SimulationEvent
 from ziplime.utils.calendar_utils import get_calendar
 
 from ziplime.protocol import handle_non_market_minutes
@@ -62,8 +68,8 @@ from zipline.finance.asset_restrictions import (
     SecurityListRestrictions,
 )
 from ziplime.assets.domain.db.asset import Asset
-from ziplime.assets.domain.future import Future
-from ziplime.assets.domain.equity import Equity
+from ziplime.assets.domain.db.futures_contract import FuturesContract
+from ziplime.assets.domain.db.equity import Equity
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.gens.tradesimulation import AlgorithmSimulator
 from ziplime.finance.metrics import MetricsTracker
@@ -194,6 +200,7 @@ class TradingAlgorithm:
             self,
             sim_params: SimulationParameters,
             bundle_data: BundleData,
+            exchange: Exchange,
             # Algorithm API
             script: str,
             metrics_set,
@@ -205,6 +212,7 @@ class TradingAlgorithm:
             create_event_context=None,
             **initialize_kwargs,
     ):
+        self.exchange = exchange
         # List of trading controls to be used to validate orders.
         self.trading_controls = []
 
@@ -221,17 +229,12 @@ class TradingAlgorithm:
         # finder earlier than that to look up assets for things like
         # set_benchmark.
         # self.data_portal = data_portal
-        self.bundle_data=bundle_data
+        self.bundle_data = bundle_data
         self.benchmark_source = benchmark_source
 
         # XXX: This is also a mess. We should remove all of this and only allow
         #      one way to pass a calendar.
         #
-        # We have a required sim_params argument as well as an optional
-        # trading_calendar argument, but sim_params has a trading_calendar
-        # attribute. If the user passed trading_calendar explicitly, make sure
-        # it matches their sim_params. Otherwise, just use what's in their
-        # sim_params.
         self.sim_params = sim_params
 
         self.metrics_tracker = None
@@ -247,7 +250,7 @@ class TradingAlgorithm:
         self._pipeline_cache = ExpiringCache()
 
         self.blotter = blotter
-
+        self.new_orders = OrderedDict()
         # The symbol lookup date specifies the date to use when resolving
         # symbols to sids, and can be set using set_symbol_lookup_date()
         self._symbol_lookup_date = None
@@ -265,6 +268,7 @@ class TradingAlgorithm:
         self.event_manager = EventManager(create_event_context)
 
         self._handle_data = None
+
 
         def noop(*args, **kwargs):
             pass
@@ -306,6 +310,20 @@ class TradingAlgorithm:
         self.capital_change_deltas = {}
 
         self.restrictions = NoRestrictions()
+
+        self.current_data = BarData(
+            bundle_data=self.bundle_data,
+            simulation_dt_func=self.get_simulation_dt,
+            data_frequency=self.sim_params.data_frequency,
+            trading_calendar=self.sim_params.trading_calendar,
+            restrictions=self.restrictions,
+        )
+
+        # We don't have a datetime for the current snapshot until we
+        # receive a message.
+        self.simulation_dt = None
+
+        self.clock = self._create_clock()
 
         self._logger = logging.getLogger(__name__)
 
@@ -358,10 +376,12 @@ class TradingAlgorithm:
 
     def _create_clock(self):
         """If the clock property is not set, then create one based on frequency."""
-        market_closes = pl.Series(self.sim_params.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
-            self.sim_params.trading_calendar.tz))
-        market_opens = pl.Series(self.sim_params.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
-            self.sim_params.trading_calendar.tz))
+        market_closes = pl.Series(
+            self.sim_params.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
+                self.sim_params.trading_calendar.tz))
+        market_opens = pl.Series(
+            self.sim_params.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
+                self.sim_params.trading_calendar.tz))
 
         before_trading_start_minutes = market_opens - datetime.timedelta(minutes=46)
 
@@ -393,17 +413,17 @@ class TradingAlgorithm:
             await self.initialize(**self.initialize_kwargs)
             self.initialized = True
 
-        self.trading_client = AlgorithmSimulator(
-            algo=self,
-            bundle_data=self.bundle_data,
-            sim_params=self.sim_params,
-            clock=self._create_clock(),
-            benchmark_source=self.benchmark_source,
-            restrictions=self.restrictions,
-        )
+        # self.trading_client = AlgorithmSimulator(
+        #     algo=self,
+        #     bundle_data=self.bundle_data,
+        #     sim_params=self.sim_params,
+        #     clock=self._create_clock(),
+        #     benchmark_source=self.benchmark_source,
+        #     restrictions=self.restrictions,
+        # )
 
         self.metrics_tracker.handle_start_of_simulation(benchmark_source=self.benchmark_source)
-        return self.trading_client.transform()
+        return self.transform()
 
     def compute_eager_pipelines(self):
         """Compute any pipelines attached with eager=True."""
@@ -417,14 +437,6 @@ class TradingAlgorithm:
         method to get a standard construction generator.
         """
         return await self._create_generator()
-
-    def _calculate_universe(self):
-        # this exists to provide backwards compatibility for older,
-        # deprecated APIs, particularly around the iterability of
-        # BarData (ie, 'for sid in data`).
-
-        # our universe is all the assets passed into `run`.
-        return self.data_portal._bundle_data.asset_repository.retrieve_all(sids=self.data_portal._bundle_data.asset_repository.sids)
 
     async def run(self):
         """Run the algorithm."""
@@ -470,7 +482,8 @@ class TradingAlgorithm:
         return daily_stats
 
     def calculate_capital_changes(
-            self, dt: datetime.datetime, emission_rate: float, is_interday: bool, portfolio_value_adjustment: float = 0.0
+            self, dt: datetime.datetime, emission_rate: float, is_interday: bool,
+            portfolio_value_adjustment: float = 0.0
     ):
         """If there is a capital change for a given dt, this means the the change
         occurs before `handle_data` on the given dt. In the case of the
@@ -707,7 +720,7 @@ class TradingAlgorithm:
             if self._symbol_lookup_date is not None
             else pd.Timestamp(self.sim_params.end_session).to_pydatetime().date()
         )
-        return await self.bundle_data.asset_repository.get_asset_by_symbol(symbol=symbol_str)
+        return await self.bundle_data.asset_repository.get_equity_by_symbol(symbol=symbol_str)
         # return self.data_portal._bundle_data.asset_repository.lookup_symbol(
         #     symbol_str,
         #     as_of_date=_lookup_date,
@@ -804,7 +817,7 @@ class TradingAlgorithm:
                 msg=f"Cannot order {asset.symbol}, as it stopped trading on {asset.end_date}."
             )
         else:
-            last_price = float(self.trading_client.current_data.current(asset, "price"))
+            last_price = float(self.current_data.current(asset, "price"))
 
             if np.isnan(last_price):
                 raise CannotOrderDelistedAsset(
@@ -838,6 +851,39 @@ class TradingAlgorithm:
                 return False
 
         return True
+
+    def reject_order(self, order_id: str, reason: str = ""):
+        """
+        Mark the given order as 'rejected', which is functionally similar to
+        cancelled. The distinction is that rejections are involuntary (and
+        usually include a message from a exchange indicating why the order was
+        rejected) while cancels are typically user-driven.
+        """
+        order = self.blotter.get_order_by_id(order_id)
+        if order is None:
+            return
+        order.reject(reason=reason)
+        order.dt = self.datetime
+
+        self.blotter.order_rejected(order=order)
+        # we want this order's new status to be relayed out
+        # along with newly placed orders.
+        self.new_orders.move_to_end(order_id)
+
+    def hold_order(self, order_id: str, reason: str = ""):
+        """
+        Mark the order with order_id as 'held'. Held is functionally similar
+        to 'open'. When a fill (full or partial) arrives, the status
+        will automatically change back to open/filled as necessary.
+        """
+        order = self.blotter.get_order_by_id(order_id)
+        if order is None or not order.open:
+            return
+        order.hold(reason=reason)
+        order.dt = self.datetime
+        # we want this order's new status to be relayed out
+        # along with newly placed orders.
+        self.new_orders.move_to_end(order.id)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
@@ -884,12 +930,34 @@ class TradingAlgorithm:
         """
         if not self._can_order_asset(asset=asset):
             return None
+        if amount == 0:
+            # Don't bother placing orders for 0 shares.
+            return None
+        elif amount > self.sim_params.max_shares:
+            # Arbitrary limit of 100 billion (US) shares will never be
+            # exceeded except by a buggy algorithm.
+            raise OverflowError(f"Can't order more than {self.max_shares} shares")
 
         amount, style = self._calculate_order(
             asset=asset, amount=amount, limit_price=limit_price, stop_price=stop_price, style=style
         )
-        # print(f"amount={amount}, style={style}")
-        return self.blotter.order(asset=asset, amount=amount, style=style)
+
+        is_buy = amount > 0
+        order_id = None
+        order = Order(
+            dt=self.datetime,
+            asset=asset,
+            amount=amount,
+            stop=style.get_stop_price(is_buy),
+            limit=style.get_limit_price(is_buy),
+            id=order_id,
+        )
+
+        submitted_order = self.exchange.submit_order(order=order)
+        persisted_order = self.blotter.save_order(order=order)
+        self.new_orders[order.id] = order
+
+        return order
 
     def _calculate_order(
             self, asset: Asset, amount: float, limit_price: float | None = None, stop_price: float | None = None,
@@ -948,7 +1016,7 @@ class TradingAlgorithm:
                 amount,
                 self.portfolio,
                 self.get_datetime(),
-                self.trading_client.current_data,
+                self.current_data,
             )
 
     @staticmethod
@@ -1353,7 +1421,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_target_value(
-            self, asset, target, limit_price=None, stop_price=None, style=None
+            self, asset: Asset, target, limit_price=None, stop_price=None, style=None
     ):
         """Place an order to adjust a position to a target value. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1492,8 +1560,6 @@ class TradingAlgorithm:
         return self._calculate_order_target_amount(asset, target_amount)
 
     @api_method
-    @expect_types(share_counts=pd.Series)
-    @expect_dtypes(share_counts=int64_dtype)
     def batch_market_order(self, share_counts):
         """Place a batch market order for multiple assets.
 
@@ -1513,10 +1579,6 @@ class TradingAlgorithm:
         ]
         return self.blotter.batch_order(order_args)
 
-    @error_keywords(
-        sid="Keyword argument `sid` is no longer supported for "
-            "get_open_orders. Use `asset` instead."
-    )
     @api_method
     def get_open_orders(self, asset=None):
         """Retrieve all of the current open orders.
@@ -1547,7 +1609,7 @@ class TradingAlgorithm:
         return []
 
     @api_method
-    def get_order(self, order_id):
+    def get_order(self, order_id) -> Order | None:
         """Lookup an order based on the order id returned from one of the
         order functions.
 
@@ -1561,11 +1623,66 @@ class TradingAlgorithm:
         order : Order
             The order object.
         """
-        if order_id in self.blotter.orders:
-            return self.blotter.orders[order_id].to_api_obj()
+        self.exchange.get_orders_by_ids([order_id])
+        return self.blotter.get_order_by_id(order_id=order_id)
+
+    def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
+        """
+        Cancel all open orders for a given asset.
+        """
+        # (sadly) open_orders is a defaultdict, so this will always succeed.
+        orders = self.blotter.get_open_orders_by_asset(asset=asset)
+
+        # We're making a copy here because `cancel` mutates the list of open
+        # orders in place.  The right thing to do here would be to make
+        # self.open_orders no longer a defaultdict.  If we do that, then we
+        # should just remove the orders once here and be done with the matter.
+        for order_id, order in orders.items():
+            self.cancel_order(order_id=order.id, relay_status=relay_status)
+            if warn:
+                # Message appropriately depending on whether there's
+                # been a partial fill or not.
+                if order.filled > 0:
+                    self._logger.warning(
+                        "Your order for {order_amt} shares of "
+                        "{order_sym} has been partially filled. "
+                        "{order_filled} shares were successfully "
+                        "purchased. {order_failed} shares were not "
+                        "filled by the end of day and "
+                        "were canceled.".format(
+                            order_amt=order.amount,
+                            order_sym=order.asset.symbol,
+                            order_filled=order.filled,
+                            order_failed=order.amount - order.filled,
+                        )
+                    )
+                elif order.filled < 0:
+                    self._logger.warning(
+                        "Your order for {order_amt} shares of "
+                        "{order_sym} has been partially filled. "
+                        "{order_filled} shares were successfully "
+                        "sold. {order_failed} shares were not "
+                        "filled by the end of day and "
+                        "were canceled.".format(
+                            order_amt=order.amount,
+                            order_sym=order.asset.symbol,
+                            order_filled=-1 * order.filled,
+                            order_failed=-1 * (order.amount - order.filled),
+                        )
+                    )
+                else:
+                    self._logger.warning(
+                        "Your order for {order_amt} shares of "
+                        "{order_sym} failed to fill by the end of day "
+                        "and was canceled.".format(
+                            order_amt=order.amount,
+                            order_sym=order.asset.symbol,
+                        )
+                    )
+
 
     @api_method
-    def cancel_order(self, order_param):
+    def cancel_order(self, order_id: str, relay_status: bool = True) -> None:
         """Cancel an open order.
 
         Parameters
@@ -1573,11 +1690,76 @@ class TradingAlgorithm:
         order_param : str or Order
             The order_id or order object to cancel.
         """
-        order_id = order_param
-        if isinstance(order_param, zipline.protocol.Order):
-            order_id = order_param.id
+        order = self.blotter.get_order_by_id(order_id=order_id)
+        if order is None or not order.open:
+            return
+        order.cancel()
+        order.dt = self.datetime
+        # we want this order's new status to be relayed out
+        # along with newly placed orders.
 
-        self.blotter.cancel(order_id)
+        self.blotter.order_cancelled(order=order)
+        self.exchange.cancel_order(order_id=order_id)
+        if relay_status:
+            self.new_orders[order.id] = order
+        else:
+            self.new_orders.pop(order.id, None)
+
+    def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
+        """
+        Cancel all open orders for a given asset.
+        """
+        # (sadly) open_orders is a defaultdict, so this will always succeed.
+        orders = self.blotter.get_open_orders_by_asset(asset=asset)
+        if not orders:
+            return
+        # We're making a copy here because `cancel` mutates the list of open
+        # orders in place.  The right thing to do here would be to make
+        # self.open_orders no longer a defaultdict.  If we do that, then we
+        # should just remove the orders once here and be done with the matter.
+        for order_id, order in orders.items():
+            self.cancel_order(order_id=order.id, relay_status=relay_status)
+            if warn:
+                # Message appropriately depending on whether there's
+                # been a partial fill or not.
+                if order.filled > 0:
+                    self._logger.warning(
+                        "Your order for {order_amt} shares of "
+                        "{order_sym} has been partially filled. "
+                        "{order_filled} shares were successfully "
+                        "purchased. {order_failed} shares were not "
+                        "filled by the end of day and "
+                        "were canceled.".format(
+                            order_amt=order.amount,
+                            order_sym=order.asset.symbol,
+                            order_filled=order.filled,
+                            order_failed=order.amount - order.filled,
+                        )
+                    )
+                elif order.filled < 0:
+                    self._logger.warning(
+                        "Your order for {order_amt} shares of "
+                        "{order_sym} has been partially filled. "
+                        "{order_filled} shares were successfully "
+                        "sold. {order_failed} shares were not "
+                        "filled by the end of day and "
+                        "were canceled.".format(
+                            order_amt=order.amount,
+                            order_sym=order.asset.symbol,
+                            order_filled=-1 * order.filled,
+                            order_failed=-1 * (order.amount - order.filled),
+                        )
+                    )
+                else:
+                    self._logger.warning(
+                        "Your order for {order_amt} shares of "
+                        "{order_sym} failed to fill by the end of day "
+                        "and was canceled.".format(
+                            order_amt=order.amount,
+                            order_sym=order.asset.symbol,
+                        )
+                    )
+        self.blotter.cancel_all_orders_for_asset(asset=asset, relay_status=relay_status)
 
     ####################
     # Account Controls #
@@ -1597,7 +1779,7 @@ class TradingAlgorithm:
                 self.portfolio,
                 self.account,
                 self.get_datetime(),
-                self.trading_client.current_data,
+                self.current_data,
             )
 
     @api_method
@@ -1929,6 +2111,257 @@ class TradingAlgorithm:
     ##################
     # End Pipeline API
     ##################
+
+
+    def get_simulation_dt(self) -> datetime.datetime:
+        return self.simulation_dt
+
+    def execute_order_cancellation_policy(self):
+        self.blotter.execute_cancel_policy(SimulationEvent.SESSION_END)
+
+    def calculate_minute_capital_changes(self, dt: datetime.datetime):
+        # process any capital changes that came between the last
+        # and current minutes
+        return self.calculate_capital_changes(dt, emission_rate=self.metrics_tracker.emission_rate,
+                                                   is_interday=False)
+
+    # TODO: simplify
+    # flake8: noqa: C901
+    async def every_bar(
+            self,
+            dt_to_use: datetime.datetime,
+            current_data: BarData,
+            handle_data,
+    ):
+        # print(f"dt_to_use: in every_bar: {dt_to_use}")
+        for capital_change in self.calculate_minute_capital_changes(dt_to_use):
+            yield capital_change
+
+        self.simulation_dt = dt_to_use
+        # called every tick (minute or day).
+        self.on_dt_changed(dt=dt_to_use)
+
+        # handle any transactions and commissions coming out new orders
+        # placed in the last bar
+
+        (
+            new_transactions,
+            new_commissions,
+            closed_orders,
+        ) = self.blotter.get_transactions(bar_data=current_data)
+        # print(f"getting transactions for {current_data.current_dt}, new transactions: {len(new_transactions)}, new commissions: {len(new_commissions)}, closed orders: {len(closed_orders)}" )
+        self.blotter.prune_orders(closed_orders=closed_orders)
+
+        for transaction in new_transactions:
+            self.metrics_tracker.process_transaction(transaction=transaction)
+
+            # since this order was modified, record it
+            order = self.blotter.get_order_by_id(transaction.order_id)
+            self.metrics_tracker.process_order(order=order)
+
+        for commission in new_commissions:
+            self.metrics_tracker.process_commission(commission=commission)
+
+        await handle_data(context=self, data=current_data, dt=dt_to_use)
+
+        # grab any new orders from the blotter, then clear the list.
+        # this includes cancelled orders.
+        new_orders = self.blotter.new_orders
+        self.blotter.new_orders = []
+
+        # if we have any new orders, record them so that we know
+        # in what perf period they were placed.
+        for new_order in new_orders:
+            self.metrics_tracker.process_order(new_order)
+
+    def once_a_day(
+            self,
+            midnight_dt,
+            current_data,
+            bundle_data: BundleData,
+    ):
+        # process any capital changes that came overnight
+        for capital_change in self.calculate_capital_changes(
+                midnight_dt, emission_rate=self.metrics_tracker.emission_rate,
+                is_interday=True
+        ):
+            yield capital_change
+
+        # set all the timestamps
+        self.simulation_dt = midnight_dt
+        self.on_dt_changed(midnight_dt)
+
+        self.metrics_tracker.handle_market_open(
+            session_label=midnight_dt,
+            bundle_data=self.bundle_data,
+        )
+
+        # handle any splits that impact any positions or any open orders.
+        assets_we_care_about = (
+                self.metrics_tracker.positions.keys() | self.blotter.get_open_orders().keys()
+        )
+
+        if assets_we_care_about:
+            splits = bundle_data.get_splits(assets_we_care_about, midnight_dt)
+            if splits:
+                self.blotter.process_splits(splits)
+                self.metrics_tracker.handle_splits(splits)
+
+    def on_exit(self):
+        # Remove references to algo, data portal, et al to break cycles
+        # and ensure deterministic cleanup of these objects when the
+        # simulation finishes.
+        self.benchmark_source = self.current_data = None
+
+    async def transform(self):
+        """
+        Main generator work loop.
+        """
+
+        async with (AsyncExitStack() as stack):
+            stack.callback(self.on_exit)
+            stack.enter_context(ZiplineAPI(algo_instance=self))
+
+            # if self.data_frequency < datetime.timedelta(days=1):
+            #
+            #     def execute_order_cancellation_policy():
+            #         self.blotter.execute_cancel_policy(SimulationEvent.SESSION_END)
+            #
+            #     def calculate_minute_capital_changes(dt: datetime.datetime):
+            #         # process any capital changes that came between the last
+            #         # and current minutes
+            #         return self.calculate_capital_changes(dt, emission_rate=emission_rate, is_interday=False)
+            #
+            # elif self.data_frequency == datetime.timedelta(days=1):
+            #
+            #     def execute_order_cancellation_policy():
+            #         self.blotter.execute_daily_cancel_policy(SimulationEvent.SESSION_END)
+            #
+            #     def calculate_minute_capital_changes(dt: datetime.datetime):
+            #         return []
+            #
+            # else:
+            #
+            #     def execute_order_cancellation_policy():
+            #         pass
+            #
+            #     def calculate_minute_capital_changes(dt: datetime.datetime):
+            #         return []
+
+            for dt, action in self.clock:
+                if action == SimulationEvent.BAR:
+                    async for capital_change_packet in self.every_bar(dt_to_use=dt, current_data=self.current_data,
+                                                                 handle_data=self.event_manager.handle_data):
+                        yield capital_change_packet
+                elif action == SimulationEvent.SESSION_START:
+                    for capital_change_packet in self.once_a_day(midnight_dt=dt,
+                                                                 current_data=self.current_data,
+                                                                 bundle_data=self.bundle_data):
+                        yield capital_change_packet
+                elif action == SimulationEvent.SESSION_END:
+                    # End of the session.
+                    positions = self.metrics_tracker.positions
+                    position_assets = list(positions.keys())
+
+                    # await self.bundle_data.asset_repository.retrieve_all(
+                    #     sids=[a.sid for a in positions]
+                    # )
+
+                    self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
+
+                    self.execute_order_cancellation_policy()
+                    self.validate_account_controls()
+
+                    yield self._get_daily_message(dt=dt)
+                elif action == SimulationEvent.BEFORE_TRADING_START_BAR:
+                    self.simulation_dt = dt
+                    self.on_dt_changed(dt=dt)
+                    self.before_trading_start(data=self.current_data)
+                elif action == SimulationEvent.EMISSION_RATE_END:
+                    minute_msg = self._get_minute_message(
+                        dt=dt,
+                    )
+
+                    yield minute_msg
+
+            risk_message = self.metrics_tracker.handle_simulation_end()
+            yield risk_message
+
+    def _cleanup_expired_assets(self, dt: datetime.datetime, position_assets):
+        """
+        Clear out any assets that have expired before starting a new sim day.
+
+        Performs two functions:
+
+        1. Finds all assets for which we have open orders and clears any
+           orders whose assets are on or after their auto_close_date.
+
+        2. Finds all assets for which we have positions and generates
+           close_position events for any assets that have reached their
+           auto_close_date.
+        """
+
+        def past_auto_close_date(asset: Asset):
+            acd = asset.auto_close_date
+            if acd is not None:
+                acd = acd
+            return acd is not None and acd <= dt.date()
+
+        # Remove positions in any sids that have reached their auto_close date.
+        assets_to_clear = [
+            asset
+            for asset in position_assets
+            if past_auto_close_date(asset)
+        ]
+        metrics_tracker = self.metrics_tracker
+        # data_portal = self.data_portal
+        for asset in assets_to_clear:
+            metrics_tracker.process_close_position(asset=asset, dt=dt)
+
+        # Remove open orders for any sids that have reached their auto close
+        # date. These orders get processed immediately because otherwise they
+        # would not be processed until the first bar of the next day.
+
+        assets_to_cancel = [
+            asset
+            for asset in self.blotter.get_open_orders().keys()
+            if past_auto_close_date(asset=asset)
+        ]
+
+        for asset in assets_to_cancel:
+            self.cancel_all_orders_for_asset(asset=asset)
+
+        # Make a copy here so that we are not modifying the list that is being
+        # iterated over.
+        new_order_values = list(self.new_orders.values())
+        for order in new_order_values:
+            if order.status == OrderStatus.CANCELLED:
+                metrics_tracker.process_order(order=order)
+                self.new_orders.pop(order.id)
+
+    def _get_daily_message(self, dt: datetime.datetime):
+        """
+        Get a perf message for the given datetime.
+        """
+        perf_message = self.metrics_tracker.handle_market_close(
+            dt=dt,
+            bundle_data=self.bundle_data,
+        )
+        perf_message["daily_perf"]["recorded_vars"] = self.recorded_vars
+        return perf_message
+
+    def _get_minute_message(self, dt: datetime.datetime):
+        """
+        Get a perf message for the given datetime.
+        """
+        rvars = self.recorded_vars
+
+        minute_message = self.metrics_tracker.handle_minute_close(
+            dt=dt,
+        )
+
+        minute_message["minute_perf"]["recorded_vars"] = rvars
+        return minute_message
 
 
 # Map from calendar name to default domain for that calendar.

@@ -11,10 +11,18 @@ from ziplime.data.services.bundle_service import BundleService
 
 from ziplime.algorithm_live import LiveTradingAlgorithm
 from ziplime.finance.blotter.blotter_live import BlotterLive
+from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
 from ziplime.finance.blotter.simulation_blotter import SimulationBlotter
+from ziplime.finance.commission import PerShare, DEFAULT_PER_CONTRACT_COST, PerContract, \
+    DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, DEFAULT_PER_SHARE_COST
+from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
 from ziplime.finance.metrics import default_metrics
-from ziplime.gens.brokers.broker import Broker
+from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
+from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
+from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
+from ziplime.gens.exchanges.exchange import Exchange
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
+from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
 from ziplime.sources.benchmark_source import BenchmarkSource
 
 try:
@@ -79,7 +87,7 @@ async def run_algorithm(
         metrics_set: str,
         custom_loader,
         benchmark_spec,
-        broker: Broker,
+        exchange: Exchange,
         market_data_provider: AbstractLiveMarketDataProvider,
         bundle_registry: BundleRegistry,
 ):
@@ -92,9 +100,8 @@ async def run_algorithm(
 
     bundle_data = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
     # date parameter validation
-    if not broker and trading_calendar.sessions_distance(start_date, end_date) < 1:
+    if trading_calendar.sessions_distance(start_date, end_date) < 1:
         raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
-
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
         asset_repository=bundle_data.asset_repository,
@@ -113,9 +120,6 @@ async def run_algorithm(
         else:
             click.echo(algotext)
 
-
-    state_filename = None
-    realtime_bar_target = None
     pipeline_loader = USEquityPricingLoader.without_fx(
         bundle_data,
     )
@@ -130,6 +134,7 @@ async def run_algorithm(
 
     # metrics_set = metrics.load(metrics_set)
     metrics_set = default_metrics()
+    max_shares = int(1e11)
 
     sim_params = SimulationParameters(
         start_session=start_date,
@@ -138,6 +143,7 @@ async def run_algorithm(
         capital_base=capital_base,
         emission_rate=emission_rate,
         data_frequency=emission_rate,
+        max_shares=max_shares
     )
 
     if benchmark_sid is not None:
@@ -158,33 +164,33 @@ async def run_algorithm(
     )
 
     try:
-        if broker is None:
-            tr = TradingAlgorithm(
-                bundle_data=bundle_data,
-                get_pipeline_loader=choose_loader,
-                sim_params=sim_params,
-                metrics_set=metrics_set,
-                blotter=SimulationBlotter(),
-                benchmark_source=benchmark_source,
-                algo_filename=algofile,
-                script=algotext
-            )
-        else:
-
-            blotter_live = BlotterLive(data_frequency=emission_rate, broker=broker)
-            tr = LiveTradingAlgorithm(
-                broker=broker,
-                state_filename=state_filename,
-                realtime_bar_target=realtime_bar_target,
-                bundle_data=bundle_data,
-                get_pipeline_loader=choose_loader,
-                sim_params=sim_params,
-                metrics_set=metrics_set,
-                blotter=blotter_live,
-                benchmark_source=benchmark_source,
-                algo_filename=algofile,
-                script=algotext,
-            )
+        tr = TradingAlgorithm(
+            exchange=exchange,
+            bundle_data=bundle_data,
+            get_pipeline_loader=choose_loader,
+            sim_params=sim_params,
+            metrics_set=metrics_set,
+            blotter=InMemoryBlotter(exchange=exchange),
+            benchmark_source=benchmark_source,
+            algo_filename=algofile,
+            script=algotext
+        )
+        # else:
+        #
+        #     blotter_live = BlotterLive(data_frequency=emission_rate, exchange=exchange)
+        #     tr = LiveTradingAlgorithm(
+        #         exchange=exchange,
+        #         state_filename=state_filename,
+        #         realtime_bar_target=realtime_bar_target,
+        #         bundle_data=bundle_data,
+        #         get_pipeline_loader=choose_loader,
+        #         sim_params=sim_params,
+        #         metrics_set=metrics_set,
+        #         blotter=blotter_live,
+        #         benchmark_source=benchmark_source,
+        #         algo_filename=algofile,
+        #         script=algotext,
+        #     )
         # tr.bundle_data = bundle_data
         # tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
         perf = await tr.run()
@@ -209,6 +215,7 @@ async def run_algorithm(
 
     return perf
 
+
 async def run_algo_new(
         algofile: str,
         algotext: str,
@@ -223,7 +230,7 @@ async def run_algo_new(
         metrics_set: str,
         custom_loader,
         benchmark_spec,
-        broker: Broker,
+        exchange: Exchange,
         market_data_provider: AbstractLiveMarketDataProvider,
         bundle_registry: BundleRegistry,
         simulation_params: SimulationParameters
@@ -231,7 +238,7 @@ async def run_algo_new(
     bundle_service = BundleService(bundle_registry=bundle_registry)
     bundle_data = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
     # date parameter validation
-    if not broker and trading_calendar.sessions_distance(start_date, end_date) < 1:
+    if not exchange and trading_calendar.sessions_distance(start_date, end_date) < 1:
         raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
@@ -251,7 +258,6 @@ async def run_algo_new(
         else:
             click.echo(algotext)
 
-
     state_filename = None
     realtime_bar_target = None
     pipeline_loader = USEquityPricingLoader.without_fx(
@@ -268,7 +274,6 @@ async def run_algo_new(
 
     # metrics_set = metrics.load(metrics_set)
     metrics_set = default_metrics()
-
 
     if benchmark_sid is not None:
         benchmark_asset = bundle_data.asset_repository.retrieve_asset(sid=benchmark_sid)
@@ -288,7 +293,7 @@ async def run_algo_new(
     )
 
     try:
-        if broker is None:
+        if exchange is None:
             tr = TradingAlgorithm(
                 bundle_data=bundle_data,
                 get_pipeline_loader=choose_loader,
@@ -301,9 +306,9 @@ async def run_algo_new(
             )
         else:
 
-            blotter_live = BlotterLive(data_frequency=emission_rate, broker=broker)
+            blotter_live = BlotterLive(data_frequency=emission_rate, exchange=exchange)
             tr = LiveTradingAlgorithm(
-                broker=broker,
+                exchange=exchange,
                 state_filename=state_filename,
                 realtime_bar_target=realtime_bar_target,
                 bundle_data=bundle_data,

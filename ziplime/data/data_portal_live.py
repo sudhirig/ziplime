@@ -8,17 +8,17 @@ from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDa
 
 
 class DataPortalLive:
-    def __init__(self, broker, market_data_provider: AbstractLiveMarketDataProvider, *args, **kwargs):
-        self.broker = broker
+    def __init__(self, exchange, market_data_provider: AbstractLiveMarketDataProvider, *args, **kwargs):
+        self.exchange = exchange
         self.market_data_provider = market_data_provider
         self._logger = logging.getLogger(__name__)
         super(DataPortalLive, self).__init__(*args, **kwargs)
 
     def get_last_traded_dt(self, asset, dt, data_frequency):
-        return self.broker.get_last_traded_dt(asset)
+        return self.exchange.get_last_traded_dt(asset)
 
     def get_spot_value(self, assets, field, dt, data_frequency):
-        return self.broker.get_spot_value(assets, field, dt, data_frequency)
+        return self.exchange.get_spot_value(assets, field, dt, data_frequency)
 
     def get_history_window(self,
                            assets,
@@ -28,7 +28,7 @@ class DataPortalLive:
                            field: str,
                            ffill: bool = True):
         # This method is responsible for merging the ingested historical data
-        # with the real-time collected data through the Broker.
+        # with the real-time collected data through the Exchange.
         # DataPortal.get_history_window() is called with ffill=False to mark
         # the missing fields with NaNs. After merge on the historical and
         # real-time data the missing values (NaNs) are filled based on their
@@ -37,7 +37,7 @@ class DataPortalLive:
         # Warning: setting ffill=True in DataPortal.get_history_window() call
         # results a wrong behavior: The last available value reported by
         # get_spot_value() will be used to fill the missing data - which is
-        # always representing the current spot price presented by Broker.
+        # always representing the current spot price presented by Exchange.
         session = self.trading_calendar.minute_to_session(end_dt)
         days_for_window = self._get_days_for_window(session, bar_count)
         if frequency == "1m":
@@ -67,7 +67,7 @@ class DataPortalLive:
             show_progress=False
         )
 
-        # Broker.get_realtime_history() returns the asset as level 0 column,
+        # Exchange.get_realtime_history() returns the asset as level 0 column,
         # open, high, low, close, volume returned as level 1 columns.
         # To filter for field the levels needs to be swapped
         results = historical_bars or None

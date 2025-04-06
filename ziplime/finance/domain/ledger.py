@@ -85,7 +85,7 @@ class Ledger:
         self._immutable_account = zp.Account()
         self._account = zp.MutableView(ob=self._immutable_account)
 
-        # The broker blotter can override some fields on the account. This is
+        # The exchange blotter can override some fields on the account. This is
         # way to tangled up at the moment but we aren't fixing it today.
         self._account_overrides = {}
         self._data_frequency = data_frequency
@@ -448,9 +448,9 @@ class Ledger:
 
             # If no attribute is found in the ``_account_overrides`` resort to
             # the following default values. If an attribute is found use the
-            # existing value. For instance, a broker may provide updates to
+            # existing value. For instance, a exchange may provide updates to
             # these attributes. In this case we do not want to over write the
-            # broker values with the default values.
+            # exchange values with the default values.
             account.settled_cash = portfolio.cash
             account.accrued_interest = 0.0
             account.buying_power = np.inf

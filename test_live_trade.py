@@ -32,12 +32,12 @@ benchmark_spec = BenchmarkSpec(benchmark_returns=[],
 #     blotter: BlotterLive = context.blotter
 #
 #
-#     # if hasattr(blotter, "broker"):
+#     # if hasattr(blotter, "exchange"):
 #     #     # Example for fetching portfolio in live trading
 #     #     # TODO: make this work with simulation also
-#     #     portfolio = blotter.broker.get_portfolio()
-#     #     account = blotter.broker.get_account()
-#     #     positions = blotter.broker.get_positions()
+#     #     portfolio = blotter.exchange.get_portfolio()
+#     #     account = blotter.exchange.get_account()
+#     #     positions = blotter.exchange.get_positions()
 #     #     print(f"Portfolio: {portfolio}")
 #     #     print(f"Positions: {positions}")
 #     #     print(f"Account: {account}")

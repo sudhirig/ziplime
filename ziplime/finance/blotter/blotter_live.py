@@ -6,14 +6,14 @@ from zipline.finance.blotter import Blotter
 from ziplime.assets.domain.db.asset import Asset
 from zipline.finance.order import Order as ZPOrder
 
-from ziplime.gens.brokers.broker import Broker
+from ziplime.gens.exchanges.exchange import Exchange
 
 
 class BlotterLive(Blotter):
 
-    def __init__(self, data_frequency: datetime.timedelta, broker: Broker):
+    def __init__(self, data_frequency: datetime.timedelta, exchange: Exchange):
         super().__init__()
-        self.broker = broker
+        self.exchange = exchange
         self._processed_closed_orders = []
         self._processed_transactions = []
         self.data_frequency = data_frequency
@@ -22,11 +22,11 @@ class BlotterLive(Blotter):
 
     @property
     def orders(self) -> dict[str, ZPOrder]:
-        return self.broker.get_orders()
+        return self.exchange.get_orders()
 
 
     def get_orders(self) -> dict[str, ZPOrder]:
-        return self.broker.get_orders()
+        return self.exchange.get_orders()
 
     @property
     def open_orders(self):
@@ -48,15 +48,15 @@ class BlotterLive(Blotter):
         if amount == 0:
             # Don't bother placing orders for 0 shares.
             return None
-        order = self.broker.order(asset, amount, style)
+        order = self.exchange.order(asset, amount, style)
         self.new_orders.append(order)
         return order.id
 
     def cancel(self, order_id, relay_status=True):
-        return self.broker.cancel_order(order_id)
+        return self.exchange.cancel_order(order_id)
 
     def execute_cancel_policy(self, event):
-        # Cancellation is handled at the broker
+        # Cancellation is handled at the exchange
         pass
 
     def reject(self, order_id, reason=''):
@@ -73,10 +73,10 @@ class BlotterLive(Blotter):
 
         all_orders = self.get_orders()
         try:
-            all_transactions = list(self.broker.get_transactions().values())
+            all_transactions = list(self.exchange.get_transactions().values())
         except NotImplementedError as e:
-            # we cannot get all previous orders from broker, use just tracked orders
-            all_transactions = list(self.broker.get_transactions_by_order_ids(order_ids=list(all_orders.keys())).values())
+            # we cannot get all previous orders from exchange, use just tracked orders
+            all_transactions = list(self.exchange.get_transactions_by_order_ids(order_ids=list(all_orders.keys())).values())
         new_transactions = _list_delta(all_transactions, self._processed_transactions)
 
         self._processed_transactions = all_transactions
@@ -93,11 +93,11 @@ class BlotterLive(Blotter):
         return new_transactions, new_commissions, new_closed_orders
 
     def prune_orders(self, closed_orders):
-        # Orders are handled at the broker
+        # Orders are handled at the exchange
         pass
 
     def process_splits(self, splits):
-        # Splits are handled at the broker
+        # Splits are handled at the exchange
         pass
 
     def cancel_all_orders_for_asset(self, asset, warn=False, relay_status=True):

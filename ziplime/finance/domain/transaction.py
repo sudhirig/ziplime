@@ -21,10 +21,19 @@ class Transaction:
         self.type = DATASOURCE_TYPE.TRANSACTION
         self.commission = commission
 
-    def __getitem__(self, name):
-        return self.__dict__[name]
+    # def __getitem__(self, name):
+    #     return self.__dict__[name]
 
     def to_dict(self):
+        return {
+            "type": self.type,
+            "amount": self.amount,
+            "dt": self.dt,
+            "price": self.price,
+            "order_id": self.order_id,
+            "commission": self.commission,
+            # "asset": self.asset,
+        }
         py = copy(self.__dict__)
         del py["type"]
         del py["asset"]

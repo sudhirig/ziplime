@@ -56,9 +56,8 @@ class BarData:
                  restrictions):
         self.bundle_data = bundle_data
         self.simulation_dt_func = simulation_dt_func
-        self.data_frequency = data_frequency
 
-        self._daily_mode = (self.data_frequency == "daily")
+        # self._daily_mode = (self.bundle_data == "daily")
 
         self._adjust_minutes = False
 
@@ -81,10 +80,12 @@ class BarData:
         if self._adjust_minutes:
             dt = self.data_portal.trading_calendar.previous_minute(dt)
 
-        if self._daily_mode:
-            # if we're in daily mode, take the given dt (which is the last
-            # minute of the session) and get the session label for it.
-            dt = self.data_portal.trading_calendar.minute_to_session(dt)
+        # TODO: check this, is it different for daily?
+        #
+        # if self._daily_mode:
+        #     # if we're in daily mode, take the given dt (which is the last
+        #     # minute of the session) and get the session label for it.
+        #     dt = self.data_portal.trading_calendar.minute_to_session(dt)
 
         # return dt
         return dt
@@ -157,7 +158,7 @@ class BarData:
                         assets=assets,
                         fields=[field],
                         dt=self._get_current_minute(),
-                        frequency=self.data_frequency
+                        frequency=self.bundle_data.frequency
                     )
         else:
             for field in fields:
@@ -167,7 +168,7 @@ class BarData:
                         field,
                         self._get_current_minute(),
                         self.simulation_dt_func(),
-                        self.data_frequency
+                        self.bundle_data.frequency
                     )
                     for asset in assets
                 }, index=assets, name=field)
@@ -181,7 +182,6 @@ class BarData:
             dt=self.simulation_dt_func()
         )
 
-    # @check_parameters(('assets',), (Asset,))
     def can_trade(self, assets: list[Asset]):
         """For the given asset or iterable of assets, returns True if all of the
         following are true:
@@ -253,7 +253,9 @@ class BarData:
         if asset.auto_close_date and session_label > asset.auto_close_date:
             return False
 
-        if not self._daily_mode:
+        # TODO: check this
+        _daily_mode = False
+        if not _daily_mode:
             # Find the next market minute for this calendar, and check if this
             # asset's exchange is open at that minute.
             if self._trading_calendar.is_open_on_minute(minute=dt):
@@ -329,12 +331,6 @@ class BarData:
         If the current simulation time is not a valid market time, we use the last market close instead.
         """
 
-        # df = self.data_portal.get_history_window(assets=assets,
-        #                                          end_dt=self._get_current_minute(),
-        #                                          bar_count=bar_count,
-        #                                          frequency=frequency,
-        #                                          fields=fields,
-        #                                          )
         df = self.bundle_data.get_data_by_limit(assets=assets,
                                                 end_date=self._get_current_minute(),
                                                 limit=bar_count,

@@ -4,7 +4,7 @@ from ziplime.protocol import BarData
 from ziplime.constants.fundamental_data import FundamentalData, FundamentalDataValueType
 from ziplime.utils.run_algo import run_algorithm
 from ziplime.data.bundles import load
-from ziplime.utils.bundle_utils import register_default_bundles, get_broker, get_live_market_data_provider
+from ziplime.utils.bundle_utils import register_default_bundles, get_exchange, get_live_market_data_provider
 
 from zipline.api import symbol, order_target, record, order, set_benchmark, order_target
 from zipline import TradingAlgorithm
@@ -69,7 +69,7 @@ def handler(event, context):
                                emission_rate=param_frequency,
                                bundle=param_bundle,
                                benchmark_spec=benchmark_spec,
-                               broker=get_broker('lime-trader-sdk'),
+                               exchange=get_exchange('lime-trader-sdk'),
                                market_data_provider=get_live_market_data_provider("lime-trader-sdk")
                                )
         respose = {"period_open": result.period_open.to_json(orient='values'),

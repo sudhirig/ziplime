@@ -44,6 +44,6 @@ poetry run python -m ziplime -b lime --start-date 2024-11-06 --end-date 2024-11-
 Run live trade (still in development)
 
 ```Bash
-run -b lime --start 2024-12-01 --end 2024-12-31 --data-frequency daily --capital-base 100000 --no-benchmark --broker lime-trader-sdk -f test_live_trade.py --print-algo
+run -b lime --start 2024-12-01 --end 2024-12-31 --data-frequency daily --capital-base 100000 --no-benchmark --exchange lime-trader-sdk -f test_live_trade.py --print-algo
 ```
 

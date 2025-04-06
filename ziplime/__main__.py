@@ -5,6 +5,7 @@ from pathlib import Path
 
 import asyncclick as click
 
+from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
 from ziplime.assets.repositories.sqlite_adjustments_repository import SQLiteAdjustmentRepository
 from ziplime.assets.repositories.sqlite_asset_repository import SqliteAssetRepository
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
@@ -14,13 +15,20 @@ from ziplime.data.services.limex_hub_data_source import LimexHubDataSource
 from ziplime.data.services.file_system_parquet_bundle_storage import FileSystemParquetBundleStorage
 from ziplime.domain.benchmark_spec import BenchmarkSpec
 from ziplime.domain.data_frequency import DataFrequency
+from ziplime.finance.commission import DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE, DEFAULT_PER_CONTRACT_COST, PerContract, \
+    DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, DEFAULT_PER_SHARE_COST, PerShare
+from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
+from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
+from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
+from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
+from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
 from ziplime.utils.run_algo import run_algorithm
 from exchange_calendars import get_calendar as ec_get_calendar
 
 from asyncclick import DateTime
 from ziplime.utils.cli import Timestamp
 
-from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_broker
+from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_exchange
 
 
 def validate_date_range(date_min: datetime.datetime, date_max: datetime.datetime):
@@ -157,7 +165,8 @@ async def ingest(ctx, bundle, start_date, end_date, frequency, symbols, fundamen
     bundle_version = str(int(datetime.datetime.now(tz=calendar.tz).timestamp()))
     assets_repository = SqliteAssetRepository(base_storage_path=bundle_storage_path,
                                               bundle_name=bundle,
-                                              bundle_version=bundle_version)
+                                              bundle_version=bundle_version,
+                                              future_chain_predicates=CHAIN_PREDICATES)
     adjustments_repository = SQLiteAdjustmentRepository(base_storage_path=bundle_storage_path,
                                                         bundle_name=bundle,
                                                         bundle_version=bundle_version)
@@ -345,10 +354,10 @@ async def bundles(ctx, bundle_storage_path):
          " extension.py.",
 )
 @click.option(
-    "--broker",
-    default=None,
-    type=click.Choice(['lime-trader-sdk']),
-    help="The broker to use for live trading.",
+    "--exchange",
+    default='simulation',
+    type=click.Choice(['simulation', 'lime-trader-sdk']),
+    help="The exchange to use for trading.",
     show_default=True,
 )
 @click.option(
@@ -382,7 +391,7 @@ async def run(
         print_algo,
         metrics_set,
         bundle_storage_path,
-        broker: str | None,
+        exchange: str,
         live_market_data_provider: str | None,
 ):
     """Run a backtest for the given algorithm."""
@@ -400,9 +409,29 @@ async def run(
         algotext = algofile.read()
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
-    if broker is not None:
-        start_date = datetime.datetime.now(tz=datetime.timezone.utc)
-        end_date = start_date + datetime.timedelta(days=5)
+    # if exchange is not None:
+    #     start_date = datetime.datetime.now(tz=datetime.timezone.utc)
+    #     end_date = start_date + datetime.timedelta(days=5)
+    if exchange == "simulation":
+        exchange_class = SimulationExchange(
+            equity_slippage=FixedBasisPointsSlippage(),
+            equity_commission=PerShare(
+                cost=DEFAULT_PER_SHARE_COST,
+                min_trade_cost=DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE,
+
+            ),
+            future_slippage=VolatilityVolumeShare(
+                volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
+            ),
+            future_commission=PerContract(
+                cost=DEFAULT_PER_CONTRACT_COST,
+                exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
+                min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
+            ),
+
+        )
+    else:
+        raise Exception("Not valid exchange.")
     return await run_algorithm(
         algofile=getattr(algofile, "name", "<algorithm>"),
         algotext=algotext,
@@ -418,7 +447,7 @@ async def run(
         metrics_set=metrics_set,
         benchmark_spec=benchmark_spec,
         custom_loader=None,
-        broker=get_broker(broker) if broker is not None else None,
+        exchange=exchange_class,
         market_data_provider=get_live_market_data_provider(
             live_market_data_provider) if live_market_data_provider is not None else None,
         bundle_registry=bundle_registry

@@ -12,12 +12,12 @@ class RealtimeClock:
     This class is a drop-in replacement for
     :class:`zipline.gens.sim_engine.MinuteSimulationClock`.
     The key difference between the two is that the RealtimeClock's event
-    emission is synchronized to the (broker's) wall time clock, while
+    emission is synchronized to the (exchange's) wall time clock, while
     MinuteSimulationClock yields a new event on every iteration (regardless of
     wall clock).
 
     The :param:`time_skew` parameter represents the time difference between
-    the Broker and the live trading machine's clock.
+    the Exchange and the live trading machine's clock.
     """
 
     def __init__(self,
@@ -26,7 +26,7 @@ class RealtimeClock:
                  execution_closes,
                  before_trading_start_minutes,
                  minute_emission: bool,
-                 is_broker_alive: Callable,
+                 is_exchange_alive: Callable,
                  frequency: str,
                  time_skew: pd.Timedelta = pd.Timedelta("0s"),
                  ):
@@ -36,7 +36,7 @@ class RealtimeClock:
         self.before_trading_start_minutes = before_trading_start_minutes
         self.minute_emission = minute_emission
         self.time_skew = time_skew
-        self.is_broker_alive = is_broker_alive
+        self.is_exchange_alive = is_exchange_alive
         self._last_emit = None
         self._before_trading_start_bar_yielded = [False for i in range(len(self.execution_opens))]
         self._frequency = frequency
@@ -59,8 +59,8 @@ class RealtimeClock:
         # i = 0
         # current_session_index = 0
         # last_session_index = 0
-        # while self.is_broker_alive() and i <96:
-        while self.is_broker_alive():
+        # while self.is_exchange_alive() and i <96:
+        while self.is_exchange_alive():
             # current_time = current_times[i]
             current_time = pd.to_datetime('now', utc=True)
             server_time = (current_time + self.time_skew).floor('1 min')

@@ -2,8 +2,8 @@ class Account:
     """
     The account object tracks information about the trading account. The
     values are updated as the algorithm runs and its keys remain unchanged.
-    If connected to a broker, one can update these values with the trading
-    account values as reported by the broker.
+    If connected to a exchange, one can update these values with the trading
+    account values as reported by the exchange.
     """
 
     def __init__(self):
@@ -24,6 +24,3 @@ class Account:
         self.leverage = 0.0
         self.net_leverage = 0.0
         self.net_liquidation = 0.0
-
-    def __repr__(self):
-        return "Account({0})".format(self.__dict__)

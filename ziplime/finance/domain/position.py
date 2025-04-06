@@ -22,7 +22,7 @@ import logging
 
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.db.dividend import Dividend
-from ziplime.assets.domain.future import Future
+from ziplime.assets.domain.db.futures_contract import FuturesContract
 
 class Position:
 
@@ -161,7 +161,7 @@ class Position:
         # cost_basis positive, while subtracting the commission.
 
         prev_cost = self.cost_basis * self.amount
-        if isinstance(asset, Future):
+        if isinstance(asset, FuturesContract):
             cost_to_use = cost / asset.price_multiplier
         else:
             cost_to_use = cost

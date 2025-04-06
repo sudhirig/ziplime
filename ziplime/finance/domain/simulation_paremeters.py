@@ -12,6 +12,7 @@ class SimulationParameters:
             capital_base: float,
             emission_rate: datetime.timedelta,
             data_frequency: datetime.timedelta,
+            max_shares: int,
             arena: str = "backtest",
     ):
 
@@ -28,6 +29,7 @@ class SimulationParameters:
         self.start_session = start_session.date()
         self.end_session = end_session.date()
         self.capital_base = capital_base
+        self.max_shares  = max_shares
 
         self.emission_rate = emission_rate
         self.data_frequency = data_frequency

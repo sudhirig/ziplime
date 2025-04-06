@@ -1,6 +1,6 @@
 import os
 
-from ziplime.gens.brokers.lime_trader_sdk_broker import LimeTraderSdkBroker
+from ziplime.gens.exchanges.lime_trader_sdk_exchange import LimeTraderSdkExchange
 from ziplime.data.providers.fundamental_data.limex_hub_fundamental_data_provider import LimexHubFundamentalDataProvider
 from ziplime.data.providers.live_market_data.lime_trader_sdk_live_market_data_provider import \
     LimeTraderSdkLiveMarketDataProvider
@@ -25,10 +25,10 @@ def get_fundamental_data_provider(code: str):
     raise Exception("Unsupported fundamental data provider!")
 
 
-def get_broker(code: str):
+def get_exchange(code: str):
     if code == "lime-trader-sdk":
         lime_trader_sdk_credentials = os.environ.get("LIME_SDK_CREDENTIALS_FILE", None)
         if lime_trader_sdk_credentials is None:
             raise ValueError("Missing LIME_SDK_CREDENTIALS_FILE environment variable.")
-        return LimeTraderSdkBroker(lime_sdk_credentials_file=lime_trader_sdk_credentials)
+        return LimeTraderSdkExchange(lime_sdk_credentials_file=lime_trader_sdk_credentials)
     raise Exception("Unsupported live market data provider!")

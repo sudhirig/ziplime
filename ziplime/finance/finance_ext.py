@@ -3,7 +3,7 @@ from math import sqrt
 import numpy as np
 import pandas as pd
 
-from ziplime.assets.domain.future import Future
+from ziplime.assets.domain.db.futures_contract import FuturesContract
 
 
 def update_position_last_sale_prices(positions, get_price, dt):
@@ -204,7 +204,7 @@ def calculate_position_tracker_stats(positions, stats):
         # through every single position multiple times.
         exposure = position.amount * position.last_sale_price
 
-        if type(position.asset) is Future:
+        if type(position.asset) is FuturesContract:
             # Futures don't have an inherent position value.
             value = 0
 

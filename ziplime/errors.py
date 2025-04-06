@@ -814,3 +814,7 @@ class IncompatibleTerms(ZiplineError):
         "{term_1} and {term_2} must have the same mask in order to compute "
         "correlations and regressions asset-wise."
     )
+
+
+class LiquidityExceeded(Exception):
+    pass

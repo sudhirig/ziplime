@@ -34,11 +34,12 @@ class Order:
         "limit_reached",
         "direction",
         "type",
-        "broker_order_id",
+        "exchange_order_id",
     ]
 
     def __init__(
             self,
+            id,
             dt,
             asset: Asset,
             amount: int,
@@ -46,7 +47,6 @@ class Order:
             limit: float | None = None,
             filled: int= 0,
             commission: float = 0,
-            id=None,
     ):
         """
         @dt - datetime.datetime that the order was placed
@@ -58,7 +58,7 @@ class Order:
         """
 
         # get a string representation of the uuid.
-        self.id = self.make_id() if id is None else id
+        self.id = id
         self.dt = dt
         self.reason = None
         self.created = dt
@@ -73,11 +73,11 @@ class Order:
         self.limit_reached = False
         self.direction = math.copysign(1, self.amount)
         self.type = zp.DATASOURCE_TYPE.ORDER
-        self.broker_order_id = None
+        self.exchange_order_id = None
 
-    @staticmethod
-    def make_id():
-        return uuid.uuid4().hex
+    # @staticmethod
+    # def make_id():
+    #     return uuid.uuid4().hex
 
     def to_dict(self):
         dct = {
@@ -86,8 +86,8 @@ class Order:
             if name not in ORDER_FIELDS_TO_IGNORE
         }
 
-        if self.broker_order_id is None:
-            del dct["broker_order_id"]
+        if self.exchange_order_id is None:
+            del dct["exchange_order_id"]
 
         # Adding 'sid' for backwards compatibility with downstream consumers.
         dct["sid"] = self.asset
@@ -95,11 +95,11 @@ class Order:
 
         return dct
 
-    @property
-    def sid(self):
-        # For backwards compatibility because we pass this object to
-        # custom slippage models.
-        return self.asset
+    # @property
+    # def sid(self):
+    #     # For backwards compatibility because we pass this object to
+    #     # custom slippage models.
+    #     return self.asset
 
     def to_api_obj(self):
         pydict = self.to_dict()

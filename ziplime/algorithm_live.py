@@ -19,7 +19,7 @@ class LiveAlgorithmExecutor(AlgorithmSimulator):
 
 class LiveTradingAlgorithm(TradingAlgorithm):
     def __init__(self, *args, **kwargs):
-        self.broker = kwargs.pop('broker', None)
+        self.exchange = kwargs.pop('exchange', None)
         self.orders = {}
 
         self.algo_filename = kwargs.get('algo_filename', "<algorithm>")
@@ -71,8 +71,8 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             execution_closes=market_closes,
             before_trading_start_minutes=before_trading_start_minutes,
             minute_emission=minutely_emission,
-            time_skew=self.broker.get_time_skew(),
-            is_broker_alive=self.broker.is_alive,
+            time_skew=self.exchange.get_time_skew(),
+            is_exchange_alive=self.exchange.is_alive,
             frequency=self.data_frequency
         )
 
@@ -93,10 +93,10 @@ class LiveTradingAlgorithm(TradingAlgorithm):
         return self.trading_client.transform()
 
     def updated_portfolio(self):
-        return self.broker.get_portfolio()
+        return self.exchange.get_portfolio()
 
     def updated_account(self):
-        return self.broker.get_account()
+        return self.exchange.get_account()
 
     @api_method
     @allowed_only_in_before_trading_start(
@@ -159,8 +159,8 @@ class LiveTradingAlgorithm(TradingAlgorithm):
             self.realtime_bar_target))
 
         today = str(pd.to_datetime('today').date())
-        subscribed_assets = self.broker.get_subscribed_assets()
-        realtime_history = self.broker.get_realtime_bars(subscribed_assets, '1m')
+        subscribed_assets = self.exchange.get_subscribed_assets()
+        realtime_history = self.exchange.get_realtime_bars(subscribed_assets, '1m')
 
         if not os.path.exists(self.realtime_bar_target):
             os.mkdir(self.realtime_bar_target)
@@ -174,14 +174,14 @@ class LiveTradingAlgorithm(TradingAlgorithm):
 
     @property
     def portfolio(self):
-        portfolio = self.broker.get_portfolio()
+        portfolio = self.exchange.get_portfolio()
         return portfolio
         # self._sync_last_sale_prices()
         # return self.metrics_tracker.portfolio
 
     @property
     def account(self):
-        account = self.broker.get_account()
+        account = self.exchange.get_account()
         return account
         # self._sync_last_sale_prices()
         # return self.metrics_tracker.account

@@ -2,9 +2,6 @@ import datetime
 from collections import  OrderedDict
 from functools import partial
 from math import isnan
-
-import logging
-import pandas as pd
 import structlog
 
 from zipline.finance.transaction import Transaction

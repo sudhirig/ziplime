@@ -1,4 +1,5 @@
 import datetime
+import uuid
 from typing import Any
 
 import polars as pl
@@ -6,8 +7,12 @@ import structlog
 from exchange_calendars import ExchangeCalendar, get_calendar
 
 from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.domain.db.asset_router import AssetRouter
+from ziplime.assets.domain.db.currency import Currency
+from ziplime.assets.domain.db.equity import Equity
 from ziplime.assets.domain.db.equity_symbol_mapping import EquitySymbolMapping
-from ziplime.assets.domain.db.exchange import Exchange
+from ziplime.assets.domain.db.exchange_info import ExchangeInfo
+from ziplime.assets.domain.db.trading_pair import TradingPair
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.data.domain.bundle_data import BundleData
@@ -63,26 +68,44 @@ class BundleService:
         data = data.with_columns(
             pl.lit(0).alias("sid")
         )
-        assets = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
-                                                         pl.min("date").alias("min_date"))
+        equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
+                                                           pl.min("date").alias("min_date"))
 
         exchanges = [
-            Exchange(exchange=exchange["exchange"],
+            ExchangeInfo(exchange=exchange["exchange"],
                      canonical_name=exchange["exchange"],
                      country_code="US")  # TODO: make dynamic
-            for exchange in assets.select(pl.col("exchange")).unique().iter_rows(named=True)
+            for exchange in equities.select(pl.col("exchange")).unique().iter_rows(named=True)
         ]
         assets_db = []
         equity_symbol_mappings = []
+        currency_asset_router = AssetRouter(sid=1, asset_type="currency")
+        asset_routers_db = [currency_asset_router]
+        trading_pairs = []
 
-        for idx, asset in enumerate(assets.iter_rows(named=True)):
-            asset_db = Asset(
-                sid=idx + 1,
+        currencies_db = [
+            Currency(sid=currency_asset_router.sid,
+                     start_date=datetime.date.today().replace(year=1900),
+                     first_traded=datetime.date.today().replace(year=1900),
+                     end_date=datetime.date.today().replace(year=2099),
+                     asset_name="Currency USD",
+                     symbol="USD",
+                     auto_close_date=datetime.date.today().replace(year=2099), )
+        ]
+        sid_counter = 2
+
+        for idx, asset in enumerate(equities.iter_rows(named=True)):
+            asset_router = AssetRouter(
+                sid=sid_counter,
+                asset_type="equity"
+            )
+            asset_routers_db.append(asset_router)
+            asset_db = Equity(
+                sid=asset_router.sid,
                 start_date=asset["min_date"].date(),
                 first_traded=asset["min_date"].date(),
                 end_date=asset["max_date"].date(),
-                exchange=asset["exchange"],
-                asset_name="",
+                asset_name=asset["symbol"],
                 auto_close_date=asset["max_date"].date().replace(year=2099),
             )
             assets_db.append(asset_db)
@@ -93,14 +116,27 @@ class BundleService:
                 share_class_symbol="",
                 start_date=asset_db.start_date.replace(year=2000),
                 end_date=asset_db.end_date.replace(year=2099),
-
+                exchange=asset["exchange"],
             )
             equity_symbol_mappings.append(equity_symbol_mapping)
+
+            trading_pair = TradingPair(
+                id=uuid.uuid4(),
+                base_asset_sid=asset_router.sid,
+                quote_asset_sid=asset_db.sid,
+                exchange=asset["exchange"],
+            )
+            trading_pairs.append(trading_pair)
+
             data = data.with_columns(
-                sid=pl.when(pl.col("symbol") == asset["symbol"]).then(asset_db.sid).otherwise(data["sid"]))
+                sid=pl.when(pl.col("symbol") == asset["symbol"]).then(sid_counter).otherwise(data["sid"]))
+            sid_counter += 1
 
         await assets_repository.save_exchanges(exchanges=exchanges)
-        await assets_repository.save_assets(assets=assets_db)
+        await assets_repository.save_asset_routers(asset_routers=asset_routers_db)
+        await assets_repository.save_currencies(currencies=currencies_db)
+        await assets_repository.save_equities(equities=assets_db)
+        await assets_repository.save_trading_pairs(trading_pairs=trading_pairs)
         await assets_repository.save_equity_symbol_mappings(equity_symbol_mappings=equity_symbol_mappings)
 
         bundle_data = BundleData(name=name,

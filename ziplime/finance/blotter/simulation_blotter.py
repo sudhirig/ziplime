@@ -8,12 +8,8 @@ from ziplime.assets.domain.db.asset import Asset
 from zipline.finance.execution import ExecutionStyle
 
 from .blotter import Blotter
-from ziplime.finance.slippage import (
-    DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-    VolatilityVolumeShare,
-    FixedBasisPointsSlippage,
-)
-from zipline.finance.commission import (
+
+from ziplime.finance.commission import (
     DEFAULT_PER_CONTRACT_COST,
     FUTURE_EXCHANGE_FEES_BY_SYMBOL,
     PerContract,
@@ -22,9 +18,11 @@ from zipline.finance.commission import (
 
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.domain.order import Order
-from ziplime.assets.domain.equity import Equity
-from ziplime.assets.domain.future import Future
-
+from ziplime.assets.domain.db.equity import Equity
+from ziplime.assets.domain.db.futures_contract import FuturesContract
+from ..slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
+from ..slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
+from ..slippage.volatility_volume_share import VolatilityVolumeShare
 
 
 class SimulationBlotter(Blotter):
@@ -263,7 +261,7 @@ class SimulationBlotter(Blotter):
         """
         Mark the given order as 'rejected', which is functionally similar to
         cancelled. The distinction is that rejections are involuntary (and
-        usually include a message from a broker indicating why the order was
+        usually include a message from a exchange indicating why the order was
         rejected) while cancels are typically user-driven.
         """
         if order_id not in self.orders:

@@ -27,10 +27,10 @@ import numpy as np
 import uuid
 
 
-from ziplime.gens.brokers.broker import Broker
+from ziplime.gens.exchanges.exchange import Exchange
 
 
-class LimeTraderSdkBroker(Broker):
+class LimeTraderSdkExchange(Exchange):
     def __init__(self, lime_sdk_credentials_file: str):
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)

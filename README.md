@@ -1,4 +1,4 @@
-# ZipLime. The iconic backtester. Reinvented📈
+# ZipLime. The iconic backtester. Reinvented <a href='https://ziplime.limex.com'><img src='img/logo.png' align="left" height="35" /></a>
 
  <a target="new" href="https://pypi.python.org/pypi/ziplime"><img border=0 src="https://img.shields.io/badge/python-3.7+-blue.svg?style=flat" alt="Python version"></a>
  <a target="new" href="https://pypi.python.org/pypi/ziplime"><img border=0 src="https://img.shields.io/pypi/v/ziplime?maxAge=60%" alt="PyPi version"></a>

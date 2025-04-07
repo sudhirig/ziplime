@@ -1,5 +1,7 @@
 import datetime
 
+from ziplime.finance.execution import LimitOrder
+
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.domain.bar_data import BarData
 
@@ -25,7 +27,8 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
             )
             asset_series = long_mavg_df.filter(long_mavg_df["sid"] == asset.sid)["close"]
             print(asset_series.head(1))
-            context.order(asset=asset, amount=10)
+            context.order(asset=asset, amount=10, style=LimitOrder(limit_price=1))
+            print(context.portfolio)
             # print(asset_series)
 #
 # start_session = pd.Timestamp('2025-02-14')

@@ -3,7 +3,6 @@ import os.path
 import pandas as pd
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
-from ziplime.gens.realtimeclock import RealtimeClock
 from ziplime.errors import ScheduleFunctionOutsideTradingStart
 from ziplime.utils.api_support import (
     ZiplineAPI,

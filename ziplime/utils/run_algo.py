@@ -3,16 +3,12 @@ import datetime
 import click
 import os
 import sys
-import polars as pl
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.data.services.bundle_registry import BundleRegistry
 from ziplime.data.services.bundle_service import BundleService
 
-from ziplime.algorithm_live import LiveTradingAlgorithm
-from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
-from ziplime.finance.metrics import default_metrics
 from ziplime.gens.domain.realtime_clock import RealtimeClock
 from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.gens.exchanges.exchange import Exchange
@@ -93,7 +89,7 @@ async def run_algorithm(
 
     bundle_data = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
     # date parameter validation
-    if trading_calendar.sessions_distance(start_date, end_date) < 1:
+    if trading_calendar.sessions_distance(start_date.date(), end_date.date()) < 1:
         raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(

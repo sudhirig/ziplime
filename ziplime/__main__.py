@@ -22,7 +22,9 @@ from ziplime.finance.metrics import default_metrics
 from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
 from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
 from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
+from ziplime.gens.exchanges.lime_trader_sdk_exchange import LimeTraderSdkExchange
 from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
+from ziplime.utils.date_utils import stripe_time_and_timezone_info
 from ziplime.utils.run_algo import run_algorithm
 from exchange_calendars import get_calendar as ec_get_calendar
 
@@ -311,13 +313,13 @@ async def bundles(ctx, bundle_storage_path):
 @click.option(
     "-s",
     "--start-date",
-    type=click.DateTime(formats=["%Y-%m-%d"]),
+    type=click.DateTime(),
     help="The start date of the simulation.",
 )
 @click.option(
     "-e",
     "--end-date",
-    type=click.DateTime(formats=["%Y-%m-%d"]),
+    type=click.DateTime(),
     help="The end date of the simulation.",
 )
 @click.option(
@@ -382,7 +384,7 @@ async def run(
 ):
     """Run a backtest for the given algorithm."""
 
-    calendar = ec_get_calendar(trading_calendar, start=start_date - datetime.timedelta(days=30))
+    calendar = ec_get_calendar(trading_calendar, start=stripe_time_and_timezone_info(start_date) - datetime.timedelta(days=30))
 
 
 
@@ -417,7 +419,23 @@ async def run(
                 exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
                 min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
             ),
-
+        )
+    elif exchange == "lime-trader-sdk":
+        exchange_class = LimeTraderSdkExchange(
+            lime_sdk_credentials_file=None
+            # equity_slippage=FixedBasisPointsSlippage(),
+            # equity_commission=PerShare(
+            #     cost=DEFAULT_PER_SHARE_COST,
+            #     min_trade_cost=DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE,
+            # ),
+            # future_slippage=VolatilityVolumeShare(
+            #     volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
+            # ),
+            # future_commission=PerContract(
+            #     cost=DEFAULT_PER_CONTRACT_COST,
+            #     exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
+            #     min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
+            # ),
         )
     else:
         raise Exception("Not valid exchange.")

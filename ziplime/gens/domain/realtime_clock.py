@@ -22,6 +22,10 @@ class RealtimeClock(TradingClock):
         self.market_opens = market_opens
         self.market_closes = market_closes
         self.before_trading_start_minutes = before_trading_start_minutes
+        self.before_trading_start_bar_yielded = len(self.before_trading_start_minutes) * [False]
+        self.market_closes_yielded = len(self.market_closes) * [False]
+        self.market_opens_yielded = len(self.market_opens) * [False]
+
         self.timezone = timezone
         self.emission_rate = emission_rate
         if timedelta_diff_from_current_time is None:
@@ -47,26 +51,39 @@ class RealtimeClock(TradingClock):
         time.sleep(sleep_seconds)
         now = datetime.datetime.now(tz=self.timezone) + self.timedelta_diff_from_current_time
         return now
+
     def __iter__(self):
-        now = datetime.datetime.now(tz=self.timezone) + self.timedelta_diff_from_current_time
-        while now <= self.market_closes[-1]:
-            current_session_index = self.sessions.index_of(now.date())
+        current_time = datetime.datetime.now(tz=self.timezone) + self.timedelta_diff_from_current_time
+        last_bar_emit: datetime.datetime | None =  None
+        while current_time <= self.market_closes[-1]:
+            current_session_index = self.sessions.index_of(current_time.date())
             if current_session_index is None:
                 # happens if current time is not in trading hours, so we need to wait till market hours
-                now = self._sleep_and_increase_time(sleep_seconds=1)
+                current_time = self._sleep_and_increase_time(sleep_seconds=1)
                 continue
-
-            for idx, session in enumerate(self.sessions):
-                yield session, SimulationEvent.SESSION_START
-
-                bts_minute = self.before_trading_start_minutes[idx]
-                regular_minutes = self.minutes_by_session[session]
-
-                yield bts_minute, SimulationEvent.BEFORE_TRADING_START_BAR
-                for minute in regular_minutes:
-                    yield minute, SimulationEvent.BAR
-                    yield minute, SimulationEvent.EMISSION_RATE_END
-
-                yield regular_minutes[-1], SimulationEvent.SESSION_END
-
-            now = datetime.datetime.now(tz=self.timezone) + self.timedelta_diff_from_current_time
+            if current_time >= self.before_trading_start_minutes[current_session_index] and not \
+                    self.before_trading_start_bar_yielded[current_session_index]:
+                self.before_trading_start_bar_yielded[current_session_index] = True
+                yield current_time, SimulationEvent.BEFORE_TRADING_START_BAR
+            elif current_time < self.market_opens[current_session_index]:
+                current_time = self._sleep_and_increase_time(sleep_seconds=1)
+            elif self.market_opens[current_session_index] <= current_time <= self.market_closes[current_session_index] and not self.market_opens_yielded[current_session_index]:
+                self.market_opens_yielded[current_session_index] = True
+                yield current_time.date(), SimulationEvent.SESSION_START
+            elif self.market_opens[current_session_index] <= current_time <= self.market_closes[current_session_index]:
+                if last_bar_emit is None or current_time - last_bar_emit >= self.emission_rate:
+                    last_bar_emit = current_time
+                    yield current_time, SimulationEvent.BAR
+                    current_time = datetime.datetime.now(tz=self.timezone) + self.timedelta_diff_from_current_time
+                    yield current_time, SimulationEvent.EMISSION_RATE_END
+                else:
+                    current_time = self._sleep_and_increase_time(sleep_seconds=1)
+            elif current_time > self.market_closes[current_session_index]:
+                if self.market_closes_yielded[current_session_index]:
+                    current_time = self._sleep_and_increase_time(sleep_seconds=1)
+                else:
+                    last_bar_emit = current_time
+                    yield current_time.date(), SimulationEvent.SESSION_END
+            else:
+                # We should never end up in this branch
+                raise RuntimeError("Invalid state in RealtimeClock")

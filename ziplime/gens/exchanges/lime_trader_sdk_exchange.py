@@ -6,13 +6,13 @@ from ziplime.errors import SymbolNotFound
 
 from ziplime.domain.portfolio import Portfolio as ZpPortfolio
 from ziplime.domain.position import Position as ZpPosition
-from ziplime.domain.account import  Account as ZpAccount
-
+from ziplime.domain.account import Account as ZpAccount
 
 from lime_trader import LimeClient
 from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
-from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
+from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, \
+    OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.finance.execution import (MarketOrder,
                                        LimitOrder,
@@ -33,11 +33,13 @@ from ziplime.gens.exchanges.exchange import Exchange
 
 class LimeTraderSdkExchange(Exchange):
 
-
-    def __init__(self, lime_sdk_credentials_file: str):
+    def __init__(self, lime_sdk_credentials_file: str | None):
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)
-        self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
+        if lime_sdk_credentials_file is None:
+            self._lime_sdk_client = LimeClient.from_env(logger=self._logger)
+        else:
+            self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
         self._tracked_orders = {}
 
     def get_positions(self) -> dict[Asset, ZpPosition]:

@@ -17,11 +17,6 @@ TRADING_DAYS_IN_YEAR = 250
 TRADING_HOURS_IN_DAY = 6.5
 MINUTES_IN_HOUR = 60
 
-ANNUALIZER = {
-    "daily": TRADING_DAYS_IN_YEAR,
-    "hourly": TRADING_DAYS_IN_YEAR * TRADING_HOURS_IN_DAY,
-    "minute": TRADING_DAYS_IN_YEAR * TRADING_HOURS_IN_DAY * MINUTES_IN_HOUR,
-}
 
 # NOTE: It may be worth revisiting how the keys for this dictionary are
 # specified, for instance making them ContinuousFuture objects instead of

@@ -3,7 +3,7 @@ import datetime
 import click
 import os
 import sys
-
+import polars as pl
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.data.services.bundle_registry import BundleRegistry
@@ -12,17 +12,11 @@ from ziplime.data.services.bundle_service import BundleService
 from ziplime.algorithm_live import LiveTradingAlgorithm
 from ziplime.finance.blotter.blotter_live import BlotterLive
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
-from ziplime.finance.blotter.simulation_blotter import SimulationBlotter
-from ziplime.finance.commission import PerShare, DEFAULT_PER_CONTRACT_COST, PerContract, \
-    DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, DEFAULT_PER_SHARE_COST
-from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
 from ziplime.finance.metrics import default_metrics
-from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
-from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
-from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
+from ziplime.gens.domain.realtime_clock import RealtimeClock
+from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.gens.exchanges.exchange import Exchange
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
-from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
 from ziplime.sources.benchmark_source import BenchmarkSource
 
 try:
@@ -78,7 +72,6 @@ async def run_algorithm(
         emission_rate: datetime.timedelta,
         capital_base: float,
         bundle_name: str,
-        bundle_timestamp,
         start_date: datetime.datetime,
         end_date: datetime.datetime,
         output,
@@ -131,9 +124,6 @@ async def run_algorithm(
             return custom_loader.get(column)
         except KeyError:
             raise ValueError("No PipelineLoader registered for column %s." % column)
-
-    # metrics_set = metrics.load(metrics_set)
-    metrics_set = default_metrics()
     max_shares = int(1e11)
 
     sim_params = SimulationParameters(
@@ -163,18 +153,38 @@ async def run_algorithm(
         benchmark_fields=["close"]
     )
 
-    try:
-        tr = TradingAlgorithm(
-            exchange=exchange,
-            bundle_data=bundle_data,
-            get_pipeline_loader=choose_loader,
-            sim_params=sim_params,
-            metrics_set=metrics_set,
-            blotter=InMemoryBlotter(exchange=exchange),
-            benchmark_source=benchmark_source,
-            algo_filename=algofile,
-            script=algotext
-        )
+    clock = SimulationClock(
+        sessions=sim_params.sessions,
+        market_opens=sim_params.market_opens,
+        market_closes=sim_params.market_closes,
+        before_trading_start_minutes=sim_params.before_trading_start_minutes,
+        emission_rate=sim_params.emission_rate,
+        timezone=sim_params.trading_calendar.tz
+    )
+    # timedelta_diff_from_current_time = datetime.datetime.now(tz=trading_calendar.tz) - start_date.replace(tzinfo=trading_calendar.tz)
+    # clock = RealtimeClock(
+    #     sessions=sim_params.sessions,
+    #     market_opens=sim_params.market_opens,
+    #     market_closes=sim_params.market_closes,
+    #     before_trading_start_minutes=sim_params.before_trading_start_minutes,
+    #     emission_rate=sim_params.emission_rate,
+    #     timezone=sim_params.trading_calendar.tz,
+    #     timedelta_diff_from_current_time=-timedelta_diff_from_current_time
+    # )
+
+
+    tr = TradingAlgorithm(
+        exchange=exchange,
+        bundle_data=bundle_data,
+        get_pipeline_loader=choose_loader,
+        sim_params=sim_params,
+        metrics_set=metrics_set,
+        blotter=InMemoryBlotter(exchange=exchange, cancel_policy=None),
+        benchmark_source=benchmark_source,
+        algo_filename=algofile,
+        script=algotext,
+        clock=clock
+    )
         # else:
         #
         #     blotter_live = BlotterLive(data_frequency=emission_rate, exchange=exchange)
@@ -193,149 +203,7 @@ async def run_algorithm(
         #     )
         # tr.bundle_data = bundle_data
         # tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
-        perf = await tr.run()
-    except NoBenchmark:
-        raise _RunAlgoError(
-            (
-                "No ``benchmark_spec`` was provided, and"
-                " ``zipline.api.set_benchmark`` was not called in"
-                " ``initialize``."
-            ),
-            (
-                "Neither '--benchmark-symbol' nor '--benchmark-sid' was"
-                " provided, and ``zipline.api.set_benchmark`` was not called"
-                " in ``initialize``. Did you mean to pass '--no-benchmark'?"
-            ),
-        )
-
-    if output == "-":
-        click.echo(str(perf))
-    elif output != os.devnull:  # make the zipline magic not write any data
-        perf.to_pickle(output)
-
-    return perf
-
-
-async def run_algo_new(
-        algofile: str,
-        algotext: str,
-        emission_rate: datetime.timedelta,
-        bundle_name: str,
-        bundle_timestamp,
-        start_date: datetime.datetime,
-        end_date: datetime.datetime,
-        output,
-        trading_calendar: ExchangeCalendar,
-        print_algo: bool,
-        metrics_set: str,
-        custom_loader,
-        benchmark_spec,
-        exchange: Exchange,
-        market_data_provider: AbstractLiveMarketDataProvider,
-        bundle_registry: BundleRegistry,
-        simulation_params: SimulationParameters
-):
-    bundle_service = BundleService(bundle_registry=bundle_registry)
-    bundle_data = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
-    # date parameter validation
-    if not exchange and trading_calendar.sessions_distance(start_date, end_date) < 1:
-        raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
-
-    benchmark_sid, benchmark_returns = benchmark_spec.resolve(
-        asset_repository=bundle_data.asset_repository,
-        start_date=start_date.date(),
-        end_date=end_date.date(),
-    )
-
-    if print_algo:
-        if PYGMENTS:
-            highlight(
-                algotext,
-                PythonLexer(),
-                TerminalFormatter(),
-                outfile=sys.stdout,
-            )
-        else:
-            click.echo(algotext)
-
-    state_filename = None
-    realtime_bar_target = None
-    pipeline_loader = USEquityPricingLoader.without_fx(
-        bundle_data,
-    )
-
-    def choose_loader(column):
-        if column in USEquityPricing.columns:
-            return pipeline_loader
-        try:
-            return custom_loader.get(column)
-        except KeyError:
-            raise ValueError("No PipelineLoader registered for column %s." % column)
-
-    # metrics_set = metrics.load(metrics_set)
-    metrics_set = default_metrics()
-
-    if benchmark_sid is not None:
-        benchmark_asset = bundle_data.asset_repository.retrieve_asset(sid=benchmark_sid)
-        benchmark_returns = None
-    else:
-        benchmark_asset = None
-        benchmark_returns = benchmark_returns
-    benchmark_source = BenchmarkSource(
-        benchmark_asset=benchmark_asset,
-        benchmark_returns=benchmark_returns,
-        trading_calendar=trading_calendar,
-        sessions=sim_params.sessions,
-        bundle_data=bundle_data,
-        emission_rate=sim_params.emission_rate,
-        timedelta_period=emission_rate,
-        benchmark_fields=["close"]
-    )
-
-    try:
-        if exchange is None:
-            tr = TradingAlgorithm(
-                bundle_data=bundle_data,
-                get_pipeline_loader=choose_loader,
-                sim_params=sim_params,
-                metrics_set=metrics_set,
-                blotter=SimulationBlotter(),
-                benchmark_source=benchmark_source,
-                algo_filename=algofile,
-                script=algotext
-            )
-        else:
-
-            blotter_live = BlotterLive(data_frequency=emission_rate, exchange=exchange)
-            tr = LiveTradingAlgorithm(
-                exchange=exchange,
-                state_filename=state_filename,
-                realtime_bar_target=realtime_bar_target,
-                bundle_data=bundle_data,
-                get_pipeline_loader=choose_loader,
-                sim_params=sim_params,
-                metrics_set=metrics_set,
-                blotter=blotter_live,
-                benchmark_source=benchmark_source,
-                algo_filename=algofile,
-                script=algotext,
-            )
-        # tr.bundle_data = bundle_data
-        # tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
-        perf = await tr.run()
-    except NoBenchmark:
-        raise _RunAlgoError(
-            (
-                "No ``benchmark_spec`` was provided, and"
-                " ``zipline.api.set_benchmark`` was not called in"
-                " ``initialize``."
-            ),
-            (
-                "Neither '--benchmark-symbol' nor '--benchmark-sid' was"
-                " provided, and ``zipline.api.set_benchmark`` was not called"
-                " in ``initialize``. Did you mean to pass '--no-benchmark'?"
-            ),
-        )
+    perf = await tr.run()
 
     if output == "-":
         click.echo(str(perf))

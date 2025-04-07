@@ -4,9 +4,10 @@ from zoneinfo import ZoneInfo
 import polars as pl
 
 from ziplime.gens.domain.simulation_event import SimulationEvent
+from ziplime.gens.domain.trading_clock import TradingClock
 
 
-class SimulationClock:
+class SimulationClock(TradingClock):
     def __init__(self,
                  sessions: pl.Series,
                  market_opens: pl.Series,

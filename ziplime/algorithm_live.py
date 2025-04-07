@@ -4,7 +4,6 @@ import pandas as pd
 from ziplime.algorithm import TradingAlgorithm
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.gens.realtimeclock import RealtimeClock
-from ziplime.gens.tradesimulation import AlgorithmSimulator
 from ziplime.errors import ScheduleFunctionOutsideTradingStart
 from ziplime.utils.api_support import (
     ZiplineAPI,
@@ -12,7 +11,7 @@ from ziplime.utils.api_support import (
     allowed_only_in_before_trading_start)
 
 
-class LiveAlgorithmExecutor(AlgorithmSimulator):
+class LiveAlgorithmExecutor():
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
 

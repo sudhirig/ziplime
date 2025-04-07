@@ -18,6 +18,7 @@ from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.commission import DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE, DEFAULT_PER_CONTRACT_COST, PerContract, \
     DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, DEFAULT_PER_SHARE_COST, PerShare
 from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
+from ziplime.finance.metrics import default_metrics
 from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
 from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
 from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
@@ -281,13 +282,6 @@ async def bundles(ctx, bundle_storage_path):
     help="The data bundle to use for the simulation.",
 )
 @click.option(
-    "--bundle-timestamp",
-    type=Timestamp(),
-    default=datetime.datetime.now(tz=datetime.timezone.utc),
-    show_default=False,
-    help="The date to lookup data on or before.\n" "[default: <current-time>]",
-)
-@click.option(
     "-bf",
     "--benchmark-file",
     default=None,
@@ -348,12 +342,6 @@ async def bundles(ctx, bundle_storage_path):
     help="Print the algorithm to stdout.",
 )
 @click.option(
-    "--metrics-set",
-    default="default",
-    help="The metrics set to use. New metrics sets may be registered in your"
-         " extension.py.",
-)
-@click.option(
     "--exchange",
     default='simulation',
     type=click.Choice(['simulation', 'lime-trader-sdk']),
@@ -379,7 +367,6 @@ async def run(
         emission_rate,
         capital_base,
         bundle,
-        bundle_timestamp,
         benchmark_file,
         benchmark_symbol,
         benchmark_sid,
@@ -389,13 +376,15 @@ async def run(
         output,
         trading_calendar,
         print_algo,
-        metrics_set,
         bundle_storage_path,
         exchange: str,
         live_market_data_provider: str | None,
 ):
     """Run a backtest for the given algorithm."""
+
     calendar = ec_get_calendar(trading_calendar, start=start_date - datetime.timedelta(days=30))
+
+
 
     benchmark_spec = BenchmarkSpec(
         benchmark_returns=None,
@@ -410,7 +399,7 @@ async def run(
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
     # if exchange is not None:
-    #     start_date = datetime.datetime.now(tz=datetime.timezone.utc)
+    #     start_date = datetime.datetime.now(tz=calendar.tz).replace(tzinfo=None, minute=0, hour=0, second=0, microsecond=0)
     #     end_date = start_date + datetime.timedelta(days=5)
     if exchange == "simulation":
         exchange_class = SimulationExchange(
@@ -438,19 +427,19 @@ async def run(
         emission_rate=DataFrequency(emission_rate).to_timedelta(),
         capital_base=capital_base,
         bundle_name=bundle,
-        bundle_timestamp=bundle_timestamp,
         start_date=start_date,
         end_date=end_date,
         output=output,
         trading_calendar=calendar,
         print_algo=print_algo,
-        metrics_set=metrics_set,
+        metrics_set=default_metrics(),
         benchmark_spec=benchmark_spec,
         custom_loader=None,
         exchange=exchange_class,
         market_data_provider=get_live_market_data_provider(
             live_market_data_provider) if live_market_data_provider is not None else None,
-        bundle_registry=bundle_registry
+        bundle_registry=bundle_registry,
+
     )
 
 

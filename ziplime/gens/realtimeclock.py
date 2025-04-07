@@ -4,9 +4,10 @@ from typing import Callable
 import pandas as pd
 
 from ziplime.gens.domain.simulation_event import SimulationEvent
+from ziplime.gens.domain.trading_clock import TradingClock
 
 
-class RealtimeClock:
+class RealtimeClock(TradingClock):
     """Realtime clock for live trading.
 
     This class is a drop-in replacement for

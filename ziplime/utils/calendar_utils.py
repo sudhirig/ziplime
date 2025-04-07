@@ -34,20 +34,10 @@ def add_tz_info(d: pd.Timestamp, tzinfo: datetime.tzinfo) -> pd.Timestamp:
 
 
 import inspect
-from functools import partial
 
 import pandas as pd
-from exchange_calendars import ExchangeCalendar as TradingCalendar
-from exchange_calendars import clear_calendars
 from exchange_calendars import get_calendar as ec_get_calendar  # get_calendar,
-from exchange_calendars import (
-    get_calendar_names,
-    register_calendar,
-    register_calendar_alias,
-)
-from exchange_calendars.calendar_utils import global_calendar_dispatcher
 
-# from exchange_calendars.errors import InvalidCalendarName
 from exchange_calendars.utils.pandas_utils import days_at_time  # noqa: reexport
 
 

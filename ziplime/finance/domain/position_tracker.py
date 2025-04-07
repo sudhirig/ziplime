@@ -1,12 +1,16 @@
 import datetime
-from collections import  OrderedDict
+from collections import OrderedDict
 from functools import partial
-from math import isnan
+from math import isnan, copysign
+
+import numpy as np
 import structlog
 
 from zipline.finance.transaction import Transaction
 import zipline.protocol as zp
 
+from ziplime.assets.domain.db.dividend import Dividend
+from ziplime.assets.domain.db.futures_contract import FuturesContract
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.domain.position import Position
 from ziplime.finance.finance_ext import (
@@ -16,7 +20,6 @@ from ziplime.finance.finance_ext import (
 )
 
 from ziplime.assets.domain.db.asset import Asset
-
 
 
 class PositionTracker:
@@ -87,7 +90,7 @@ class PositionTracker:
         else:
             position = self.positions[asset]
 
-        position.update(txn)
+        self._update_position(position=position, txn=txn)
 
         if position.amount == 0:
             del self.positions[asset]
@@ -99,11 +102,84 @@ class PositionTracker:
             except KeyError:
                 pass
 
+    def _update_position(self, position: Position, txn: Transaction):
+        if position.asset != txn.asset:
+            raise Exception("updating position with txn for a " "different asset")
+
+        total_shares = position.amount + txn.amount
+
+        if total_shares == 0:
+            position.cost_basis = 0.0
+        else:
+            prev_direction = copysign(1, position.amount)
+            txn_direction = copysign(1, txn.amount)
+
+            if prev_direction != txn_direction:
+                # we're covering a short or closing a position
+                if abs(txn.amount) > abs(position.amount):
+                    # we've closed the position and gone short
+                    # or covered the short position and gone long
+                    position.cost_basis = txn.price
+            else:
+                prev_cost = position.cost_basis * position.amount
+                txn_cost = txn.amount * txn.price
+                total_cost = prev_cost + txn_cost
+                position.cost_basis = total_cost / total_shares
+
+            # Update the last sale price if txn is
+            # best data we have so far
+            if position.last_sale_date is None or txn.dt > position.last_sale_date:
+                position.last_sale_price = txn.price
+                position.last_sale_date = txn.dt
+
+        position.amount = total_shares
+
     def handle_commission(self, asset: Asset, cost: float) -> None:
         # Adjust the cost basis of the stock if we own it
         if asset in self.positions:
             self._dirty_stats = True
-            self.positions[asset].adjust_commission_cost_basis(asset, cost)
+            self.adjust_commission_cost_basis(position=self.positions[asset], asset=asset, cost=cost)
+
+    def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: float):
+        """
+        A note about cost-basis in zipline: all positions are considered
+        to share a cost basis, even if they were executed in different
+        transactions with different commission costs, different prices, etc.
+
+        Due to limitations about how zipline handles positions, zipline will
+        currently spread an externally-delivered commission charge across
+        all shares in a position.
+        """
+
+        if asset != position.asset:
+            raise Exception("Updating a commission for a different asset?")
+        if cost == 0.0:
+            return
+
+        # If we no longer hold this position, there is no cost basis to
+        # adjust.
+        if position.amount == 0:
+            return
+
+        # We treat cost basis as the share price where we have broken even.
+        # For longs, commissions cause a relatively straight forward increase
+        # in the cost basis.
+        #
+        # For shorts, you actually want to decrease the cost basis because you
+        # break even and earn a profit when the share price decreases.
+        #
+        # Shorts are represented as having a negative `amount`.
+        #
+        # The multiplication and division by `amount` cancel out leaving the
+        # cost_basis positive, while subtracting the commission.
+
+        prev_cost = position.cost_basis * position.amount
+        if isinstance(asset, FuturesContract):
+            cost_to_use = cost / asset.price_multiplier
+        else:
+            cost_to_use = cost
+        new_cost = prev_cost + cost_to_use
+        position.cost_basis = new_cost / position.amount
 
     def handle_splits(self, splits):
         """Processes a list of splits by modifying any positions as needed.
@@ -127,10 +203,67 @@ class PositionTracker:
                 # Make the position object handle the split. It returns the
                 # leftover cash from a fractional share, if there is any.
                 position = self.positions[asset]
-                leftover_cash = position.handle_split(asset, ratio)
+                leftover_cash = self.handle_split(position=position, asset=asset, ratio=ratio)
                 total_leftover_cash += leftover_cash
 
         return total_leftover_cash
+
+    def earn_dividend(self, position: Position, dividend: Dividend) -> dict[str, float]:
+        """
+        Register the number of shares we held at this dividend's ex date so
+        that we can pay out the correct amount on the dividend's pay date.
+        """
+        return {"amount": position.amount * dividend.amount}
+
+    def earn_stock_dividend(self, position: Position, stock_dividend):
+        """
+        Register the number of shares we held at this dividend's ex date so
+        that we can pay out the correct amount on the dividend's pay date.
+        """
+        return {
+            "payment_asset": stock_dividend.payment_asset,
+            "share_count": np.floor(position.amount * float(stock_dividend.ratio)),
+        }
+
+    def handle_split(self, position: Position, asset: Asset, ratio: float):
+        """
+        Update the position by the split ratio, and return the resulting
+        fractional share that will be converted into cash.
+
+        Returns the unused cash.
+        """
+        if position.asset != asset:
+            raise Exception("updating split with the wrong asset!")
+
+        # adjust the # of shares by the ratio
+        # (if we had 100 shares, and the ratio is 3,
+        #  we now have 33 shares)
+        # (old_share_count / ratio = new_share_count)
+        # (old_price * ratio = new_price)
+
+        # e.g., 33.333
+        raw_share_count = position.amount / float(ratio)
+
+        # e.g., 33
+        full_share_count = np.floor(raw_share_count)
+
+        # e.g., 0.333
+        fractional_share_count = raw_share_count - full_share_count
+
+        # adjust the cost basis to the nearest cent, e.g., 60.0
+        new_cost_basis = round(position.cost_basis * ratio, 2)
+
+        position.cost_basis = new_cost_basis
+        position.amount = full_share_count
+
+        return_cash = round(float(fractional_share_count * new_cost_basis), 2)
+
+        self._logger.info("after split: " + str(position))
+        self._logger.info("returning cash: " + str(return_cash))
+
+        # return the leftover cash, which will be converted into cash
+        # (rounded to the nearest cent)
+        return return_cash
 
     def earn_dividends(self, cash_dividends, stock_dividends):
         """Given a list of dividends whose ex_dates are all the next trading
@@ -149,9 +282,7 @@ class PositionTracker:
 
             # Store the earned dividends so that they can be paid on the
             # dividends' pay_dates.
-            div_owed = self.positions[cash_dividend.asset].earn_dividend(
-                cash_dividend,
-            )
+            div_owed = self.earn_dividend(position=self.positions[cash_dividend.asset], dividend=cash_dividend)
             try:
                 self._unpaid_dividends[cash_dividend.pay_date].append(div_owed)
             except KeyError:
@@ -160,9 +291,8 @@ class PositionTracker:
         for stock_dividend in stock_dividends:
             self._dirty_stats = True  # only mark dirty if we pay a dividend
 
-            div_owed = self.positions[stock_dividend.asset].earn_stock_dividend(
-                stock_dividend
-            )
+            div_owed = self.earn_stock_dividend(position=self.positions[stock_dividend.asset],
+                                                stock_dividend=stock_dividend)
             try:
                 self._unpaid_stock_dividends[stock_dividend.pay_date].append(
                     div_owed,
@@ -227,7 +357,7 @@ class PositionTracker:
         amount = self.positions.get(asset).amount
         # TODO: check this
         price = self.bundle_data.get_spot_value(assets=asset, field="price", dt=dt,
-                                                 data_frequency=self._data_frequency)
+                                                data_frequency=self._data_frequency)
 
         # Get the last traded price if price is no longer available
         if isnan(price):

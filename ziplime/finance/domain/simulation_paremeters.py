@@ -65,3 +65,13 @@ class SimulationParameters:
         self.sessions = pl.Series(self.trading_calendar.sessions_in_range(
             self.start_session, self.end_session)
         ).dt.date()
+
+        self.market_closes = pl.Series(
+            self.trading_calendar.schedule.loc[self.sessions, "close"].dt.tz_convert(
+                self.trading_calendar.tz))
+        self.market_opens = pl.Series(
+            self.trading_calendar.first_minutes.loc[self.sessions].dt.tz_convert(
+                self.trading_calendar.tz))
+
+        self.before_trading_start_minutes = self.market_opens - datetime.timedelta(minutes=46)
+

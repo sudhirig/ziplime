@@ -1,41 +1,22 @@
 import empyrical
 
-from ziplime.utils.deprecate import deprecated
-
-from .core import (
-    metrics_sets,
-    register,
-    unregister,
-    load,
-)
-from .metric import (
-    AlphaBeta,
-    BenchmarkReturnsAndVolatility,
-    CashFlow,
-    DailyLedgerField,
-    MaxLeverage,
-    NumTradingDays,
-    Orders,
-    PeriodLabel,
-    PNL,
-    Returns,
-    ReturnsStatistic,
-    SimpleLedgerField,
-    StartOfPeriodLedgerField,
-    Transactions,
-    _ConstantCumulativeRiskMetric,
-    _ClassicRiskMetrics,
-)
-from .tracker import MetricsTracker
+from ziplime.finance.metrics.max_leverage import MaxLeverage
+from ziplime.finance.metrics.alpha_beta import AlphaBeta
+from ziplime.finance.metrics.benchmark_returns_and_volatility import BenchmarkReturnsAndVolatility
+from ziplime.finance.metrics.cash_flow import CashFlow
+from ziplime.finance.metrics.constant_cumulative_risk_metric import ConstantCumulativeRiskMetric
+from ziplime.finance.metrics.daily_ledger_field import DailyLedgerField
+from ziplime.finance.metrics.num_trading_days import NumTradingDays
+from ziplime.finance.metrics.orders import Orders
+from ziplime.finance.metrics.period_label import PeriodLabel
+from ziplime.finance.metrics.pnl import PNL
+from ziplime.finance.metrics.retruns_statistics import ReturnsStatistic
+from ziplime.finance.metrics.simple_ledger_field import SimpleLedgerField
+from ziplime.finance.metrics.start_of_period_ledger_field import StartOfPeriodLedgerField
+from ziplime.finance.metrics.transactions import Transactions
+from ziplime.finance.metrics.returns import Returns
 
 
-__all__ = ["MetricsTracker", "unregister", "metrics_sets", "load"]
-
-
-register("none", set)
-
-
-@register("default")
 def default_metrics():
     return {
         Returns(),
@@ -73,19 +54,8 @@ def default_metrics():
         ReturnsStatistic(empyrical.max_drawdown),
         MaxLeverage(),
         # Please kill these!
-        _ConstantCumulativeRiskMetric("excess_return", 0.0),
-        _ConstantCumulativeRiskMetric("treasury_period_return", 0.0),
+        ConstantCumulativeRiskMetric("excess_return", 0.0),
+        ConstantCumulativeRiskMetric("treasury_period_return", 0.0),
         NumTradingDays(),
         PeriodLabel(),
     }
-
-
-@register("classic")
-@deprecated(
-    "The original risk packet has been deprecated and will be removed in a "
-    'future release. Please use "default" metrics instead.'
-)
-def classic_metrics():
-    metrics = default_metrics()
-    metrics.add(_ClassicRiskMetrics())
-    return metrics

@@ -16,8 +16,17 @@ from exchange_calendars import ExchangeCalendar
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.blotter.blotter import Blotter
+from ziplime.finance.controls.long_only import LongOnly
+from ziplime.finance.controls.max_order_count import MaxOrderCount
+from ziplime.finance.controls.max_order_size import MaxOrderSize
+from ziplime.finance.controls.max_position_size import MaxPositionSize
+from ziplime.finance.controls.min_leverage import MinLeverage
+from ziplime.finance.controls.restricted_list_order import RestrictedListOrder
+from ziplime.finance.domain.ledger import Ledger
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.order_status import OrderStatus
+from ziplime.finance.metrics import MaxLeverage
+from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.gens.exchanges.exchange import Exchange
 from ziplime.gens.domain.simulation_event import SimulationEvent
 from ziplime.utils.calendar_utils import get_calendar
@@ -36,30 +45,15 @@ from ziplime.errors import (
     RegisterAccountControlPostInit,
     RegisterTradingControlPostInit,
     ScheduleFunctionInvalidCalendar,
-    SetBenchmarkOutsideInitialize,
     SetCancelPolicyPostInit,
     SetCommissionPostInit,
     SetSlippagePostInit,
     UnsupportedCancelPolicy,
     UnsupportedDatetimeFormat,
-    UnsupportedOrderParameters,
     ZeroCapitalError,
 )
-from ziplime.finance.controls import (
-    LongOnly,
-    MaxOrderCount,
-    MaxOrderSize,
-    MaxPositionSize,
-    MaxLeverage,
-    MinLeverage,
-    RestrictedListOrder,
-)
-from zipline.finance.execution import (
-    LimitOrder,
-    MarketOrder,
-    StopLimitOrder,
-    StopOrder, ExecutionStyle,
-)
+
+from ziplime.finance.execution import ExecutionStyle
 from zipline.finance.asset_restrictions import Restrictions
 from zipline.finance.cancel_policy import CancelPolicy
 from zipline.finance.asset_restrictions import (
@@ -71,8 +65,7 @@ from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.db.futures_contract import FuturesContract
 from ziplime.assets.domain.db.equity import Equity
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
-from ziplime.gens.tradesimulation import AlgorithmSimulator
-from ziplime.finance.metrics import MetricsTracker
+from ziplime.finance.metrics_tracker import MetricsTracker
 from ziplime.pipeline import Pipeline
 import zipline.pipeline.domain as domain
 from ziplime.pipeline.engine import (
@@ -89,14 +82,10 @@ from ziplime.utils.api_support import (
 from ziplime.utils.compat import ExitStack
 from ziplime.utils.date_utils import make_utc_aware
 from ziplime.utils.input_validation import (
-    error_keywords,
-    expect_dtypes,
     expect_types,
 )
-from ziplime.utils.numpy_utils import int64_dtype
 from ziplime.utils.cache import ExpiringCache
 
-import zipline.utils.events
 from ziplime.utils.events import (
     EventManager,
     make_eventrule,
@@ -112,9 +101,7 @@ from ziplime.utils.math_utils import (
 )
 from ziplime.utils.security_list import SecurityList
 
-import zipline.protocol
-
-from ziplime.gens.simulation_clock import SimulationClock
+from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.sources.benchmark_source import BenchmarkSource
 from zipline.zipline_warnings import ZiplineDeprecationWarning
 
@@ -207,6 +194,7 @@ class TradingAlgorithm:
             blotter: Blotter,
             algo_filename,
             benchmark_source: BenchmarkSource,
+            clock: TradingClock,
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
@@ -269,6 +257,8 @@ class TradingAlgorithm:
 
         self._handle_data = None
 
+        self._ledger = Ledger(trading_sessions=self.sim_params.sessions, capital_base=self.sim_params.capital_base,
+                              bundle_data=self.bundle_data, data_frequency=self.sim_params.data_frequency)
 
         def noop(*args, **kwargs):
             pass
@@ -323,7 +313,7 @@ class TradingAlgorithm:
         # receive a message.
         self.simulation_dt = None
 
-        self.clock = self._create_clock()
+        self.clock = clock
 
         self._logger = logging.getLogger(__name__)
 
@@ -374,36 +364,19 @@ class TradingAlgorithm:
         with ZiplineAPI(self):
             self._analyze(self, perf)
 
-    def _create_clock(self):
-        """If the clock property is not set, then create one based on frequency."""
-        market_closes = pl.Series(
-            self.sim_params.trading_calendar.schedule.loc[self.sim_params.sessions, "close"].dt.tz_convert(
-                self.sim_params.trading_calendar.tz))
-        market_opens = pl.Series(
-            self.sim_params.trading_calendar.first_minutes.loc[self.sim_params.sessions].dt.tz_convert(
-                self.sim_params.trading_calendar.tz))
-
-        before_trading_start_minutes = market_opens - datetime.timedelta(minutes=46)
-
-        return SimulationClock(
-            sessions=self.sim_params.sessions,
-            market_opens=market_opens,
-            market_closes=market_closes,
-            before_trading_start_minutes=before_trading_start_minutes,
-            emission_rate=self.sim_params.emission_rate,
-            timezone=self.sim_params.trading_calendar.tz
-        )
 
     async def _create_generator(self):
         self.metrics_tracker = MetricsTracker(
             bundle_data=self.bundle_data,
             trading_calendar=self.sim_params.trading_calendar,
+            sessions=self.sim_params.sessions,
             first_session=self.sim_params.start_session,
             last_session=self.sim_params.end_session,
             capital_base=self.sim_params.capital_base,
             emission_rate=self.sim_params.emission_rate,
-            data_frequency=self.sim_params.data_frequency,
+            ledger=self._ledger,
             metrics=self._metrics_set,
+            benchmark_source=self.benchmark_source
         )
 
         # Set the dt initially to the period start by forcing it to change.
@@ -422,7 +395,7 @@ class TradingAlgorithm:
         #     restrictions=self.restrictions,
         # )
 
-        self.metrics_tracker.handle_start_of_simulation(benchmark_source=self.benchmark_source)
+        self.metrics_tracker.handle_start_of_simulation()
         return self.transform()
 
     def compute_eager_pipelines(self):
@@ -482,7 +455,7 @@ class TradingAlgorithm:
         return daily_stats
 
     def calculate_capital_changes(
-            self, dt: datetime.datetime, emission_rate: float, is_interday: bool,
+            self, dt: datetime.datetime, emission_rate: datetime.timedelta, is_interday: bool,
             portfolio_value_adjustment: float = 0.0
     ):
         """If there is a capital change for a given dt, this means the the change
@@ -528,7 +501,7 @@ class TradingAlgorithm:
             return
 
         self.capital_change_deltas.update({dt: capital_change_amount})
-        self.metrics_tracker.capital_change(capital_change_amount)
+        self._ledger.capital_change(change_amount=capital_change_amount)
 
         yield {
             "capital_change": {
@@ -887,8 +860,7 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    def order(self, asset: Asset, amount: float, limit_price: float | None = None, stop_price: float | None = None,
-              style: ExecutionStyle = None):
+    def order(self, asset: Asset, amount: float, style: ExecutionStyle):
         """Place an order for a fixed number of shares.
 
         Parameters
@@ -936,11 +908,11 @@ class TradingAlgorithm:
         elif amount > self.sim_params.max_shares:
             # Arbitrary limit of 100 billion (US) shares will never be
             # exceeded except by a buggy algorithm.
-            raise OverflowError(f"Can't order more than {self.max_shares} shares")
+            raise OverflowError(f"Can't order more than {self.sim_params.max_shares} shares")
 
-        amount, style = self._calculate_order(
-            asset=asset, amount=amount, limit_price=limit_price, stop_price=stop_price, style=style
-        )
+        amount = self.round_order(amount)
+        # Raises a ZiplineError if invalid parameters are detected.
+        self.validate_order_params(asset=asset, amount=amount)
 
         is_buy = amount > 0
         order_id = None
@@ -948,9 +920,11 @@ class TradingAlgorithm:
             dt=self.datetime,
             asset=asset,
             amount=amount,
-            stop=style.get_stop_price(is_buy),
-            limit=style.get_limit_price(is_buy),
+            stop=style.get_stop_price(is_buy=is_buy),
+            limit=style.get_limit_price(is_buy=is_buy),
             id=order_id,
+            commission=0.00,
+            filled=0
         )
 
         submitted_order = self.exchange.submit_order(order=order)
@@ -960,19 +934,19 @@ class TradingAlgorithm:
         return order
 
     def _calculate_order(
-            self, asset: Asset, amount: float, limit_price: float | None = None, stop_price: float | None = None,
-            style: ExecutionStyle = None
+            self, asset: Asset, amount: float,  # limit_price: float | None = None, stop_price: float | None = None,
+            style: ExecutionStyle
     ):
         amount = self.round_order(amount)
 
         # Raises a ZiplineError if invalid parameters are detected.
-        self.validate_order_params(asset, amount, limit_price, stop_price, style)
+        self.validate_order_params(asset=asset, amount=amount)
 
         # Convert deprecated limit_price and stop_price parameters to use
         # ExecutionStyle objects.
-        style = self.__convert_order_params_for_blotter(
-            asset, limit_price, stop_price, style
-        )
+        # style = self.__convert_order_params_for_blotter(
+        #     asset=asset, limit_price=limit_price, stop_price=stop_price, style=style
+        # )
         return amount, style
 
     @staticmethod
@@ -986,8 +960,7 @@ class TradingAlgorithm:
         """
         return int(round_if_near_integer(amount))
 
-    def validate_order_params(self, asset: Asset, amount: int, limit_price: float, stop_price: float,
-                              style: ExecutionStyle):
+    def validate_order_params(self, asset: Asset, amount: int):
         """
         Helper method for validating parameters to the order API function.
 
@@ -999,45 +972,34 @@ class TradingAlgorithm:
                 msg="order() can only be called from within handle_data()"
             )
 
-        if style:
-            if limit_price:
-                raise UnsupportedOrderParameters(
-                    msg="Passing both limit_price and style is not supported."
-                )
-
-            if stop_price:
-                raise UnsupportedOrderParameters(
-                    msg="Passing both stop_price and style is not supported."
-                )
-
         for control in self.trading_controls:
             control.validate(
-                asset,
-                amount,
-                self.portfolio,
-                self.get_datetime(),
-                self.current_data,
+                asset=asset,
+                amount=amount,
+                portfolio=self.portfolio,
+                algo_datetime=self.datetime,
+                algo_current_data=self.current_data,
             )
 
-    @staticmethod
-    def __convert_order_params_for_blotter(asset: Asset, limit_price: float, stop_price: float, style: ExecutionStyle):
-        """Helper method for converting deprecated limit_price and stop_price
-        arguments into ExecutionStyle instances.
-
-        This function assumes that either style == None or (limit_price,
-        stop_price) == (None, None).
-        """
-        if style:
-            assert (limit_price, stop_price) == (None, None)
-            return style
-        if limit_price and stop_price:
-            return StopLimitOrder(limit_price, stop_price, asset=asset)
-        if limit_price:
-            return LimitOrder(limit_price, asset=asset)
-        if stop_price:
-            return StopOrder(stop_price, asset=asset)
-        else:
-            return MarketOrder()
+    # @staticmethod
+    # def __convert_order_params_for_blotter(asset: Asset, limit_price: float, stop_price: float, style: ExecutionStyle):
+    #     """Helper method for converting deprecated limit_price and stop_price
+    #     arguments into ExecutionStyle instances.
+    #
+    #     This function assumes that either style == None or (limit_price,
+    #     stop_price) == (None, None).
+    #     """
+    #     if style:
+    #         assert (limit_price, stop_price) == (None, None)
+    #         return style
+    #     if limit_price and stop_price:
+    #         return StopLimitOrder(limit_price, stop_price, asset=asset)
+    #     if limit_price:
+    #         return LimitOrder(limit_price, asset=asset)
+    #     if stop_price:
+    #         return StopOrder(stop_price, asset=asset)
+    #     else:
+    #         return MarketOrder()
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
@@ -1111,20 +1073,18 @@ class TradingAlgorithm:
             dt = self.datetime
 
         if dt != self._last_sync_time:
-            self.metrics_tracker.sync_last_sale_prices(
-                dt=dt,
-            )
+            self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)
             self._last_sync_time = dt
 
     @property
     def portfolio(self):
         self._sync_last_sale_prices()
-        return self.metrics_tracker.portfolio
+        return self._ledger.portfolio
 
     @property
     def account(self):
         self._sync_last_sale_prices()
-        return self.metrics_tracker.account
+        return self._ledger.account
 
     def set_logger(self, logger):
         self.logger = logger
@@ -1189,13 +1149,13 @@ class TradingAlgorithm:
             self.blotter.slippage_models[Equity] = us_equities
 
         if us_futures is not None:
-            if Future not in us_futures.allowed_asset_types:
+            if FuturesContract not in us_futures.allowed_asset_types:
                 raise IncompatibleSlippageModel(
                     asset_type="futures",
                     given_model=us_futures,
                     supported_asset_types=us_futures.allowed_asset_types,
                 )
-            self.blotter.slippage_models[Future] = us_futures
+            self.blotter.slippage_models[FuturesContract] = us_futures
 
     @api_method
     def set_commission(self, us_equities=None, us_futures=None):
@@ -1232,13 +1192,13 @@ class TradingAlgorithm:
             self.blotter.commission_models[Equity] = us_equities
 
         if us_futures is not None:
-            if Future not in us_futures.allowed_asset_types:
+            if FuturesContract not in us_futures.allowed_asset_types:
                 raise IncompatibleCommissionModel(
                     asset_type="futures",
                     given_model=us_futures,
                     supported_asset_types=us_futures.allowed_asset_types,
                 )
-            self.blotter.commission_models[Future] = us_futures
+            self.blotter.commission_models[FuturesContract] = us_futures
 
     @api_method
     def set_cancel_policy(self, cancel_policy):
@@ -1294,7 +1254,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_percent(
-            self, asset, percent, limit_price=None, stop_price=None, style=None
+            self, asset: Asset, percent: float, style: ExecutionStyle
     ):
         """Place an order in the specified asset corresponding to the given
         percent of the current portfolio value.
@@ -1306,10 +1266,6 @@ class TradingAlgorithm:
         percent : float
             The percentage of the portfolio value to allocate to ``asset``.
             This is specified as a decimal, for example: 0.50 means 50%.
-        limit_price : float, optional
-            The limit price for the order.
-        stop_price : float, optional
-            The stop price for the order.
         style : ExecutionStyle
             The execution style for the order.
 
@@ -1329,26 +1285,24 @@ class TradingAlgorithm:
         :func:`zipline.api.order`
         :func:`zipline.api.order_value`
         """
-        if not self._can_order_asset(asset):
+        if not self._can_order_asset(asset=asset):
             return None
 
-        amount = self._calculate_order_percent_amount(asset, percent)
+        amount = self._calculate_order_percent_amount(asset=asset, percent=percent)
         return self.order(
-            asset,
-            amount,
-            limit_price=limit_price,
-            stop_price=stop_price,
+            asset=asset,
+            amount=amount,
             style=style,
         )
 
-    def _calculate_order_percent_amount(self, asset, percent):
+    def _calculate_order_percent_amount(self, asset: Asset, percent: float):
         value = self.portfolio.portfolio_value * percent
-        return self._calculate_order_value_amount(asset, value)
+        return self._calculate_order_value_amount(asset=asset, value=value)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_target(
-            self, asset, target, limit_price=None, stop_price=None, style=None
+            self, asset: Asset, target: int, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target number of shares. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1399,19 +1353,17 @@ class TradingAlgorithm:
         :func:`zipline.api.order_target_percent`
         :func:`zipline.api.order_target_value`
         """
-        if not self._can_order_asset(asset):
+        if not self._can_order_asset(asset=asset):
             return None
 
-        amount = self._calculate_order_target_amount(asset, target)
+        amount = self._calculate_order_target_amount(asset=asset, target=target)
         return self.order(
-            asset,
-            amount,
-            limit_price=limit_price,
-            stop_price=stop_price,
+            asset=asset,
+            amount=amount,
             style=style,
         )
 
-    def _calculate_order_target_amount(self, asset, target):
+    def _calculate_order_target_amount(self, asset: Asset, target: int):
         if asset in self.portfolio.positions:
             current_position = self.portfolio.positions[asset].amount
             target -= current_position
@@ -1421,7 +1373,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_target_value(
-            self, asset: Asset, target, limit_price=None, stop_price=None, style=None
+            self, asset: Asset, target: float, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target value. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1437,10 +1389,6 @@ class TradingAlgorithm:
             The asset that this order is for.
         target : float
             The desired total value of ``asset``.
-        limit_price : float, optional
-            The limit price for the order.
-        stop_price : float, optional
-            The stop price for the order.
         style : ExecutionStyle
             The execution style for the order.
 
@@ -1463,9 +1411,6 @@ class TradingAlgorithm:
         call to ``order_target_value`` will not have been filled when the
         second ``order_target_value`` call is made.
 
-        See :func:`zipline.api.order` for more information about
-        ``limit_price``, ``stop_price``, and ``style``
-
         See Also
         --------
         :class:`zipline.finance.execution.ExecutionStyle`
@@ -1479,19 +1424,16 @@ class TradingAlgorithm:
         target_amount = self._calculate_order_value_amount(asset, target)
         amount = self._calculate_order_target_amount(asset, target_amount)
         return self.order(
-            asset,
-            amount,
-            limit_price=limit_price,
-            stop_price=stop_price,
+            asset=asset,
+            amount=amount,
             style=style,
         )
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     def order_target_percent(
-            self, asset: Asset, target: float, limit_price: float | None = None,
-            stop_price: float | None = None,
-            style: ExecutionStyle | None = None
+            self, asset: Asset, target: float,
+            style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target percent of the
         current portfolio value. If the position doesn't already exist, this is
@@ -1546,12 +1488,10 @@ class TradingAlgorithm:
         if not self._can_order_asset(asset):
             return None
 
-        amount = self._calculate_order_target_percent_amount(asset, target)
+        amount = self._calculate_order_target_percent_amount(asset=asset, target=target)
         return self.order(
-            asset,
-            amount,
-            limit_price=limit_price,
-            stop_price=stop_price,
+            asset=asset,
+            amount=amount,
             style=style,
         )
 
@@ -1559,25 +1499,25 @@ class TradingAlgorithm:
         target_amount = self._calculate_order_percent_amount(asset, target)
         return self._calculate_order_target_amount(asset, target_amount)
 
-    @api_method
-    def batch_market_order(self, share_counts):
-        """Place a batch market order for multiple assets.
-
-        Parameters
-        ----------
-        share_counts : pd.Series[Asset -> int]
-            Map from asset to number of shares to order for that asset.
-
-        Returns
-        -------
-        order_ids : pd.Index[str]
-            Index of ids for newly-created orders.
-        """
-        style = MarketOrder()
-        order_args = [
-            (asset, amount, style) for (asset, amount) in share_counts.items() if amount
-        ]
-        return self.blotter.batch_order(order_args)
+    # @api_method
+    # def batch_market_order(self, share_counts):
+    #     """Place a batch market order for multiple assets.
+    #
+    #     Parameters
+    #     ----------
+    #     share_counts : pd.Series[Asset -> int]
+    #         Map from asset to number of shares to order for that asset.
+    #
+    #     Returns
+    #     -------
+    #     order_ids : pd.Index[str]
+    #         Index of ids for newly-created orders.
+    #     """
+    #     style = MarketOrder()
+    #     order_args = [
+    #         (asset, amount, style) for (asset, amount) in share_counts.items() if amount
+    #     ]
+    #     return self.blotter.batch_order(order_args)
 
     @api_method
     def get_open_orders(self, asset=None):
@@ -1599,13 +1539,14 @@ class TradingAlgorithm:
         """
         if asset is None:
             return {
-                key: [order.to_api_obj() for order in orders]
+                key: list(orders.values())  # [order.to_api_obj() for order in orders]
                 for key, orders in self.blotter.open_orders.items()
                 if orders
             }
         if asset in self.blotter.open_orders:
             orders = self.blotter.open_orders[asset]
-            return [order.to_api_obj() for order in orders]
+            return list(orders.values())
+            # return [order.to_api_obj() for order in orders]
         return []
 
     @api_method
@@ -1626,60 +1567,59 @@ class TradingAlgorithm:
         self.exchange.get_orders_by_ids([order_id])
         return self.blotter.get_order_by_id(order_id=order_id)
 
-    def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
-        """
-        Cancel all open orders for a given asset.
-        """
-        # (sadly) open_orders is a defaultdict, so this will always succeed.
-        orders = self.blotter.get_open_orders_by_asset(asset=asset)
-
-        # We're making a copy here because `cancel` mutates the list of open
-        # orders in place.  The right thing to do here would be to make
-        # self.open_orders no longer a defaultdict.  If we do that, then we
-        # should just remove the orders once here and be done with the matter.
-        for order_id, order in orders.items():
-            self.cancel_order(order_id=order.id, relay_status=relay_status)
-            if warn:
-                # Message appropriately depending on whether there's
-                # been a partial fill or not.
-                if order.filled > 0:
-                    self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} has been partially filled. "
-                        "{order_filled} shares were successfully "
-                        "purchased. {order_failed} shares were not "
-                        "filled by the end of day and "
-                        "were canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                            order_filled=order.filled,
-                            order_failed=order.amount - order.filled,
-                        )
-                    )
-                elif order.filled < 0:
-                    self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} has been partially filled. "
-                        "{order_filled} shares were successfully "
-                        "sold. {order_failed} shares were not "
-                        "filled by the end of day and "
-                        "were canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                            order_filled=-1 * order.filled,
-                            order_failed=-1 * (order.amount - order.filled),
-                        )
-                    )
-                else:
-                    self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} failed to fill by the end of day "
-                        "and was canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                        )
-                    )
-
+    # def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
+    #     """
+    #     Cancel all open orders for a given asset.
+    #     """
+    #     # (sadly) open_orders is a defaultdict, so this will always succeed.
+    #     orders = self.blotter.get_open_orders_by_asset(asset=asset)
+    #
+    #     # We're making a copy here because `cancel` mutates the list of open
+    #     # orders in place.  The right thing to do here would be to make
+    #     # self.open_orders no longer a defaultdict.  If we do that, then we
+    #     # should just remove the orders once here and be done with the matter.
+    #     for order_id, order in orders.items():
+    #         self.cancel_order(order_id=order.id, relay_status=relay_status)
+    #         if warn:
+    #             # Message appropriately depending on whether there's
+    #             # been a partial fill or not.
+    #             if order.filled > 0:
+    #                 self._logger.warning(
+    #                     "Your order for {order_amt} shares of "
+    #                     "{order_sym} has been partially filled. "
+    #                     "{order_filled} shares were successfully "
+    #                     "purchased. {order_failed} shares were not "
+    #                     "filled by the end of day and "
+    #                     "were canceled.".format(
+    #                         order_amt=order.amount,
+    #                         order_sym=order.asset.symbol,
+    #                         order_filled=order.filled,
+    #                         order_failed=order.amount - order.filled,
+    #                     )
+    #                 )
+    #             elif order.filled < 0:
+    #                 self._logger.warning(
+    #                     "Your order for {order_amt} shares of "
+    #                     "{order_sym} has been partially filled. "
+    #                     "{order_filled} shares were successfully "
+    #                     "sold. {order_failed} shares were not "
+    #                     "filled by the end of day and "
+    #                     "were canceled.".format(
+    #                         order_amt=order.amount,
+    #                         order_sym=order.asset.symbol,
+    #                         order_filled=-1 * order.filled,
+    #                         order_failed=-1 * (order.amount - order.filled),
+    #                     )
+    #                 )
+    #             else:
+    #                 self._logger.warning(
+    #                     "Your order for {order_amt} shares of "
+    #                     "{order_sym} failed to fill by the end of day "
+    #                     "and was canceled.".format(
+    #                         order_amt=order.amount,
+    #                         order_sym=order.asset.symbol,
+    #                     )
+    #                 )
 
     @api_method
     def cancel_order(self, order_id: str, relay_status: bool = True) -> None:
@@ -1778,7 +1718,7 @@ class TradingAlgorithm:
             control.validate(
                 self.portfolio,
                 self.account,
-                self.get_datetime(),
+                self.datetime,
                 self.current_data,
             )
 
@@ -2044,17 +1984,17 @@ class TradingAlgorithm:
     def _pipeline_output(self, pipeline, chunks, name):
         """Internal implementation of `pipeline_output`."""
         # TODO FIXME TZ MESS
-        today = self.get_datetime().normalize().tz_localize(None)
+        today = self.datetime
         try:
-            data = self._pipeline_cache.get(name, today)
+            data = self._pipeline_cache.get(key=name, dt=today)
         except KeyError:
             # Calculate the next block.
             data, valid_until = self.run_pipeline(
-                pipeline,
-                today,
-                next(chunks),
+                pipeline=pipeline,
+                start_session=today,
+                chunksize=next(chunks),
             )
-            self._pipeline_cache.set(name, data, valid_until)
+            self._pipeline_cache.set(key=name, value=data, expiration_dt=valid_until)
 
         # Now that we have a cached result, try to return the data for today.
         try:
@@ -2112,7 +2052,6 @@ class TradingAlgorithm:
     # End Pipeline API
     ##################
 
-
     def get_simulation_dt(self) -> datetime.datetime:
         return self.simulation_dt
 
@@ -2123,7 +2062,7 @@ class TradingAlgorithm:
         # process any capital changes that came between the last
         # and current minutes
         return self.calculate_capital_changes(dt, emission_rate=self.metrics_tracker.emission_rate,
-                                                   is_interday=False)
+                                              is_interday=False)
 
     # TODO: simplify
     # flake8: noqa: C901
@@ -2153,14 +2092,14 @@ class TradingAlgorithm:
         self.blotter.prune_orders(closed_orders=closed_orders)
 
         for transaction in new_transactions:
-            self.metrics_tracker.process_transaction(transaction=transaction)
+            self._ledger.process_transaction(transaction=transaction)
 
             # since this order was modified, record it
             order = self.blotter.get_order_by_id(transaction.order_id)
-            self.metrics_tracker.process_order(order=order)
+            self._ledger.process_order(order=order)
 
         for commission in new_commissions:
-            self.metrics_tracker.process_commission(commission=commission)
+            self._ledger.process_commission(commission=commission)
 
         await handle_data(context=self, data=current_data, dt=dt_to_use)
 
@@ -2172,7 +2111,7 @@ class TradingAlgorithm:
         # if we have any new orders, record them so that we know
         # in what perf period they were placed.
         for new_order in new_orders:
-            self.metrics_tracker.process_order(new_order)
+            self._ledger.process_order(order=new_order)
 
     def once_a_day(
             self,
@@ -2198,14 +2137,14 @@ class TradingAlgorithm:
 
         # handle any splits that impact any positions or any open orders.
         assets_we_care_about = (
-                self.metrics_tracker.positions.keys() | self.blotter.get_open_orders().keys()
+                self._ledger.position_tracker.positions.keys() | self.blotter.get_open_orders().keys()
         )
 
         if assets_we_care_about:
             splits = bundle_data.get_splits(assets_we_care_about, midnight_dt)
             if splits:
                 self.blotter.process_splits(splits)
-                self.metrics_tracker.handle_splits(splits)
+                self._ledger.process_splits(splits)
 
     def on_exit(self):
         # Remove references to algo, data portal, et al to break cycles
@@ -2251,7 +2190,7 @@ class TradingAlgorithm:
             for dt, action in self.clock:
                 if action == SimulationEvent.BAR:
                     async for capital_change_packet in self.every_bar(dt_to_use=dt, current_data=self.current_data,
-                                                                 handle_data=self.event_manager.handle_data):
+                                                                      handle_data=self.event_manager.handle_data):
                         yield capital_change_packet
                 elif action == SimulationEvent.SESSION_START:
                     for capital_change_packet in self.once_a_day(midnight_dt=dt,
@@ -2260,7 +2199,7 @@ class TradingAlgorithm:
                         yield capital_change_packet
                 elif action == SimulationEvent.SESSION_END:
                     # End of the session.
-                    positions = self.metrics_tracker.positions
+                    positions = self._ledger.position_tracker.positions
                     position_assets = list(positions.keys())
 
                     # await self.bundle_data.asset_repository.retrieve_all(
@@ -2316,7 +2255,7 @@ class TradingAlgorithm:
         metrics_tracker = self.metrics_tracker
         # data_portal = self.data_portal
         for asset in assets_to_clear:
-            metrics_tracker.process_close_position(asset=asset, dt=dt)
+            self._ledger.close_position(asset=asset, dt=dt)
 
         # Remove open orders for any sids that have reached their auto close
         # date. These orders get processed immediately because otherwise they
@@ -2336,7 +2275,7 @@ class TradingAlgorithm:
         new_order_values = list(self.new_orders.values())
         for order in new_order_values:
             if order.status == OrderStatus.CANCELLED:
-                metrics_tracker.process_order(order=order)
+                self._ledger.process_order(order=order)
                 self.new_orders.pop(order.id)
 
     def _get_daily_message(self, dt: datetime.datetime):

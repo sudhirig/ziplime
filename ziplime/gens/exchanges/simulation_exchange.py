@@ -1,5 +1,4 @@
 import uuid
-from abc import abstractmethod
 
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.domain.db.asset import Asset
@@ -22,22 +21,12 @@ class SimulationExchange(Exchange):
                  future_commission: FutureCommissionModel,
                  ):
         self.slippage_models = {
-            AssetType.EQUITY.value: equity_slippage,  # or FixedBasisPointsSlippage(),
+            AssetType.EQUITY.value: equity_slippage,
             AssetType.FUTURES_CONTRACT.value: future_slippage,
-            # Future: future_slippage
-            #         or VolatilityVolumeShare(
-            #     volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-            # ),
         }
         self.commission_models = {
-            AssetType.EQUITY.value: equity_commission,  # or FixedBasisPointsSlippage(),
+            AssetType.EQUITY.value: equity_commission,
             AssetType.FUTURES_CONTRACT.value: future_commission,
-            # Equity: equity_commission or PerShare(),
-            # Future: future_commission
-            #         or PerContract(
-            #     cost=DEFAULT_PER_CONTRACT_COST,
-            #     exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
-            # ),
         }
 
     def get_commission_model(self, asset: Asset):

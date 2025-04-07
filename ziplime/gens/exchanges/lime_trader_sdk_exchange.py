@@ -14,10 +14,11 @@ from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
 from ziplime.assets.domain.db.asset import Asset
-from zipline.finance.execution import (MarketOrder,
+from ziplime.finance.execution import (MarketOrder,
                                        LimitOrder,
                                        ExecutionStyle)
 
+from ziplime.finance.commission import CommissionModel
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.domain.transaction import Transaction
@@ -26,11 +27,13 @@ import pandas as pd
 import numpy as np
 import uuid
 
-
+from ziplime.finance.slippage.slippage_model import SlippageModel
 from ziplime.gens.exchanges.exchange import Exchange
 
 
 class LimeTraderSdkExchange(Exchange):
+
+
     def __init__(self, lime_sdk_credentials_file: str):
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)
@@ -334,3 +337,12 @@ class LimeTraderSdkExchange(Exchange):
             df.columns = pd.MultiIndex.from_product([[asset, ], df.columns])
             dfs.append(df)
         return pd.concat(dfs, axis=1)
+
+    def submit_order(self, order: Order):
+        pass
+
+    def get_commission_model(self, asset: Asset) -> CommissionModel:
+        pass
+
+    def get_slippage_model(self, asset: Asset) -> SlippageModel:
+        pass

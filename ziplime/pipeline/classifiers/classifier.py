@@ -22,7 +22,7 @@ from ziplime.pipeline.dtypes import (
 from ziplime.pipeline.sentinels import NotSpecified
 from ziplime.pipeline.term import ComputableTerm
 from ziplime.utils.compat import unicode
-from ziplime.utils.input_validation import expect_types, expect_dtypes
+from ziplime.utils.input_validation import expect_dtypes
 from ziplime.utils.numpy_utils import (
     categorical_dtype,
     int64_dtype,
@@ -38,7 +38,6 @@ from ..mixins import (
     SingleInputMixin,
     StandardOutputs,
 )
-
 
 string_classifiers_only = restrict_to_dtype(
     dtype=categorical_dtype,
@@ -133,8 +132,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
     del bad_compare
 
     @string_classifiers_only
-    @expect_types(prefix=(bytes, unicode))
-    def startswith(self, prefix):
+    def startswith(self, prefix: bytes | unicode):
         """
         Construct a Filter matching values starting with ``prefix``.
 
@@ -156,8 +154,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
         )
 
     @string_classifiers_only
-    @expect_types(suffix=(bytes, unicode))
-    def endswith(self, suffix):
+    def endswith(self, suffix: bytes | unicode):
         """
         Construct a Filter matching values ending with ``suffix``.
 
@@ -179,8 +176,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
         )
 
     @string_classifiers_only
-    @expect_types(substring=(bytes, unicode))
-    def has_substring(self, substring):
+    def has_substring(self, substring: bytes | unicode):
         """
         Construct a Filter matching values containing ``substring``.
 
@@ -202,8 +198,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
         )
 
     @string_classifiers_only
-    @expect_types(pattern=(bytes, unicode, type(re.compile(""))))
-    def matches(self, pattern):
+    def matches(self, pattern: bytes | unicode | type(re.compile(""))):
         """
         Construct a Filter that checks regex matches against ``pattern``.
 
@@ -485,8 +480,7 @@ class Relabel(SingleInputMixin, Classifier):
 
     # TODO: Support relabeling for integer dtypes.
     @expect_dtypes(term=categorical_dtype)
-    @expect_types(term=Classifier)
-    def __new__(cls, term, relabeler):
+    def __new__(cls, term: Classifier, relabeler):
         return super(Relabel, cls).__new__(
             cls,
             inputs=(term,),

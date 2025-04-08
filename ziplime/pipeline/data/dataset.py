@@ -5,9 +5,9 @@ from textwrap import dedent
 from weakref import WeakKeyDictionary
 
 from toolz import first
-
 from zipline.currency import Currency
 from zipline.data.fx import DEFAULT_FX_RATE
+
 from ziplime.pipeline.classifiers import Classifier, Latest as LatestClassifier
 from ziplime.pipeline.domain import Domain, GENERIC
 from ziplime.pipeline.factors import Factor, Latest as LatestFactor
@@ -20,9 +20,7 @@ from ziplime.pipeline.term import (
 )
 from ziplime.utils.formatting import s, plural
 from ziplime.utils.input_validation import (
-    coerce_types,
     ensure_dtype,
-    expect_types,
 )
 from ziplime.utils.numpy_utils import float64_dtype, NoDefaultMissingValue
 from ziplime.utils.preprocess import preprocess
@@ -38,12 +36,12 @@ class Column:
 
     @preprocess(dtype=ensure_dtype)
     def __init__(
-        self,
-        dtype,
-        missing_value=NotSpecified,
-        doc=None,
-        metadata=None,
-        currency_aware=False,
+            self,
+            dtype,
+            missing_value=NotSpecified,
+            doc=None,
+            metadata=None,
+            currency_aware=False,
     ):
         if currency_aware and dtype != float64_dtype:
             raise ValueError(
@@ -162,15 +160,15 @@ class BoundColumn(LoadableTerm):
     window_safe = True
 
     def __new__(
-        cls,
-        dtype,
-        missing_value,
-        dataset,
-        name,
-        doc,
-        metadata,
-        currency_conversion,
-        currency_aware,
+            cls,
+            dtype,
+            missing_value,
+            dataset,
+            name,
+            doc,
+            metadata,
+            currency_conversion,
+            currency_aware,
     ):
         if currency_aware and dtype != float64_dtype:
             raise AssertionError(
@@ -199,15 +197,15 @@ class BoundColumn(LoadableTerm):
         )
 
     def _init(
-        self,
-        dataset,
-        name,
-        doc,
-        metadata,
-        currency_conversion,
-        currency_aware,
-        *args,
-        **kwargs,
+            self,
+            dataset,
+            name,
+            doc,
+            metadata,
+            currency_conversion,
+            currency_aware,
+            *args,
+            **kwargs,
     ):
         self._dataset = dataset
         self._name = name
@@ -219,15 +217,15 @@ class BoundColumn(LoadableTerm):
 
     @classmethod
     def _static_identity(
-        cls,
-        dataset,
-        name,
-        doc,
-        metadata,
-        currency_conversion,
-        currency_aware,
-        *args,
-        **kwargs,
+            cls,
+            dataset,
+            name,
+            doc,
+            metadata,
+            currency_conversion,
+            currency_aware,
+            *args,
+            **kwargs,
     ):
         return (
             super(BoundColumn, cls)._static_identity(*args, **kwargs),
@@ -275,8 +273,7 @@ class BoundColumn(LoadableTerm):
         """
         return self.specialize(GENERIC)
 
-    @coerce_types(currency=(str, Currency))
-    def fx(self, currency):
+    def fx(self, currency: str | Currency):
         """
         Construct a currency-converted version of this column.
 
@@ -440,8 +437,7 @@ class DataSetMeta(type):
 
         return newtype
 
-    @expect_types(domain=Domain)
-    def specialize(cls, domain):
+    def specialize(cls, domain: Domain):
         """
         Specialize a generic DataSet to a concrete domain.
 
@@ -505,11 +501,11 @@ class DataSetMeta(type):
         # already in specialize().
         assert isinstance(domain, Domain)
         assert (
-            domain not in cls._domain_specializations
+                domain not in cls._domain_specializations
         ), "Domain specializations should be memoized!"
         if domain is not GENERIC:
             assert (
-                cls.domain is GENERIC
+                    cls.domain is GENERIC
             ), "Can't specialize dataset with domain {} to domain {}.".format(
                 cls.domain,
                 domain,

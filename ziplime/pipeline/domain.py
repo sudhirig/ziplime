@@ -27,7 +27,6 @@ from ziplime.utils.calendar_utils import get_calendar
 
 from zipline.country import CountryCode
 from ziplime.utils.formatting import bulleted_list
-from ziplime.utils.input_validation import expect_types, optional
 from ziplime.utils.memoize import lazyval
 from ziplime.utils.pandas_utils import days_at_time
 
@@ -154,21 +153,16 @@ class EquityCalendarDomain(Domain):
          appear in the pipeline input for the given session.
     """
 
-    @expect_types(
-        country_code=str,
-        calendar_name=str,
-        __funcname="EquityCountryDomain",
-    )
     def __init__(
-        self, country_code, calendar_name, data_query_offset=-np.timedelta64(45, "m")
+            self, country_code: str, calendar_name:str, data_query_offset=-np.timedelta64(45, "m")
     ):
         self._country_code = country_code
         self.calendar_name = calendar_name
         self._data_query_offset = (
             # add one minute because `open_time` is actually the open minute
             # label which is one minute _after_ market open...
-            data_query_offset
-            - np.timedelta64(1, "m")
+                data_query_offset
+                - np.timedelta64(1, "m")
         )
         if data_query_offset >= datetime.timedelta(0):
             raise ValueError(
@@ -380,19 +374,12 @@ class EquitySessionDomain(Domain):
         for a session falls on a different calendar day from the session label.
     """
 
-    @expect_types(
-        sessions=pd.DatetimeIndex,
-        country_code=str,
-        data_query_time=optional(datetime.time),
-        data_query_date_offset=int,
-        __funcname="EquitySessionDomain",
-    )
     def __init__(
-        self,
-        sessions,
-        country_code,
-        data_query_time=None,
-        data_query_date_offset=0,
+            self,
+            sessions: pd.DatetimeIndex,
+            country_code: str,
+            data_query_time: datetime.time | None = None,
+            data_query_date_offset: int = 0,
     ):
         self._country_code = country_code
         self._sessions = sessions

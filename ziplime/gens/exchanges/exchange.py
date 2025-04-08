@@ -3,6 +3,7 @@ from abc import abstractmethod
 from ziplime.assets.domain.db.asset import Asset
 from zipline.finance.order import Order as ZPOrder
 
+from ziplime.domain.bar_data import BarData
 from ziplime.domain.position import Position
 from ziplime.domain.portfolio import Portfolio
 from ziplime.domain.account import Account
@@ -12,6 +13,10 @@ from ziplime.finance.slippage.slippage_model import SlippageModel
 
 
 class Exchange:
+
+    def __init__(self, name: str):
+        self.name = name
+
     def subscribe_to_market_data(self, asset):
         return []
 
@@ -31,7 +36,7 @@ class Exchange:
     def get_time_skew(self): ...
 
     @abstractmethod
-    def submit_order(self, order: Order): ...
+    async def submit_order(self, order: Order): ...
 
     def is_alive(self): ...
 
@@ -39,7 +44,7 @@ class Exchange:
     def get_orders(self) -> dict[str, ZPOrder]: ...
 
     @abstractmethod
-    def get_transactions(self): ...
+    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData): ...
 
     @abstractmethod
     def get_orders_by_ids(self, order_ids: list[str]): ...

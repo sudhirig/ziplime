@@ -104,7 +104,7 @@ class BundleService:
                 sid=asset_router.sid,
                 start_date=asset["min_date"].date(),
                 first_traded=asset["min_date"].date(),
-                end_date=asset["max_date"].date(),
+                end_date=asset["max_date"].date().replace(year=2099),
                 asset_name=asset["symbol"],
                 auto_close_date=asset["max_date"].date().replace(year=2099),
             )

@@ -11,6 +11,7 @@ from ziplime.data.services.bundle_service import BundleService
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
 from ziplime.gens.domain.realtime_clock import RealtimeClock
 from ziplime.gens.domain.simulation_clock import SimulationClock
+from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.gens.exchanges.exchange import Exchange
 from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.sources.benchmark_source import BenchmarkSource
@@ -65,19 +66,14 @@ class _RunAlgoError(click.ClickException, ValueError):
 async def run_algorithm(
         algofile: str,
         algotext: str,
-        emission_rate: datetime.timedelta,
-        capital_base: float,
-        bundle_name: str,
-        start_date: datetime.datetime,
-        end_date: datetime.datetime,
         output,
-        trading_calendar: ExchangeCalendar,
         print_algo: bool,
         metrics_set: str,
         custom_loader,
         benchmark_spec,
-        exchange: Exchange,
+        clock: TradingClock,
         market_data_provider: AbstractLiveMarketDataProvider,
+        simulation_params: SimulationParameters,
         bundle_registry: BundleRegistry,
 ):
     """Run a backtest for the given algorithm.
@@ -87,15 +83,15 @@ async def run_algorithm(
     # benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
     bundle_service = BundleService(bundle_registry=bundle_registry)
 
-    bundle_data = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
+    bundle_data = await bundle_service.load_bundle(bundle_name=simulation_params.bundle_name, bundle_version=None)
     # date parameter validation
-    if trading_calendar.sessions_distance(start_date.date(), end_date.date()) < 1:
-        raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
+    if simulation_params.trading_calendar.sessions_distance(simulation_params.start_session, simulation_params.end_session) < 1:
+        raise _RunAlgoError(f"There are no trading days between {simulation_params.start_session} and {simulation_params.end_session}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
         asset_repository=bundle_data.asset_repository,
-        start_date=start_date.date(),
-        end_date=end_date.date(),
+        start_date=simulation_params.start_session,
+        end_date=simulation_params.end_session,
     )
 
     if print_algo:
@@ -120,17 +116,8 @@ async def run_algorithm(
             return custom_loader.get(column)
         except KeyError:
             raise ValueError("No PipelineLoader registered for column %s." % column)
-    max_shares = int(1e11)
 
-    sim_params = SimulationParameters(
-        start_session=start_date,
-        end_session=end_date,
-        trading_calendar=trading_calendar,
-        capital_base=capital_base,
-        emission_rate=emission_rate,
-        data_frequency=emission_rate,
-        max_shares=max_shares
-    )
+
 
     if benchmark_sid is not None:
         benchmark_asset = bundle_data.asset_repository.retrieve_asset(sid=benchmark_sid)
@@ -141,41 +128,41 @@ async def run_algorithm(
     benchmark_source = BenchmarkSource(
         benchmark_asset=benchmark_asset,
         benchmark_returns=benchmark_returns,
-        trading_calendar=trading_calendar,
-        sessions=sim_params.sessions,
+        trading_calendar=simulation_params.trading_calendar,
+        sessions=simulation_params.sessions,
         bundle_data=bundle_data,
-        emission_rate=sim_params.emission_rate,
-        timedelta_period=emission_rate,
+        emission_rate=simulation_params.emission_rate,
+        timedelta_period=simulation_params.emission_rate,
         benchmark_fields=["close"]
     )
 
-    clock = SimulationClock(
-        sessions=sim_params.sessions,
-        market_opens=sim_params.market_opens,
-        market_closes=sim_params.market_closes,
-        before_trading_start_minutes=sim_params.before_trading_start_minutes,
-        emission_rate=sim_params.emission_rate,
-        timezone=sim_params.trading_calendar.tz
-    )
-    # timedelta_diff_from_current_time = datetime.datetime.now(tz=trading_calendar.tz) - start_date.replace(tzinfo=trading_calendar.tz)
-    # clock = RealtimeClock(
+    # clock = SimulationClock(
     #     sessions=sim_params.sessions,
     #     market_opens=sim_params.market_opens,
     #     market_closes=sim_params.market_closes,
     #     before_trading_start_minutes=sim_params.before_trading_start_minutes,
     #     emission_rate=sim_params.emission_rate,
-    #     timezone=sim_params.trading_calendar.tz,
+    #     timezone=sim_params.trading_calendar.tz
+    # )
+    # timedelta_diff_from_current_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz) - start_date.replace(tzinfo=simulation_params.trading_calendar.tz)
+    # clock = RealtimeClock(
+    #     sessions=simulation_params.sessions,
+    #     market_opens=simulation_params.market_opens,
+    #     market_closes=simulation_params.market_closes,
+    #     before_trading_start_minutes=simulation_params.before_trading_start_minutes,
+    #     emission_rate=simulation_params.emission_rate,
+    #     timezone=simulation_params.trading_calendar.tz,
     #     timedelta_diff_from_current_time=-timedelta_diff_from_current_time
     # )
 
 
     tr = TradingAlgorithm(
-        exchange=exchange,
+        exchange=simulation_params.exchange,
         bundle_data=bundle_data,
         get_pipeline_loader=choose_loader,
-        sim_params=sim_params,
+        sim_params=simulation_params,
         metrics_set=metrics_set,
-        blotter=InMemoryBlotter(exchange=exchange, cancel_policy=None),
+        blotter=InMemoryBlotter(exchange=simulation_params.exchange, cancel_policy=None),
         benchmark_source=benchmark_source,
         algo_filename=algofile,
         script=algotext,

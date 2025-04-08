@@ -1,5 +1,6 @@
 from typing import Any, Self
 
+from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.db.asset_router import AssetRouter
 from ziplime.assets.domain.db.commodity import Commodity
@@ -7,6 +8,7 @@ from ziplime.assets.domain.db.currency import Currency
 from ziplime.assets.domain.db.equity import Equity
 from ziplime.assets.domain.db.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.domain.db.exchange_info import ExchangeInfo
+from ziplime.assets.domain.db.futures_contract import FuturesContract
 from ziplime.assets.domain.db.trading_pair import TradingPair
 
 
@@ -28,7 +30,15 @@ class AssetRepository:
 
     async def get_asset_by_sid(self, sid: int) -> Asset: ...
 
-    async def get_equity_by_symbol(self, symbol: str) -> Equity: ...
+    async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None: ...
+
+    async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType, exchange_name: str) -> Asset | None: ...
+
+    async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContract | None: ...
+
+    async def get_currency_by_symbol(self, symbol: str) -> Currency | None: ...
+
+    async def get_commodity_by_symbol(self, symbol: str) -> Commodity | None: ...
 
     def to_json(self): ...
 

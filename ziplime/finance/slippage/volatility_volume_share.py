@@ -5,7 +5,6 @@ from ziplime.finance.constants import ROOT_SYMBOL_TO_ETA, DEFAULT_ETA
 from ziplime.assets.domain.db.futures_contract import FuturesContract
 from ziplime.finance.slippage.market_impact_base import MarketImpactBase
 from ziplime.utils.dummy import DummyMapping
-from ziplime.utils.range import merge
 
 
 class VolatilityVolumeShare(MarketImpactBase):

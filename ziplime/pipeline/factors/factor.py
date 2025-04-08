@@ -53,7 +53,6 @@ from ziplime.pipeline.mixins import (
 from ziplime.pipeline.sentinels import NotSpecified, NotSpecifiedType
 from ziplime.pipeline.term import AssetExists, ComputableTerm, Term
 from ziplime.utils.functional import with_doc, with_name
-from ziplime.utils.input_validation import expect_types
 from ziplime.utils.math_utils import (
     nanmax,
     nanmean,
@@ -70,7 +69,6 @@ from ziplime.utils.numpy_utils import (
     is_missing,
 )
 from ziplime.utils.sharedoc import templated_docstring
-
 
 _RANK_METHODS = frozenset(["average", "min", "max", "dense", "ordinal"])
 
@@ -385,7 +383,6 @@ float64_only = restrict_to_dtype(
     ),
 )
 
-
 CORRELATION_METHOD_NOTE = dedent(
     """\
     This method can only be called on expressions which are deemed safe for use
@@ -436,9 +433,8 @@ class summary_funcs:
 def summary_method(name):
     func = getattr(summary_funcs, name)
 
-    @expect_types(mask=(Filter, NotSpecifiedType))
     @float64_only
-    def f(self, mask=NotSpecified):
+    def f(self, mask: Filter | NotSpecifiedType = NotSpecified):
         """Create a 1-dimensional factor computing the {} of self, each day.
 
         Parameters
@@ -532,12 +528,9 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
 
     eq = binary_operator("==")
 
-    @expect_types(
-        mask=(Filter, NotSpecifiedType),
-        groupby=(Classifier, NotSpecifiedType),
-    )
     @float64_only
-    def demean(self, mask=NotSpecified, groupby=NotSpecified):
+    def demean(self, mask: Filter | NotSpecifiedType = NotSpecified,
+               groupby: Classifier | NotSpecifiedType = NotSpecified):
         """
         Construct a Factor that computes ``self`` and subtracts the mean from
         row of the result.
@@ -661,12 +654,9 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @expect_types(
-        mask=(Filter, NotSpecifiedType),
-        groupby=(Classifier, NotSpecifiedType),
-    )
     @float64_only
-    def zscore(self, mask=NotSpecified, groupby=NotSpecified):
+    def zscore(self, mask: Filter | NotSpecifiedType = NotSpecified,
+               groupby: Classifier | NotSpecifiedType = NotSpecified):
         """
         Construct a Factor that Z-Scores each day's results.
 
@@ -729,7 +719,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         )
 
     def rank(
-        self, method="ordinal", ascending=True, mask=NotSpecified, groupby=NotSpecified
+            self, method="ordinal", ascending=True, mask=NotSpecified, groupby=NotSpecified
     ):
         """
         Construct a new Factor representing the sorted rank of each column
@@ -785,13 +775,8 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             window_safe=True,
         )
 
-    @expect_types(
-        target=Term,
-        correlation_length=int,
-        mask=(Filter, NotSpecifiedType),
-    )
     @templated_docstring(CORRELATION_METHOD_NOTE=CORRELATION_METHOD_NOTE)
-    def pearsonr(self, target, correlation_length, mask=NotSpecified):
+    def pearsonr(self, target: Term, correlation_length: int, mask: Filter | NotSpecifiedType = NotSpecified):
         """
         Construct a new Factor that computes rolling pearson correlation
         coefficients between ``target`` and the columns of ``self``.
@@ -854,13 +839,8 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @expect_types(
-        target=Term,
-        correlation_length=int,
-        mask=(Filter, NotSpecifiedType),
-    )
     @templated_docstring(CORRELATION_METHOD_NOTE=CORRELATION_METHOD_NOTE)
-    def spearmanr(self, target, correlation_length, mask=NotSpecified):
+    def spearmanr(self, target: Term, correlation_length: int, mask: Filter | NotSpecifiedType = NotSpecified):
         """
         Construct a new Factor that computes rolling spearman rank correlation
         coefficients between ``target`` and the columns of ``self``.
@@ -922,13 +902,8 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @expect_types(
-        target=Term,
-        regression_length=int,
-        mask=(Filter, NotSpecifiedType),
-    )
     @templated_docstring(CORRELATION_METHOD_NOTE=CORRELATION_METHOD_NOTE)
-    def linear_regression(self, target, regression_length, mask=NotSpecified):
+    def linear_regression(self, target: Term, regression_length: int, mask: Filter | NotSpecifiedType = NotSpecified):
         """
         Construct a new Factor that performs an ordinary least-squares
         regression predicting the columns of `self` from `target`.
@@ -987,15 +962,10 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @expect_types(
-        min_percentile=(int, float),
-        max_percentile=(int, float),
-        mask=(Filter, NotSpecifiedType),
-        groupby=(Classifier, NotSpecifiedType),
-    )
     @float64_only
     def winsorize(
-        self, min_percentile, max_percentile, mask=NotSpecified, groupby=NotSpecified
+            self, min_percentile: int | float, max_percentile: int | float,
+            mask: Filter | NotSpecifiedType = NotSpecified, groupby: Classifier | NotSpecifiedType = NotSpecified
     ):
         """
         Construct a new factor that winsorizes the result of this factor.
@@ -1089,8 +1059,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             window_safe=self.window_safe,
         )
 
-    @expect_types(bins=int, mask=(Filter, NotSpecifiedType))
-    def quantiles(self, bins, mask=NotSpecified):
+    def quantiles(self, bins: int, mask: Filter | NotSpecifiedType = NotSpecified):
         """
         Construct a Classifier computing quantiles of the output of ``self``.
 
@@ -1116,8 +1085,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask = self.mask
         return Quantiles(inputs=(self,), bins=bins, mask=mask)
 
-    @expect_types(mask=(Filter, NotSpecifiedType))
-    def quartiles(self, mask=NotSpecified):
+    def quartiles(self, mask: Filter | NotSpecifiedType = NotSpecified):
         """
         Construct a Classifier computing quartiles over the output of ``self``.
 
@@ -1140,8 +1108,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self.quantiles(bins=4, mask=mask)
 
-    @expect_types(mask=(Filter, NotSpecifiedType))
-    def quintiles(self, mask=NotSpecified):
+    def quintiles(self, mask: Filter | NotSpecifiedType = NotSpecified):
         """
         Construct a Classifier computing quintile labels on ``self``.
 
@@ -1164,8 +1131,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self.quantiles(bins=5, mask=mask)
 
-    @expect_types(mask=(Filter, NotSpecifiedType))
-    def deciles(self, mask=NotSpecified):
+    def deciles(self, mask: Filter | NotSpecifiedType = NotSpecified):
         """
         Construct a Classifier computing decile labels on ``self``.
 
@@ -1408,15 +1374,15 @@ class GroupedRowTransform(Factor):
     window_length = 0
 
     def __new__(
-        cls,
-        transform,
-        transform_args,
-        factor,
-        groupby,
-        dtype,
-        missing_value,
-        mask,
-        **kwargs,
+            cls,
+            transform,
+            transform_args,
+            factor,
+            groupby,
+            dtype,
+            missing_value,
+            mask,
+            **kwargs,
     ):
 
         if mask is NotSpecified:

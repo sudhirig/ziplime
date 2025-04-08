@@ -51,7 +51,6 @@ class BarData:
     def __init__(self,
                  bundle_data: BundleData,
                  simulation_dt_func: Callable,
-                 data_frequency: datetime.timedelta,
                  trading_calendar: ExchangeCalendar,
                  restrictions):
         self.bundle_data = bundle_data

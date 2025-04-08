@@ -92,27 +92,6 @@ class MetricsTracker:
         # don't compare these strings over and over again!
         self._progress = progress
 
-        # # bind all of the hooks from the passed metric objects.
-        # for hook in self._hooks:
-        #     registered = []
-        #     for metric in metrics:
-        #         try:
-        #             registered.append(getattr(metric, hook))
-        #         except AttributeError:
-        #             pass
-        #
-        #     def closing_over_loop_variables_is_hard(registered=registered):
-        #         def hook_implementation(*args, **kwargs):
-        #             for impl in registered:
-        #                 impl(*args, **kwargs)
-        #
-        #         return hook_implementation
-        #
-        #     hook_implementation = closing_over_loop_variables_is_hard()
-        #
-        #     hook_implementation.__name__ = hook
-        #     setattr(self, hook, hook_implementation)
-
     def handle_start_of_simulation(self):
         for metric in self._start_of_simulation_metrics:
             metric.start_of_simulation(
@@ -122,13 +101,6 @@ class MetricsTracker:
                 sessions=self._sessions,
                 benchmark_source=self._benchmark_source,
             )
-        # self.start_of_simulation(
-        #     ledger=self._ledger,
-        #     emission_rate=self.emission_rate,
-        #     trading_calendar=self._trading_calendar,
-        #     sessions=self._sessions,
-        #     benchmark_source=self._benchmark_source,
-        # )
 
     def handle_minute_close(self, dt: datetime.datetime):
         """Handles the close of the given minute in minute emission.
@@ -168,13 +140,6 @@ class MetricsTracker:
                 session_ix=self._session_count,
                 bundle_data=self.bundle_data,
             )
-        # self.end_of_bar(
-        #     packet=packet,
-        #     ledger=ledger,
-        #     session=dt,
-        #     session_ix=self._session_count,
-        #     bundle_data=self.bundle_data,
-        # )
         return packet
 
     def handle_market_open(self, session_label: datetime.datetime, bundle_data: BundleData) -> None:
@@ -255,14 +220,6 @@ class MetricsTracker:
                 session_ix=session_ix,
                 bundle_data=bundle_data,
             )
-        # self.end_of_session(
-        #     packet=packet,
-        #     ledger=self._ledger,
-        #     session=self._current_session,
-        #     session_ix=session_ix,
-        #     bundle_data=bundle_data,
-        # )
-
         return packet
 
     def handle_simulation_end(self):
@@ -285,12 +242,4 @@ class MetricsTracker:
                 bundle_data=self.bundle_data,
                 benchmark_source=self._benchmark_source,
             )
-        # self.end_of_simulation(
-        #     packet=packet,
-        #     ledger=self._ledger,
-        #     trading_calendar=self._trading_calendar,
-        #     sessions=self._sessions,
-        #     bundle_data=self.bundle_data,
-        #     benchmark_source=self._benchmark_source,
-        # )
         return packet

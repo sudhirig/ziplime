@@ -28,7 +28,6 @@ from ziplime.errors import (
 )
 from zipline.lib.adjusted_array import can_represent_dtype
 from zipline.lib.labelarray import LabelArray
-from ziplime.utils.input_validation import expect_types
 from ziplime.utils.memoize import classlazyval, lazyval
 from ziplime.utils.numpy_utils import (
     bool_dtype,
@@ -241,8 +240,7 @@ class Term(ABC):
         """
         pass
 
-    @expect_types(key=Asset)
-    def __getitem__(self, key):
+    def __getitem__(self, key: Asset):
         if isinstance(self, LoadableTerm):
             raise NonSliceableTerm(term=self)
 
@@ -672,8 +670,7 @@ class ComputableTerm(Term):
         out[self.mask] = 0
         return out
 
-    @expect_types(data=ndarray)
-    def postprocess(self, data):
+    def postprocess(self, data: ndarray):
         """
         Called with an result of ``self``, unravelled (i.e. 1-dimensional)
         after any user-defined screens have been applied.

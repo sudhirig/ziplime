@@ -16,7 +16,6 @@ from ziplime.pipeline.term import AssetExists
 from ziplime.utils.input_validation import (
     expect_bounded,
     expect_dtypes,
-    expect_types,
 )
 from ziplime.utils.math_utils import nanmean
 from ziplime.utils.numpy_utils import (
@@ -486,18 +485,12 @@ class SimpleBeta(CustomFactor, StandardOutputs):
     dtype = float64_dtype
     params = ("allowed_missing_count",)
 
-    @expect_types(
-        target=Asset,
-        regression_length=int,
-        allowed_missing_percentage=(int, float),
-        __funcname="SimpleBeta",
-    )
     @expect_bounded(
         regression_length=(3, None),
         allowed_missing_percentage=(0.0, 1.0),
         __funcname="SimpleBeta",
     )
-    def __new__(cls, target, regression_length, allowed_missing_percentage=0.25):
+    def __new__(cls, target: Asset, regression_length: int, allowed_missing_percentage: int| float=0.25):
         daily_returns = Returns(
             window_length=2,
             mask=(AssetExists() | SingleAsset(asset=target)),

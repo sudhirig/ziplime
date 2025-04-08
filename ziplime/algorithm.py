@@ -13,6 +13,7 @@ from itertools import chain, repeat
 
 from exchange_calendars import ExchangeCalendar
 
+from ziplime.assets.domain.asset_type import AssetType
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.blotter.blotter import Blotter
@@ -81,9 +82,6 @@ from ziplime.utils.api_support import (
 )
 from ziplime.utils.compat import ExitStack
 from ziplime.utils.date_utils import make_utc_aware
-from ziplime.utils.input_validation import (
-    expect_types,
-)
 from ziplime.utils.cache import ExpiringCache
 
 from ziplime.utils.events import (
@@ -258,7 +256,7 @@ class TradingAlgorithm:
         self._handle_data = None
 
         self._ledger = Ledger(trading_sessions=self.sim_params.sessions, capital_base=self.sim_params.capital_base,
-                              bundle_data=self.bundle_data, data_frequency=self.sim_params.data_frequency)
+                              bundle_data=self.bundle_data, data_frequency=self.sim_params.emission_rate)
 
         def noop(*args, **kwargs):
             pass
@@ -304,7 +302,6 @@ class TradingAlgorithm:
         self.current_data = BarData(
             bundle_data=self.bundle_data,
             simulation_dt_func=self.get_simulation_dt,
-            data_frequency=self.sim_params.data_frequency,
             trading_calendar=self.sim_params.trading_calendar,
             restrictions=self.restrictions,
         )
@@ -348,7 +345,7 @@ class TradingAlgorithm:
 
         with handle_non_market_minutes(
                 data
-        ) if self.data_frequency == datetime.timedelta(minutes=1) else ExitStack():
+        ) if self.sim_params.emission_rate == datetime.timedelta(minutes=1) else ExitStack():
             self._before_trading_start(self, data)
 
         self._in_before_trading_start = False
@@ -363,7 +360,6 @@ class TradingAlgorithm:
 
         with ZiplineAPI(self):
             self._analyze(self, perf)
-
 
     async def _create_generator(self):
         self.metrics_tracker = MetricsTracker(
@@ -575,7 +571,7 @@ class TradingAlgorithm:
         date_rule = date_rule or date_rules.every_day()
         time_rule = (
             (time_rule or time_rules.every_minute())
-            if self.sim_params.data_frequency == "minute"
+            if self.sim_params.emission_rate == datetime.timedelta(minutes=1)
             else
             # If we are in daily mode the time_rule is ignored.
             time_rules.every_minute()
@@ -661,7 +657,11 @@ class TradingAlgorithm:
         )
 
     @api_method
-    async def symbol(self, symbol_str: str, country_code: str | None = None):
+    async def symbol(
+            self, symbol_str: str, asset_type: AssetType = AssetType.EQUITY,
+            exchange_name: str = None,
+            country_code: str | None = None
+    ) -> Asset | None:
         """Lookup an Equity by its ticker symbol.
 
         Parameters
@@ -688,16 +688,20 @@ class TradingAlgorithm:
         """
         # If the user has not set the symbol lookup date,
         # use the end_session as the date for symbol->sid resolution.
-        _lookup_date = (
-            self._symbol_lookup_date
-            if self._symbol_lookup_date is not None
-            else pd.Timestamp(self.sim_params.end_session).to_pydatetime().date()
-        )
-        return await self.bundle_data.asset_repository.get_equity_by_symbol(symbol=symbol_str)
-        # return self.data_portal._bundle_data.asset_repository.lookup_symbol(
-        #     symbol_str,
-        #     as_of_date=_lookup_date,
-        #     country_code=country_code,
+        # _lookup_date = (
+        #     self._symbol_lookup_date
+        #     if self._symbol_lookup_date is not None
+        #     else pd.Timestamp(self.sim_params.end_session).to_pydatetime().date()
+        # )
+        if exchange_name is None:
+            exchange_name = self.sim_params.exchange.name
+        return await self.bundle_data.asset_repository.get_asset_by_symbol(symbol=symbol_str,
+                                                                           asset_type=asset_type,
+                                                                           exchange_name=exchange_name)
+
+        # return await self.bundle_data.asset_repository.get_equity_by_symbol(
+        #     symbol=symbol_str,
+        #     exchange_name=exchange_name,
         # )
 
     @api_method
@@ -730,7 +734,7 @@ class TradingAlgorithm:
         return [self.symbol(identifier, **kwargs) for identifier in args]
 
     @api_method
-    def sid(self, sid: int):
+    async def sid(self, sid: int) -> Asset | None:
         """Lookup an Asset by its unique asset identifier.
 
         Parameters
@@ -748,10 +752,10 @@ class TradingAlgorithm:
         SidsNotFound
             When a requested ``sid`` does not map to any asset.
         """
-        return self.data_portal._bundle_data.asset_repository.retrieve_asset(sid)
+        return await self.bundle_data.asset_repository.get_asset_by_sid(sid=sid)
 
     @api_method
-    def future_symbol(self, symbol: str):
+    async def future_symbol(self, symbol: str, exchange_name: str = None) -> FuturesContract | None:
         """Lookup a futures contract with a given symbol.
 
         Parameters
@@ -769,7 +773,10 @@ class TradingAlgorithm:
         SymbolNotFound
             Raised when no contract named 'symbol' is found.
         """
-        return self.data_portal._bundle_data.asset_repository.lookup_future_symbol(symbol)
+        return await self.bundle_data.asset_repository.get_futures_contract_by_symbol(
+            symbol=symbol,
+            exchange_name=exchange_name or self.sim_params.exchange.name
+        )
 
     def _calculate_order_value_amount(self, asset: Asset, value: float):
         """Calculates how many shares/contracts to order based on the type of
@@ -783,18 +790,18 @@ class TradingAlgorithm:
 
         if normalized_date < asset.start_date:
             raise CannotOrderDelistedAsset(
-                msg=f"Cannot order {asset.symbol}, as it started trading on {asset.start_date}"
+                msg=f"Cannot order sid={asset.sid}, as it started trading on {asset.start_date}"
             )
-        elif normalized_date > add_tz_info(asset.end_date, tzinfo=datetime.timezone.utc):
+        elif normalized_date > asset.end_date:
             raise CannotOrderDelistedAsset(
-                msg=f"Cannot order {asset.symbol}, as it stopped trading on {asset.end_date}."
+                msg=f"Cannot order sid={asset.sid}, as it stopped trading on {asset.end_date}."
             )
         else:
             last_price = float(self.current_data.current(asset, "price"))
 
             if np.isnan(last_price):
                 raise CannotOrderDelistedAsset(
-                    msg=f"Cannot order {asset.symbol} on {self.datetime} as there is no last price for the security."
+                    msg=f"Cannot order sid={asset.sid} on {self.datetime} as there is no last price for the security."
                 )
 
         if tolerant_equals(last_price, 0):
@@ -815,10 +822,10 @@ class TradingAlgorithm:
                 # the user that they can't place an order for this asset, and
                 # return None.
                 log.warning(
-                    "Cannot place order for {0}, as it has de-listed. "
-                    "Any existing positions for this asset will be "
-                    "liquidated on "
-                    "{1}.".format(asset.symbol, asset.auto_close_date)
+                    f"Cannot place order for sid={asset.sid}, as it has de-listed. "
+                    f"Any existing positions for this asset will be "
+                    f"liquidated on "
+                    f"{asset.auto_close_date}."
                 )
 
                 return False
@@ -860,7 +867,7 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    def order(self, asset: Asset, amount: float, style: ExecutionStyle):
+    async def order(self, asset: Asset, amount: float, style: ExecutionStyle) -> Order | None:
         """Place an order for a fixed number of shares.
 
         Parameters
@@ -914,24 +921,23 @@ class TradingAlgorithm:
         # Raises a ZiplineError if invalid parameters are detected.
         self.validate_order_params(asset=asset, amount=amount)
 
-        is_buy = amount > 0
         order_id = None
         order = Order(
             dt=self.datetime,
             asset=asset,
             amount=amount,
-            stop=style.get_stop_price(is_buy=is_buy),
-            limit=style.get_limit_price(is_buy=is_buy),
             id=order_id,
             commission=0.00,
-            filled=0
+            filled=0,
+            execution_style=style,
+            status=OrderStatus.OPEN
         )
 
-        submitted_order = self.exchange.submit_order(order=order)
-        persisted_order = self.blotter.save_order(order=order)
-        self.new_orders[order.id] = order
+        submitted_order = await self.exchange.submit_order(order=order)
+        persisted_order = self.blotter.save_order(order=submitted_order)
+        self.new_orders[submitted_order.id] = submitted_order
 
-        return order
+        return submitted_order
 
     def _calculate_order(
             self, asset: Asset, amount: float,  # limit_price: float | None = None, stop_price: float | None = None,
@@ -980,26 +986,6 @@ class TradingAlgorithm:
                 algo_datetime=self.datetime,
                 algo_current_data=self.current_data,
             )
-
-    # @staticmethod
-    # def __convert_order_params_for_blotter(asset: Asset, limit_price: float, stop_price: float, style: ExecutionStyle):
-    #     """Helper method for converting deprecated limit_price and stop_price
-    #     arguments into ExecutionStyle instances.
-    #
-    #     This function assumes that either style == None or (limit_price,
-    #     stop_price) == (None, None).
-    #     """
-    #     if style:
-    #         assert (limit_price, stop_price) == (None, None)
-    #         return style
-    #     if limit_price and stop_price:
-    #         return StopLimitOrder(limit_price, stop_price, asset=asset)
-    #     if limit_price:
-    #         return LimitOrder(limit_price, asset=asset)
-    #     if stop_price:
-    #         return StopOrder(stop_price, asset=asset)
-    #     else:
-    #         return MarketOrder()
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
@@ -1242,14 +1228,14 @@ class TradingAlgorithm:
                 input=dt, method="set_symbol_lookup_date"
             ) from exc
 
-    @property
-    def data_frequency(self):
-        return self.sim_params.data_frequency
-
-    @data_frequency.setter
-    def data_frequency(self, value):
-        assert value in ("daily", "minute")
-        self.sim_params.data_frequency = value
+    # @property
+    # def data_frequency(self):
+    #     return self.sim_params.data_frequency
+    #
+    # @data_frequency.setter
+    # def data_frequency(self, value):
+    #     assert value in ("daily", "minute")
+    #     self.sim_params.data_frequency = value
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
@@ -1567,60 +1553,6 @@ class TradingAlgorithm:
         self.exchange.get_orders_by_ids([order_id])
         return self.blotter.get_order_by_id(order_id=order_id)
 
-    # def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
-    #     """
-    #     Cancel all open orders for a given asset.
-    #     """
-    #     # (sadly) open_orders is a defaultdict, so this will always succeed.
-    #     orders = self.blotter.get_open_orders_by_asset(asset=asset)
-    #
-    #     # We're making a copy here because `cancel` mutates the list of open
-    #     # orders in place.  The right thing to do here would be to make
-    #     # self.open_orders no longer a defaultdict.  If we do that, then we
-    #     # should just remove the orders once here and be done with the matter.
-    #     for order_id, order in orders.items():
-    #         self.cancel_order(order_id=order.id, relay_status=relay_status)
-    #         if warn:
-    #             # Message appropriately depending on whether there's
-    #             # been a partial fill or not.
-    #             if order.filled > 0:
-    #                 self._logger.warning(
-    #                     "Your order for {order_amt} shares of "
-    #                     "{order_sym} has been partially filled. "
-    #                     "{order_filled} shares were successfully "
-    #                     "purchased. {order_failed} shares were not "
-    #                     "filled by the end of day and "
-    #                     "were canceled.".format(
-    #                         order_amt=order.amount,
-    #                         order_sym=order.asset.symbol,
-    #                         order_filled=order.filled,
-    #                         order_failed=order.amount - order.filled,
-    #                     )
-    #                 )
-    #             elif order.filled < 0:
-    #                 self._logger.warning(
-    #                     "Your order for {order_amt} shares of "
-    #                     "{order_sym} has been partially filled. "
-    #                     "{order_filled} shares were successfully "
-    #                     "sold. {order_failed} shares were not "
-    #                     "filled by the end of day and "
-    #                     "were canceled.".format(
-    #                         order_amt=order.amount,
-    #                         order_sym=order.asset.symbol,
-    #                         order_filled=-1 * order.filled,
-    #                         order_failed=-1 * (order.amount - order.filled),
-    #                     )
-    #                 )
-    #             else:
-    #                 self._logger.warning(
-    #                     "Your order for {order_amt} shares of "
-    #                     "{order_sym} failed to fill by the end of day "
-    #                     "and was canceled.".format(
-    #                         order_amt=order.amount,
-    #                         order_sym=order.asset.symbol,
-    #                     )
-    #                 )
-
     @api_method
     def cancel_order(self, order_id: str, relay_status: bool = True) -> None:
         """Cancel an open order.
@@ -1664,40 +1596,27 @@ class TradingAlgorithm:
                 # been a partial fill or not.
                 if order.filled > 0:
                     self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} has been partially filled. "
-                        "{order_filled} shares were successfully "
-                        "purchased. {order_failed} shares were not "
-                        "filled by the end of day and "
-                        "were canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                            order_filled=order.filled,
-                            order_failed=order.amount - order.filled,
-                        )
+                        f"Your order for {order.amount} shares of "
+                        f"{order.asset.sid} has been partially filled. "
+                        f"{order.filled} shares were successfully "
+                        f"purchased. {order.amount - order.filled} shares were not "
+                        f"filled by the end of day and "
+                        f"were canceled."
                     )
                 elif order.filled < 0:
                     self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} has been partially filled. "
-                        "{order_filled} shares were successfully "
-                        "sold. {order_failed} shares were not "
-                        "filled by the end of day and "
-                        "were canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                            order_filled=-1 * order.filled,
-                            order_failed=-1 * (order.amount - order.filled),
-                        )
+                        f"Your order for {order.amount} shares of "
+                        f"{asset.sid} has been partially filled. "
+                        f"{-1 * order.filled} shares were successfully "
+                        f"sold. {-1 * (order.amount - order.filled)} shares were not "
+                        f"filled by the end of day and "
+                        f"were canceled."
                     )
                 else:
                     self._logger.warning(
-                        "Your order for {order_amt} shares of "
-                        "{order_sym} failed to fill by the end of day "
-                        "and was canceled.".format(
-                            order_amt=order.amount,
-                            order_sym=order.asset.symbol,
-                        )
+                        f"Your order for {order.amount} shares of "
+                        f"{order.asset.sid} failed to fill by the end of day "
+                        f"and was canceled."
                     )
         self.blotter.cancel_all_orders_for_asset(asset=asset, relay_status=relay_status)
 
@@ -1870,11 +1789,7 @@ class TradingAlgorithm:
         self.set_asset_restrictions(restrictions, on_error)
 
     @api_method
-    @expect_types(
-        restrictions=Restrictions,
-        on_error=str,
-    )
-    def set_asset_restrictions(self, restrictions, on_error="fail"):
+    def set_asset_restrictions(self, restrictions: Restrictions, on_error: str = "fail"):
         """Set a restriction on which assets can be ordered.
 
         Parameters
@@ -2087,7 +2002,7 @@ class TradingAlgorithm:
             new_transactions,
             new_commissions,
             closed_orders,
-        ) = self.blotter.get_transactions(bar_data=current_data)
+        ) = await self.exchange.get_transactions(orders=self.blotter.get_open_orders(), bar_data=current_data)
         # print(f"getting transactions for {current_data.current_dt}, new transactions: {len(new_transactions)}, new commissions: {len(new_commissions)}, closed orders: {len(closed_orders)}" )
         self.blotter.prune_orders(closed_orders=closed_orders)
 

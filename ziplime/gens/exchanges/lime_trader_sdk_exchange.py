@@ -1,14 +1,18 @@
+import asyncio
 import datetime
 import logging
 from decimal import Decimal
 
+from lime_trader.models.page import PageRequest
+
+from ziplime.domain.bar_data import BarData
 from ziplime.errors import SymbolNotFound
 
 from ziplime.domain.portfolio import Portfolio as ZpPortfolio
 from ziplime.domain.position import Position as ZpPosition
 from ziplime.domain.account import Account as ZpAccount
 
-from lime_trader import LimeClient
+from lime_trader import LimeClient, AsyncLimeClient
 from lime_trader.models.accounts import AccountDetails
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, \
@@ -33,18 +37,22 @@ from ziplime.gens.exchanges.exchange import Exchange
 
 class LimeTraderSdkExchange(Exchange):
 
-    def __init__(self, lime_sdk_credentials_file: str | None):
+    def __init__(self, name: str, account_id: str | None = None, lime_sdk_credentials_file: str | None = None):
+        super().__init__(name=name)
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)
         if lime_sdk_credentials_file is None:
-            self._lime_sdk_client = LimeClient.from_env(logger=self._logger)
+            self._sync_lime_sdk_client = LimeClient.from_env(logger=self._logger)
+            self._lime_sdk_client = AsyncLimeClient.from_env(logger=self._logger)
         else:
-            self._lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
+            self._sync_lime_sdk_client = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
+            self._lime_sdk_client = AsyncLimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
+        self._account_id = account_id or self._get_account_number()
         self._tracked_orders = {}
 
     def get_positions(self) -> dict[Asset, ZpPosition]:
         z_positions = {}
-        positions = self._lime_sdk_client.account.get_positions(account_number=self._get_account_number(),
+        positions = self._lime_sdk_client.account.get_positions(account_number=self._account_id,
                                                                 date=None, strategy=None)
         quotes = {
             quote.symbol: quote
@@ -73,7 +81,7 @@ class LimeTraderSdkExchange(Exchange):
         return z_positions
 
     def get_portfolio(self) -> ZpPortfolio:
-        account = self.get_account_balance(account_number=self._get_account_number())
+        account = self.get_account_balance(account_number=self._account_id)
         z_portfolio = ZpPortfolio(portfolio_value=float(account.account_value_total),
                                   positions=self.get_positions(),
                                   positions_value=float(account.position_market_value),
@@ -87,7 +95,7 @@ class LimeTraderSdkExchange(Exchange):
         return z_portfolio
 
     def get_account(self) -> ZpAccount:
-        account = self.get_account_balance(account_number=self._get_account_number())
+        account = self.get_account_balance(account_number=self._account_id)
         z_account = ZpAccount()
         z_account.buying_power = float(account.cash)
         z_account.total_position_value = float(account.position_market_value)
@@ -110,104 +118,60 @@ class LimeTraderSdkExchange(Exchange):
         except Exception as _:
             return False
 
-    def _order2zp(self, order: OrderDetails) -> Order | None:
+    def _order2zp(self, order: OrderDetails, asset: Asset) -> Order | None:
 
-        try:
-            asset = symbol_lookup(order.symbol)
-        except SymbolNotFound:
-            return None
+        match order.order_status:
+            case LimeTraderOrderStatus.CANCELED:
+                order_status = OrderStatus.CANCELLED
+            case LimeTraderOrderStatus.REJECTED:
+                order_status = OrderStatus.REJECTED
+            case LimeTraderOrderStatus.SUSPENDED:
+                order_status = OrderStatus.HELD
+            # case LimeTraderOrderStatus.REPLACED:
+            #     zp_order.status = OrderStatus.REPLACED
+            # case LimeTraderOrderStatus.PENDING_CANCEL:
+            #     zp_order.status = OrderStatus.PENDING_CANCEL
+            # case LimeTraderOrderStatus.DONE_FOR_DAY:
+            #     zp_order.status = OrderStatus.DONE_FOR_DAY
+            case LimeTraderOrderStatus.NEW:
+                order_status = OrderStatus.OPEN
+            case LimeTraderOrderStatus.PENDING_NEW:
+                order_status = OrderStatus.OPEN
+            case LimeTraderOrderStatus.PARTIALLY_FILLED:
+                order_status = OrderStatus.OPEN
+            case LimeTraderOrderStatus.FILLED:
+                order_status = OrderStatus.FILLED
+            case _:
+                raise Exception(f"Unknown order status: {order.order_status}")
+        match order.order_type:
+            case OrderType.MARKET:
+                execution_style = MarketOrder()
+            case OrderType.LIMIT:
+                execution_style = LimitOrder(limit_price=float(order.price))
+            case _:
+                raise Exception(f"Unknown order type {order.order_type}")
 
-        zp_order = Order(
+        order_details = Order(
             id=order.client_order_id,
             asset=asset,
             amount=int(order.quantity) if order.order_side == OrderSide.BUY else -int(order.quantity),
-            stop=float(order.stop_price) if order.stop_price is not None else None,  # No stop price support
-            limit=float(order.price) if order.price is not None else None,
             filled=int(order.executed_quantity),
-            dt=None,
+            dt=order.executed_timestamp,
             commission=0.0,
+            execution_style=execution_style,
+            status=order_status,
+            exchange_order_id=order.order_id
         )
 
-        zp_order.status = OrderStatus.OPEN
-        if order.order_status == LimeTraderOrderStatus.CANCELED:
-            zp_order.status = OrderStatus.CANCELLED
-        elif order.order_status == LimeTraderOrderStatus.REJECTED:
-            zp_order.status = OrderStatus.REJECTED
-        elif order.order_status == LimeTraderOrderStatus.SUSPENDED:
-            zp_order.status = OrderStatus.HELD
-        # elif order.order_status == LimeTraderOrderStatus.REPLACED:
-        #     zp_order.status = OrderStatus.REPLACED
-        # elif order.order_status == LimeTraderOrderStatus.PENDING_CANCEL:
-        #     zp_order.status = OrderStatus.PENDING_CANCEL
-        # elif order.order_status == LimeTraderOrderStatus.DONE_FOR_DAY:
-        #     zp_order.status = OrderStatus.DONE_FOR_DAY
-        elif order.order_status == LimeTraderOrderStatus.NEW:
-            zp_order.status = OrderStatus.OPEN
-        elif order.order_status == LimeTraderOrderStatus.PENDING_NEW:
-            zp_order.status = OrderStatus.OPEN
-        elif order.order_status == LimeTraderOrderStatus.PARTIALLY_FILLED:
-            zp_order.status = OrderStatus.OPEN
-            zp_order.filled = int(order.executed_quantity)
-        elif order.order_status == LimeTraderOrderStatus.FILLED:
-            zp_order.status = OrderStatus.FILLED
-            zp_order.filled = int(order.executed_quantity)
-        return zp_order
-
-    def _new_order_id(self) -> str:
-        return uuid.uuid4().hex
-
-    def order(self, asset: Asset, amount: int, style: ExecutionStyle):
-        symbol = asset.symbol
-        qty = amount if amount > 0 else -amount
-        side = OrderSide.BUY if amount > 0 else OrderSide.SELL
-
-        if isinstance(style, MarketOrder):
-            order_type = OrderType.MARKET
-        elif isinstance(style, LimitOrder):
-            order_type = OrderType.LIMIT
-        else:
-            raise Exception(f"Unsupported order type: {style}.")
-
-        limit_price = style.get_limit_price(side == OrderSide.BUY) or None
-        stop_price = style.get_stop_price(side == OrderSide.BUY) or None
-
-        zp_order_id = self._new_order_id()
-        dt = pd.to_datetime('now', utc=True)
-        zp_order = Order(
-            dt=dt,
-            asset=asset,
-            amount=amount,
-            stop=stop_price,
-            limit=limit_price,
-            id=zp_order_id,
-        )
-        order = LimeTraderOrder(
-            symbol=symbol,
-            quantity=Decimal(qty),
-            side=side,
-            order_type=order_type,
-            time_in_force=TimeInForce.DAY,
-            price=limit_price,
-            client_order_id=zp_order.id,
-            account_number=self._get_account_number()
-        )
-        validated_order = self._lime_sdk_client.trading.validate_order(order=order)
-        submitted_order = self._lime_sdk_client.trading.place_order(order=order)
-        order_details = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=zp_order.id)
-
-        zp_order = self._order2zp(order=order_details)
-
-        self._tracked_orders[order_details.client_order_id] = order_details
-        return zp_order
+        return order_details
 
     def _get_account_number(self) -> str:
-        # TODO: add this as param
-        return self._lime_sdk_client.account.get_balances()[0].account_number
+        return self._sync_lime_sdk_client.account.get_balances()[0].account_number
 
     def get_orders(self) -> dict[str, Order]:
         # return {}
         current_active_orders = self._lime_sdk_client.trading.get_active_orders(
-            account_number=self._get_account_number())
+            account_number=self._account_id)
 
         for order in current_active_orders:
             self._tracked_orders[order.client_order_id] = order
@@ -228,34 +192,133 @@ class LimeTraderSdkExchange(Exchange):
             result.append(order)
         return result
 
-    def get_transactions(self):
-        raise NotImplementedError("Use get_transactions_by_order_ids method.")
-
-    def get_transactions_by_order_ids(self, order_ids: list[str]):
+    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData):
         results = {}
+        closed_orders = []
+        transactions = []
+        commissions = []
 
-        for order_id in order_ids:
-            order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=order_id)
-            # self._lime_sdk_client.account.iterate_trades(account_number=self._get_account_number(),
-            #                                          date=
-            #
-            #                                          ):
-            if order.executed_timestamp is None:
+        all_orders = []
+        for asset, asset_orders_dict in orders.items():
+            asset_orders = list(asset_orders_dict.values())
+            all_orders.extend(asset_orders)
+        if not all_orders:
+            return transactions, commissions, closed_orders
+        assets_from_orders = {order.asset.get_symbol_by_exchange(self.name): order.asset for order in all_orders}
+        start_date_for_transactions = min(o.dt for o in all_orders)
+
+        orders = [self._lime_sdk_client.trading.get_order_details(order_id=order.exchange_order_id) for
+                  order in all_orders]
+        order_details = await asyncio.gather(*orders)
+
+        for order_sdk_raw, order in zip(order_details, all_orders):
+            order_sdk = self._order2zp(order=order_sdk_raw, asset=order.asset)
+            if order_sdk_raw.executed_timestamp is None:
                 continue
-            try:
-                asset = symbol_lookup(order.symbol)
-            except SymbolNotFound:
-                continue
-            tx = Transaction(
-                asset=asset,
-                amount=int(order.executed_quantity),
-                dt=order.executed_timestamp,
-                price=float(order.price),
-                order_id=order.client_order_id,
-                commission=0.0,
-            )
-            results[order.client_order_id] = tx
+            if not order_sdk.open:
+                closed_orders.append(order)
+        async for transaction_page in self._lime_sdk_client.account.iterate_transactions_journal(
+                account_number=self._account_id,
+                start_page=PageRequest(page=1, size=20),
+                start_date=start_date_for_transactions.date(),
+                end_date=bar_data.current_dt.date()):
+
+
+
+            for transaction_sdk in transaction_page.data:
+                asset = assets_from_orders[transaction_sdk.asset.symbol]
+                if asset is None:
+                    continue
+
+                total_commissions = sum(
+                    fee.amount for fee in transaction_sdk.fees
+                )
+                tx = Transaction(
+                    asset=asset,
+                    amount=int(transaction_sdk.asset.quantity),
+                    dt=transaction_sdk.date,
+                    price=float(transaction_sdk.asset.price),
+                    order_id=None,
+                    commission=total_commissions,  # TODO: how to get commission
+                )
+                transactions.append(tx)
+                commissions.append(
+                    {
+                        "asset": assets_from_orders[transaction_sdk.asset.symbol],
+                        # "order": order,
+                        "cost": total_commissions,
+                    }
+                )
+        return transactions, commissions, closed_orders
+
+        #
+        #     for order, txn in slippage.simulate(data=bar_data, assets=[asset],
+        #                                         orders_for_asset=asset_orders.values()):
+        #         commission = self.get_commission_model(asset=asset)
+        #         additional_commission = commission.calculate(order, txn)
+        #
+        #         if additional_commission > 0:
+        #
+        #
+        #         order.filled += txn.amount
+        #         order.commission += additional_commission
+        #
+        #         order.dt = txn.dt
+        #
+        #         transactions.append(txn)
+        #
+        #         if not order.open:
+        #             closed_orders.append(order)
+        #
+        # for asset, asset_orders_dict in orders.items():
+        #     asset_orders = list(asset_orders_dict.values())
+        #     orders = [self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=order.id) for
+        #               order in asset_orders]
+        #     order_details = await asyncio.gather(*orders)
+        #     for order_sdk_raw, order in zip(order_details, asset_orders):
+        #         order_sdk = self._order2zp(order=order_sdk_raw, asset=asset)
+        #         if order_sdk_raw.executed_timestamp is None:
+        #             continue
+        #         tx = Transaction(
+        #             asset=order.asset,
+        #             amount=int(order_sdk_raw.executed_quantity),
+        #             dt=order_sdk_raw.executed_timestamp,
+        #             price=float(order_sdk_raw.price),
+        #             order_id=order_sdk_raw.client_order_id,
+        #             commission=order_sdk_raw,
+        #         )
+        #         if not order_sdk.open:
+        #             closed_orders.append(order_sdk)
+        #         results[order_sdk_raw.client_order_id] = tx
         return results
+
+        # raise NotImplementedError("Use get_transactions_by_order_ids method.")
+
+    # def get_transactions_by_order_ids(self, order_ids: list[str]):
+    #     results = {}
+    #
+    #     for order_id in order_ids:
+    #         order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=order_id)
+    #         # self._lime_sdk_client.account.iterate_trades(account_number=self._account_id,
+    #         #                                          date=
+    #         #
+    #         #                                          ):
+    #         if order.executed_timestamp is None:
+    #             continue
+    #         try:
+    #             asset = symbol_lookup(order.symbol)
+    #         except SymbolNotFound:
+    #             continue
+    #         tx = Transaction(
+    #             asset=asset,
+    #             amount=int(order.executed_quantity),
+    #             dt=order.executed_timestamp,
+    #             price=float(order.price),
+    #             order_id=order.client_order_id,
+    #             commission=0.0,
+    #         )
+    #         results[order.client_order_id] = tx
+    #     return results
 
     def cancel_order(self, zp_order_id: str) -> None:
         try:
@@ -340,8 +403,41 @@ class LimeTraderSdkExchange(Exchange):
             dfs.append(df)
         return pd.concat(dfs, axis=1)
 
-    def submit_order(self, order: Order):
-        pass
+    async def submit_order(self, order: Order):
+        symbol = order.asset.get_symbol_by_exchange(self.name)
+        qty = order.amount if order.amount > 0 else -order.amount
+        side = OrderSide.BUY if order.amount > 0 else OrderSide.SELL
+
+        if isinstance(order.execution_style, MarketOrder):
+            order_type = OrderType.MARKET
+        elif isinstance(order.execution_style, LimitOrder):
+            order_type = OrderType.LIMIT
+        else:
+            raise Exception(f"Unsupported order type: {order.execution_style}.")
+
+        new_order_id = uuid.uuid4().hex
+        sdk_order = LimeTraderOrder(
+            symbol=symbol,
+            quantity=Decimal(qty),
+            side=side,
+            order_type=order_type,
+            time_in_force=TimeInForce.DAY,
+            price=order.limit,
+            client_order_id=new_order_id,
+            account_number=self._account_id
+        )
+        validated_order = await self._lime_sdk_client.trading.validate_order(order=sdk_order)
+        if not validated_order.is_valid:
+            raise Exception("Validation failed for order")
+
+        submitted_order = await self._lime_sdk_client.trading.place_order(order=sdk_order)
+        # await asyncio.sleep(5)  # TODO: check why order is not immediately available
+        order_details_sdk = await self._lime_sdk_client.trading.get_order_details(
+            order_id=submitted_order.order_id
+        )
+        order_details = self._order2zp(order=order_details_sdk, asset=order.asset)
+
+        return order_details
 
     def get_commission_model(self, asset: Asset) -> CommissionModel:
         pass

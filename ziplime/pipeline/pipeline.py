@@ -1,8 +1,6 @@
 from ziplime.errors import UnsupportedPipelineOutput
 from ziplime.utils.input_validation import (
     expect_element,
-    expect_types,
-    optional,
 )
 
 from .domain import Domain, GENERIC, infer_domain
@@ -37,8 +35,7 @@ class Pipeline:
 
     __slots__ = ("_columns", "_screen", "_domain", "__weakref__")
 
-    @expect_types(columns=optional(dict), screen=optional(Filter), domain=Domain)
-    def __init__(self, columns=None, screen=None, domain=GENERIC):
+    def __init__(self, columns: dict | None = None, screen: Filter | None = None, domain: Domain = GENERIC):
         if columns is None:
             columns = {}
 
@@ -92,8 +89,7 @@ class Pipeline:
         """
         return self._screen
 
-    @expect_types(term=Term, name=str)
-    def add(self, term, name, overwrite=False):
+    def add(self, term: Term, name: str, overwrite: bool = False):
         """Add a column.
 
         The results of computing ``term`` will show up as a column in the
@@ -126,8 +122,7 @@ class Pipeline:
 
         self._columns[name] = term
 
-    @expect_types(name=str)
-    def remove(self, name):
+    def remove(self, name: str):
         """Remove a column.
 
         Parameters
@@ -147,8 +142,7 @@ class Pipeline:
         """
         return self.columns.pop(name)
 
-    @expect_types(screen=Filter, overwrite=(bool, int))
-    def set_screen(self, screen, overwrite=False):
+    def set_screen(self, screen: Filter, overwrite: bool | int):
         """Set a screen on this Pipeline.
 
         Parameters
@@ -255,8 +249,7 @@ class Pipeline:
             raise AssertionError("Unknown graph format %r." % format)
 
     @staticmethod
-    @expect_types(term=Term, column_name=str)
-    def validate_column(column_name, term):
+    def validate_column(column_name: str, term: Term):
         if term.ndim == 1:
             raise UnsupportedPipelineOutput(column_name=column_name, term=term)
 
@@ -274,8 +267,7 @@ class Pipeline:
             terms.append(screen)
         return terms
 
-    @expect_types(default=Domain)
-    def domain(self, default):
+    def domain(self, default: Domain):
         """
         Get the domain for this pipeline.
 

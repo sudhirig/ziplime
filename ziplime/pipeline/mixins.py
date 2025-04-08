@@ -25,10 +25,9 @@ from ziplime.errors import (
 )
 from zipline.lib.labelarray import LabelArray, labelarray_where
 from ziplime.utils.context_tricks import nop_context
-from ziplime.utils.input_validation import expect_dtypes, expect_types
+from ziplime.utils.input_validation import expect_dtypes
 from ziplime.utils.numpy_utils import bool_dtype
 from ziplime.utils.pandas_utils import nearest_unequal_elements
-
 
 from .downsample_helpers import (
     select_sampling_indices,
@@ -93,8 +92,8 @@ class RestrictedDTypeMixin(Term):
     def _validate(self):
         super(RestrictedDTypeMixin, self)._validate()
         assert self.ALLOWED_DTYPES is not NotSpecified, (
-            "ALLOWED_DTYPES not supplied on subclass "
-            "of RestrictedDTypeMixin: %s." % type(self).__name__
+                "ALLOWED_DTYPES not supplied on subclass "
+                "of RestrictedDTypeMixin: %s." % type(self).__name__
         )
 
         if self.dtype not in self.ALLOWED_DTYPES:
@@ -117,15 +116,15 @@ class CustomTermMixin(Term):
     ctx = nop_context
 
     def __new__(
-        cls,
-        inputs=NotSpecified,
-        outputs=NotSpecified,
-        window_length=NotSpecified,
-        mask=NotSpecified,
-        dtype=NotSpecified,
-        missing_value=NotSpecified,
-        ndim=NotSpecified,
-        **kwargs,
+            cls,
+            inputs=NotSpecified,
+            outputs=NotSpecified,
+            window_length=NotSpecified,
+            mask=NotSpecified,
+            dtype=NotSpecified,
+            missing_value=NotSpecified,
+            ndim=NotSpecified,
+            **kwargs,
     ):
 
         unexpected_keys = set(kwargs) - set(cls.params)
@@ -398,9 +397,8 @@ class DownsampledMixin(StandardOutputs, UniversalMixin):
     # point is that you're re-using the same result multiple times.
     window_safe = False
 
-    @expect_types(term=Term)
     @expect_downsample_frequency
-    def __new__(cls, term, frequency):
+    def __new__(cls, term: Term, frequency):
         return super(DownsampledMixin, cls).__new__(
             cls,
             inputs=term.inputs,
@@ -499,7 +497,7 @@ class DownsampledMixin(StandardOutputs, UniversalMixin):
         """
         to_sample = dates[select_sampling_indices(dates, self._frequency)]
         assert to_sample[0] == dates[0], (
-            "Misaligned sampling dates in %s." % type(self).__name__
+                "Misaligned sampling dates in %s." % type(self).__name__
         )
 
         real_compute = self._wrapped_term._compute
@@ -545,9 +543,9 @@ class DownsampledMixin(StandardOutputs, UniversalMixin):
                 results.append(
                     real_compute(
                         prepare_inputs(),
-                        dates[i : i + 1],
+                        dates[i: i + 1],
                         assets,
-                        mask[i : i + 1],
+                        mask[i: i + 1],
                     )
                 )
                 try:

@@ -21,7 +21,6 @@ from numpy import (
 import numpy as np
 
 from ziplime.pipeline.data import EquityPricing
-from ziplime.utils.input_validation import expect_types
 from ziplime.utils.math_utils import (
     nanargmax,
     nanmax,
@@ -238,8 +237,7 @@ class _ExponentialWeightedFactor(SingleInputMixin, CustomFactor):
     params = ("decay_rate",)
 
     @classmethod
-    @expect_types(span=Number)
-    def from_span(cls, inputs, window_length, span, **kwargs):
+    def from_span(cls, inputs, window_length, span: Number, **kwargs):
         """
         Convenience constructor for passing `decay_rate` in terms of `span`.
 
@@ -279,8 +277,7 @@ class _ExponentialWeightedFactor(SingleInputMixin, CustomFactor):
         )
 
     @classmethod
-    @expect_types(halflife=Number)
-    def from_halflife(cls, inputs, window_length, halflife, **kwargs):
+    def from_halflife(cls, inputs, window_length, halflife: Number, **kwargs):
         """
         Convenience constructor for passing ``decay_rate`` in terms of half
         life.

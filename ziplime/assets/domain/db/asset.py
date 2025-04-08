@@ -1,4 +1,5 @@
 import datetime
+from abc import abstractmethod
 
 from sqlalchemy.orm import Mapped, relationship, declared_attr
 
@@ -24,3 +25,6 @@ class Asset(BaseModel):
 
     def __hash__(self):
         return self.sid
+
+    @abstractmethod
+    def get_symbol_by_exchange(self, exchange_name: str) -> str: ...

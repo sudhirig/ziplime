@@ -41,7 +41,6 @@ from ziplime.pipeline.mixins import (
     StandardOutputs,
 )
 from ziplime.pipeline.term import ComputableTerm, Term
-from ziplime.utils.input_validation import expect_types
 from ziplime.utils.numpy_utils import (
     same,
     bool_dtype,
@@ -219,8 +218,7 @@ class Filter(RestrictedDTypeMixin, ComputableTerm):
     def _principal_computable_term_type(cls):
         return Filter
 
-    @expect_types(if_true=ComputableTerm, if_false=ComputableTerm)
-    def if_else(self, if_true, if_false):
+    def if_else(self, if_true: ComputableTerm, if_false: ComputableTerm):
         """
         Create a term that selects values from one of two choices.
 
@@ -575,8 +573,7 @@ class ArrayPredicate(SingleInputMixin, Filter):
     params = ("op", "opargs")
     window_length = 0
 
-    @expect_types(term=Term, opargs=tuple)
-    def __new__(cls, term, op, opargs):
+    def __new__(cls, term: Term, op, opargs: tuple):
         hash(opargs)  # fail fast if opargs isn't hashable.
         return super(ArrayPredicate, cls).__new__(
             ArrayPredicate,

@@ -4,11 +4,13 @@ from zipline.protocol import DATASOURCE_TYPE
 
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.finance.domain.order_status import OrderStatus
+from ziplime.finance.execution import ExecutionStyle
 
 SELL = 1 << 0
 BUY = 1 << 1
 STOP = 1 << 2
 LIMIT = 1 << 3
+
 
 # ORDER_FIELDS_TO_IGNORE = {"type", "direction", "_status", "asset"}
 
@@ -22,8 +24,9 @@ class Order:
             amount: int,
             filled: int,
             commission: float,
-            stop: float | None = None,
-            limit: float | None = None,
+            execution_style: ExecutionStyle,
+            status: OrderStatus,
+            exchange_order_id: str = None
     ):
         """
         @dt - datetime.datetime that the order was placed
@@ -43,14 +46,17 @@ class Order:
         self.amount = amount
         self.filled = filled
         self.commission = commission
-        self._status = OrderStatus.OPEN
-        self.stop = stop
-        self.limit = limit
+        self._status = status
+
+        is_buy = amount > 0
+        self.stop = execution_style.get_stop_price(is_buy=is_buy)
+        self.limit = execution_style.get_limit_price(is_buy=is_buy)
         self.stop_reached = False
         self.limit_reached = False
         self.direction = math.copysign(1, self.amount)
         self.type = DATASOURCE_TYPE.ORDER
-        self.exchange_order_id = None
+        self.execution_style = execution_style
+        self.exchange_order_id = exchange_order_id
 
     def to_dict(self):
         dct = {
@@ -91,6 +97,21 @@ class Order:
             # Change the STOP LIMIT order into a LIMIT order
             self.stop = None
 
+    def get_order_type(self) -> int:
+        order_type = 0
+
+        if self.amount > 0:
+            order_type |= BUY
+        else:
+            order_type |= SELL
+
+        if self.stop is not None:
+            order_type |= STOP
+
+        if self.limit is not None:
+            order_type |= LIMIT
+        return order_type
+
     # TODO: simplify
     # flake8: noqa: C901
     def check_order_triggers(self, current_price):
@@ -112,20 +133,7 @@ class Order:
         stop_reached = False
         limit_reached = False
         sl_stop_reached = False
-
-        order_type = 0
-
-        if self.amount > 0:
-            order_type |= BUY
-        else:
-            order_type |= SELL
-
-        if self.stop is not None:
-            order_type |= STOP
-
-        if self.limit is not None:
-            order_type |= LIMIT
-
+        order_type = self.get_order_type()
         if order_type == BUY | STOP | LIMIT:
             if current_price >= self.stop:
                 sl_stop_reached = True
@@ -150,7 +158,7 @@ class Order:
             if current_price >= self.limit:
                 limit_reached = True
 
-        return (stop_reached, limit_reached, sl_stop_reached)
+        return stop_reached, limit_reached, sl_stop_reached
 
     def handle_split(self, ratio):
         # update the amount, limit_price, and stop_price

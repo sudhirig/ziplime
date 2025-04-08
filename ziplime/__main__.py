@@ -18,10 +18,13 @@ from ziplime.domain.data_frequency import DataFrequency
 from ziplime.finance.commission import DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE, DEFAULT_PER_CONTRACT_COST, PerContract, \
     DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, DEFAULT_PER_SHARE_COST, PerShare
 from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
+from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.finance.metrics import default_metrics
 from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
 from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
 from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
+from ziplime.gens.domain.realtime_clock import RealtimeClock
+from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.gens.exchanges.lime_trader_sdk_exchange import LimeTraderSdkExchange
 from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
 from ziplime.utils.date_utils import stripe_time_and_timezone_info
@@ -344,7 +347,13 @@ async def bundles(ctx, bundle_storage_path):
     help="Print the algorithm to stdout.",
 )
 @click.option(
-    "--exchange",
+    "--exchange-name",
+    default='LIME',
+    help="The exchange to use for trading.",
+    show_default=True,
+)
+@click.option(
+    "--exchange-type",
     default='simulation',
     type=click.Choice(['simulation', 'lime-trader-sdk']),
     help="The exchange to use for trading.",
@@ -379,14 +388,14 @@ async def run(
         trading_calendar,
         print_algo,
         bundle_storage_path,
-        exchange: str,
+        exchange_name: str,
+        exchange_type: str,
         live_market_data_provider: str | None,
 ):
     """Run a backtest for the given algorithm."""
 
-    calendar = ec_get_calendar(trading_calendar, start=stripe_time_and_timezone_info(start_date) - datetime.timedelta(days=30))
-
-
+    calendar = ec_get_calendar(trading_calendar,
+                               start=stripe_time_and_timezone_info(start_date) - datetime.timedelta(days=30))
 
     benchmark_spec = BenchmarkSpec(
         benchmark_returns=None,
@@ -400,11 +409,9 @@ async def run(
         algotext = algofile.read()
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
-    # if exchange is not None:
-    #     start_date = datetime.datetime.now(tz=calendar.tz).replace(tzinfo=None, minute=0, hour=0, second=0, microsecond=0)
-    #     end_date = start_date + datetime.timedelta(days=5)
-    if exchange == "simulation":
+    if exchange_type == "simulation":
         exchange_class = SimulationExchange(
+            name=exchange_name,
             equity_slippage=FixedBasisPointsSlippage(),
             equity_commission=PerShare(
                 cost=DEFAULT_PER_SHARE_COST,
@@ -420,43 +427,61 @@ async def run(
                 min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
             ),
         )
-    elif exchange == "lime-trader-sdk":
+    elif exchange_type == "lime-trader-sdk":
         exchange_class = LimeTraderSdkExchange(
+            name=exchange_name,
             lime_sdk_credentials_file=None
-            # equity_slippage=FixedBasisPointsSlippage(),
-            # equity_commission=PerShare(
-            #     cost=DEFAULT_PER_SHARE_COST,
-            #     min_trade_cost=DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE,
-            # ),
-            # future_slippage=VolatilityVolumeShare(
-            #     volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-            # ),
-            # future_commission=PerContract(
-            #     cost=DEFAULT_PER_CONTRACT_COST,
-            #     exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
-            #     min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
-            # ),
         )
+
     else:
         raise Exception("Not valid exchange.")
+    max_shares = int(1e11)
+
+    sim_params = SimulationParameters(
+        start_date=start_date.replace(tzinfo=calendar.tz),
+        end_date=end_date.replace(tzinfo=calendar.tz),
+        trading_calendar=calendar,
+        capital_base=capital_base,
+        emission_rate=DataFrequency(emission_rate).to_timedelta(),
+        max_shares=max_shares,
+        exchange=exchange_class,
+        bundle_name=bundle
+    )
+
+    clock = SimulationClock(
+        sessions=sim_params.sessions,
+        market_opens=sim_params.market_opens,
+        market_closes=sim_params.market_closes,
+        before_trading_start_minutes=sim_params.before_trading_start_minutes,
+        emission_rate=sim_params.emission_rate,
+        timezone=sim_params.trading_calendar.tz
+    )
+    timedelta_diff_from_current_time = datetime.datetime.now(tz=sim_params.trading_calendar.tz) - start_date.replace(
+        tzinfo=sim_params.trading_calendar.tz)
+
+    # clock = RealtimeClock(
+    #     sessions=sim_params.sessions,
+    #     market_opens=sim_params.market_opens,
+    #     market_closes=sim_params.market_closes,
+    #     before_trading_start_minutes=sim_params.before_trading_start_minutes,
+    #     emission_rate=sim_params.emission_rate,
+    #     timezone=sim_params.trading_calendar.tz,
+    #     timedelta_diff_from_current_time=-timedelta_diff_from_current_time
+    # )
+
     return await run_algorithm(
         algofile=getattr(algofile, "name", "<algorithm>"),
         algotext=algotext,
-        emission_rate=DataFrequency(emission_rate).to_timedelta(),
-        capital_base=capital_base,
-        bundle_name=bundle,
-        start_date=start_date,
-        end_date=end_date,
         output=output,
-        trading_calendar=calendar,
         print_algo=print_algo,
         metrics_set=default_metrics(),
         benchmark_spec=benchmark_spec,
         custom_loader=None,
-        exchange=exchange_class,
         market_data_provider=get_live_market_data_provider(
             live_market_data_provider) if live_market_data_provider is not None else None,
         bundle_registry=bundle_registry,
+        simulation_params=sim_params,
+        clock=clock
 
     )
 

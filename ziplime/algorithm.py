@@ -2009,6 +2009,10 @@ class TradingAlgorithm:
         for transaction in new_transactions:
             self._ledger.process_transaction(transaction=transaction)
 
+            if transaction.order_id is None:
+                # TODO: fix this when we get back order id in transaction
+                continue
+
             # since this order was modified, record it
             order = self.blotter.get_order_by_id(transaction.order_id)
             self._ledger.process_order(order=order)

@@ -5,6 +5,7 @@ import os
 import sys
 from exchange_calendars import ExchangeCalendar
 
+from ziplime.data.services.bundle_data_source import BundleDataSource
 from ziplime.data.services.bundle_registry import BundleRegistry
 from ziplime.data.services.bundle_service import BundleService
 
@@ -72,7 +73,7 @@ async def run_algorithm(
         custom_loader,
         benchmark_spec,
         clock: TradingClock,
-        market_data_provider: AbstractLiveMarketDataProvider,
+        missing_bundle_data_source: BundleDataSource,
         simulation_params: SimulationParameters,
         bundle_registry: BundleRegistry,
 ):
@@ -83,7 +84,8 @@ async def run_algorithm(
     # benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
     bundle_service = BundleService(bundle_registry=bundle_registry)
 
-    bundle_data = await bundle_service.load_bundle(bundle_name=simulation_params.bundle_name, bundle_version=None)
+    bundle_data = await bundle_service.load_bundle(bundle_name=simulation_params.bundle_name, bundle_version=None,
+                                                   missing_bundle_data_source=missing_bundle_data_source)
     # date parameter validation
     if simulation_params.trading_calendar.sessions_distance(simulation_params.start_session, simulation_params.end_session) < 1:
         raise _RunAlgoError(f"There are no trading days between {simulation_params.start_session} and {simulation_params.end_session}")

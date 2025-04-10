@@ -11,6 +11,7 @@ from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.db.equity import Equity
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 from ziplime.assets.repositories.asset_repository import AssetRepository
+from ziplime.data.services.bundle_data_source import BundleDataSource
 
 
 @dataclass
@@ -27,6 +28,8 @@ class BundleData:
     adjustment_repository: AdjustmentRepository
 
     data: pl.DataFrame
+
+    missing_bundle_data_source: BundleDataSource | None = None
 
     def get_dataframe(self) -> pl.DataFrame:
         df = self.data
@@ -58,6 +61,19 @@ class BundleData:
             return df
         return df_raw
 
+    def get_missing_data_by_limit(self, fields: list[str],
+                                  limit: int,
+                                  end_date: datetime.datetime,
+                                  frequency: datetime.timedelta,
+                                  assets: list[Asset],
+                                  include_end_date: bool,
+                                  ) -> pl.DataFrame:
+
+        return self.missing_bundle_data_source.get_data_sync(
+            symbols=[asset.get_symbol_by_exchange(None) for asset in assets], frequency=frequency,
+            date_from=end_date - frequency * limit,
+            date_to=end_date)
+
     def get_data_by_limit(self, fields: list[str],
                           limit: int,
                           end_date: datetime.datetime,
@@ -67,6 +83,11 @@ class BundleData:
                           ) -> pl.DataFrame:
 
         total_bar_count = limit
+        if end_date > self.end_date:
+            return self.get_missing_data_by_limit(frequency=frequency, assets=assets, fields=fields,
+                                                  limit=limit, include_end_date=include_end_date,
+                                                  end_date=end_date
+                                                  )  # pl.DataFrame() # we have missing data
         if self.frequency < frequency:
             multiplier = int(frequency / self.frequency)
             total_bar_count = limit * multiplier
@@ -116,12 +137,18 @@ class BundleData:
             ``field`` is 'volume' the value will be a int. If the ``field`` is
             'last_traded' the value will be a Timestamp.
         """
-        return self._get_single_asset_value(
-            asset=asset,
-            field=field,
+        return self.get_spot_value(
+            assets=[asset],
+            fields=[field],
             dt=dt,
             frequency=frequency,
         )
+        # return self._get_single_asset_value(
+        #     asset=asset,
+        #     field=field,
+        #     dt=dt,
+        #     frequency=frequency,
+        # )
 
     def _get_single_asset_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                 frequency: datetime.timedelta) -> pl.DataFrame:
@@ -248,13 +275,11 @@ class BundleData:
         if spot_value is None:
             spot_value = self.get_spot_value(assets=[asset], fields=[field], dt=dt, data_frequency=data_frequency)
 
-        if isinstance(asset, Equity): # TODO: fix this, not valid way to check if it is equity
+        if isinstance(asset, Equity):  # TODO: fix this, not valid way to check if it is equity
             ratio = self.get_adjustments(assets=[asset], field=field, dt=dt, perspective_dt=perspective_dt)[0]
             spot_value *= ratio
 
         return spot_value
-
-
 
     def _get_adjustment_list(self, asset: Asset, adjustments_dict: dict[str, Any], table_name: str):
         """Internal method that returns a list of adjustments for the given sid.
@@ -408,8 +433,8 @@ class BundleData:
             return None
         return self.asset_repository.retrieve_asset(sid=contract_sid)
 
-
-    def get_adjustments(self, assets: list[Asset], field: str, dt: datetime.datetime, perspective_dt: datetime.datetime):
+    def get_adjustments(self, assets: list[Asset], field: str, dt: datetime.datetime,
+                        perspective_dt: datetime.datetime):
         """Returns a list of adjustments between the dt and perspective_dt for the
         given field and list of assets
 
@@ -471,4 +496,3 @@ class BundleData:
             adjustment_ratios_per_asset.append(ratio)
 
         return adjustment_ratios_per_asset
-

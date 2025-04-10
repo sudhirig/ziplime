@@ -266,7 +266,7 @@ class BenchmarkSource:
                 frequency=self.emission_rate,
                 end_date=trading_days[-1],
                 assets=[asset],
-                include_end_date=False
+                include_end_date=False,
             )
 
             # get a minute history window of the first day

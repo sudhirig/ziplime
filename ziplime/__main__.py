@@ -34,7 +34,8 @@ from exchange_calendars import get_calendar as ec_get_calendar
 from asyncclick import DateTime
 from ziplime.utils.cli import Timestamp
 
-from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_exchange
+from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_exchange, \
+    get_data_source
 
 
 def validate_date_range(date_min: datetime.datetime, date_max: datetime.datetime):
@@ -477,7 +478,7 @@ async def run(
         metrics_set=default_metrics(),
         benchmark_spec=benchmark_spec,
         custom_loader=None,
-        market_data_provider=get_live_market_data_provider(
+        missing_bundle_data_source=get_data_source(
             live_market_data_provider) if live_market_data_provider is not None else None,
         bundle_registry=bundle_registry,
         simulation_params=sim_params,

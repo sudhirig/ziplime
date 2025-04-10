@@ -152,13 +152,12 @@ class BarData:
         data = {}
 
         if not self._adjust_minutes:
-            for field in fields:
-                return self.bundle_data.get_spot_value(
-                        assets=assets,
-                        fields=[field],
-                        dt=self._get_current_minute(),
-                        frequency=self.bundle_data.frequency
-                    )
+            return self.bundle_data.get_spot_value(
+                    assets=assets,
+                    fields=fields,
+                    dt=self._get_current_minute(),
+                    frequency=self.bundle_data.frequency
+                )
         else:
             for field in fields:
                 series = pd.Series(data={

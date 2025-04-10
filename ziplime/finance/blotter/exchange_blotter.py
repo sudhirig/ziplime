@@ -92,6 +92,7 @@ class InMemoryBlotter(Blotter):
         """
         self.open_orders.pop(asset, None)
 
+
     # End of day cancel for daily frequency
     def execute_daily_cancel_policy(self, event):
         if self.cancel_policy.should_cancel(event):

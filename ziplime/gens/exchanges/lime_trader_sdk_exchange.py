@@ -2,8 +2,10 @@ import asyncio
 import datetime
 import logging
 from decimal import Decimal
+from functools import partial
 
 from lime_trader.models.page import PageRequest
+from lime_trader.utils.pagination import iterate_pages_async
 
 from ziplime.domain.bar_data import BarData
 from ziplime.errors import SymbolNotFound
@@ -13,7 +15,7 @@ from ziplime.domain.position import Position as ZpPosition
 from ziplime.domain.account import Account as ZpAccount
 
 from lime_trader import LimeClient, AsyncLimeClient
-from lime_trader.models.accounts import AccountDetails
+from lime_trader.models.accounts import AccountDetails, TradeSide
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, \
     OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
@@ -49,6 +51,7 @@ class LimeTraderSdkExchange(Exchange):
             self._lime_sdk_client = AsyncLimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
         self._account_id = account_id or self._get_account_number()
         self._tracked_orders = {}
+        self.processed_transaction_ids = set()
 
     def get_positions(self) -> dict[Asset, ZpPosition]:
         z_positions = {}
@@ -193,7 +196,6 @@ class LimeTraderSdkExchange(Exchange):
         return result
 
     async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData):
-        results = {}
         closed_orders = []
         transactions = []
         commissions = []
@@ -217,34 +219,41 @@ class LimeTraderSdkExchange(Exchange):
                 continue
             if not order_sdk.open:
                 closed_orders.append(order)
-        async for transaction_page in self._lime_sdk_client.account.iterate_transactions_journal(
-                account_number=self._account_id,
-                start_page=PageRequest(page=1, size=20),
-                start_date=start_date_for_transactions.date(),
-                end_date=bar_data.current_dt.date()):
-
-
+        async for transaction_page in iterate_pages_async(start_page=PageRequest(page=1, size=20),
+                                              func=partial(self._lime_sdk_client.account.get_trades,
+                                                           account_number=self._account_id,
+                                                           date=bar_data.current_dt.date())):
+            # async for transaction_page in self._lime_sdk_client.account.iterate_trades(
+            #         account_number=self._account_id,
+            #         start_page=PageRequest(page=1, size=20),
+            #         date=start_date_for_transactions.date()):
 
             for transaction_sdk in transaction_page.data:
-                asset = assets_from_orders[transaction_sdk.asset.symbol]
+                asset = assets_from_orders[transaction_sdk.symbol]
                 if asset is None:
                     continue
 
-                total_commissions = sum(
-                    fee.amount for fee in transaction_sdk.fees
-                )
+                # total_commissions = sum(
+                #     fee.amount for fee in transaction_sdk.fees
+                # )
+                total_commissions = 0.00
+
+                if transaction_sdk.trade_id in self.processed_transaction_ids:
+                    continue
+
                 tx = Transaction(
                     asset=asset,
-                    amount=int(transaction_sdk.asset.quantity),
-                    dt=transaction_sdk.date,
-                    price=float(transaction_sdk.asset.price),
+                    amount=transaction_sdk.quantity if transaction_sdk.side == TradeSide.BUY else -transaction_sdk.quantity,
+                    dt=transaction_sdk.timestamp,
+                    price=float(transaction_sdk.price),
                     order_id=None,
                     commission=total_commissions,  # TODO: how to get commission
                 )
                 transactions.append(tx)
+                self.processed_transaction_ids.add(transaction_sdk.trade_id)
                 commissions.append(
                     {
-                        "asset": assets_from_orders[transaction_sdk.asset.symbol],
+                        "asset": asset,
                         # "order": order,
                         "cost": total_commissions,
                     }

@@ -155,7 +155,8 @@ class BundleService:
 
         self._logger.info(f"Finished ingesting bundle_name={name}, bundle_version={bundle_version}")
 
-    async def load_bundle(self, bundle_name: str, bundle_version: str | None) -> BundleData:
+    async def load_bundle(self, bundle_name: str, bundle_version: str | None,
+                           missing_bundle_data_source: BundleDataSource) -> BundleData:
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
                                                                            bundle_version=bundle_version)
 
@@ -191,7 +192,8 @@ class BundleService:
                                  adjustment_repository=None,  # TODO: add
                                  data=None,
                                  timestamp=timestamp,
-                                 version=bundle_metadata["version"]
+                                 version=bundle_metadata["version"],
+                                 missing_bundle_data_source=missing_bundle_data_source
                                  )
         data = await bundle_storage.load_bundle_data(bundle_data=bundle_data)
         bundle_data.data = data

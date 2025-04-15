@@ -35,7 +35,7 @@ class FixedBasisPointsSlippage(SlippageModel):
     Notes
     -----
     - A basis point is one one-hundredth of a percent.
-    - This class, default-constructed, is zipline's default slippage model for
+    - This class, default-constructed, is ziplime's default slippage model for
       equities.
     """
 

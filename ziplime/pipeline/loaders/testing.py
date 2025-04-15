@@ -1,5 +1,5 @@
 """
-Loaders for zipline.pipeline.data.testing datasets.
+Loaders for ziplime.pipeline.data.testing datasets.
 """
 
 from .synthetic import EyeLoader, SeededRandomLoader

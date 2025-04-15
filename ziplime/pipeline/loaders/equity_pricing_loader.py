@@ -13,11 +13,10 @@
 # limitations under the License.
 from collections import defaultdict
 
-from interface import implements
 from numpy import iinfo, uint32, multiply
 
-from zipline.data.fx import ExplodingFXRateReader
-from zipline.lib.adjusted_array import AdjustedArray
+from ziplime.data.fx import ExplodingFXRateReader
+from ziplime.lib.adjusted_array import AdjustedArray
 from ziplime.utils.numpy_utils import repeat_first_axis
 
 from .base import PipelineLoader
@@ -28,16 +27,16 @@ from ...data.domain.bundle_data import BundleData
 UINT32_MAX = iinfo(uint32).max
 
 
-class EquityPricingLoader(implements(PipelineLoader)):
+class EquityPricingLoader(PipelineLoader):
     """A PipelineLoader for loading daily OHLCV data.
 
     Parameters
     ----------
-    raw_price_reader : zipline.data.session_bars.SessionBarReader
+    raw_price_reader : ziplime.data.session_bars.SessionBarReader
         Reader providing raw prices.
-    adjustments_reader : zipline.data.adjustments.SQLiteAdjustmentReader
+    adjustments_reader : ziplime.data.adjustments.SQLiteAdjustmentReader
         Reader providing price/volume adjustments.
-    fx_reader : zipline.data.fx.FXRateReader
+    fx_reader : ziplime.data.fx.FXRateReader
        Reader providing currency conversions.
     """
 
@@ -56,9 +55,9 @@ class EquityPricingLoader(implements(PipelineLoader)):
 
         Parameters
         ----------
-        raw_price_reader : zipline.data.session_bars.SessionBarReader
+        raw_price_reader : ziplime.data.session_bars.SessionBarReader
             Reader providing raw prices.
-        adjustments_reader : zipline.data.adjustments.SQLiteAdjustmentReader
+        adjustments_reader : ziplime.data.adjustments.SQLiteAdjustmentReader
             Reader providing price/volume adjustments.
 
         Returns
@@ -139,7 +138,7 @@ class EquityPricingLoader(implements(PipelineLoader)):
 
         Parameters
         ----------
-        columns : list[zipline.pipeline.data.BoundColumn]
+        columns : list[ziplime.pipeline.data.BoundColumn]
             List of columns whose raw data has been loaded.
         arrays : list[np.array]
             List of arrays, parallel to ``columns`` containing data for the
@@ -187,14 +186,14 @@ class EquityPricingLoader(implements(PipelineLoader)):
 
         Parameters
         ----------
-        columns : list[zipline.pipeline.data.BoundColumn]
+        columns : list[ziplime.pipeline.data.BoundColumn]
             Columns to be loaded by ``load_adjusted_array``.
 
         Returns
         -------
-        ohlcv_columns : list[zipline.pipeline.data.BoundColumn]
+        ohlcv_columns : list[ziplime.pipeline.data.BoundColumn]
             Price and volume columns from ``columns``.
-        currency_columns : list[zipline.pipeline.data.BoundColumn]
+        currency_columns : list[ziplime.pipeline.data.BoundColumn]
             Currency code column from ``columns``, if present.
         """
         currency_name = EquityPricing.currency.name

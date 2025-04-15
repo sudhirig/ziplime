@@ -1,4 +1,4 @@
-"""Caching utilities for zipline"""
+"""Caching utilities for ziplime"""
 
 from .sentinel import sentinel
 

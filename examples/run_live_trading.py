@@ -34,8 +34,7 @@ async def run_live_trading(
         benchmark_file=None,
         no_benchmark=True,
     )
-    timedelta_diff_from_current_time = datetime.datetime.now(tz=sim_params.trading_calendar.tz) - simulation_parameters.start_date.replace(
-        tzinfo=sim_params.trading_calendar.tz)
+    timedelta_diff_from_current_time = datetime.timedelta(seconds=0)
 
     clock = RealtimeClock(
         sessions=sim_params.sessions,
@@ -57,7 +56,6 @@ async def run_live_trading(
     return await run_algorithm(
         algofile=getattr(algorithm_file, "name", "<algorithm>"),
         algotext=algotext,
-        output=None,
         print_algo=True,
         metrics_set=default_metrics(),
         benchmark_spec=benchmark_spec,
@@ -78,7 +76,7 @@ if __name__ == "__main__":
     calendar = get_calendar("NYSE")
     algorithm_file = Path("algorithms/test_algo.py").absolute()
     # TODO: currently start time needs to be at moment when trading was open. Fix it to allow any date
-    start_date = datetime.datetime.now(tz=calendar.tz) - datetime.timedelta(hours=12)
+    start_date = datetime.datetime.now(tz=calendar.tz) - datetime.timedelta(hours=16)
     sim_params = SimulationParameters(
         start_date=start_date,
         end_date=start_date + datetime.timedelta(days=2),
@@ -89,5 +87,6 @@ if __name__ == "__main__":
         exchange=exchange_class,
         bundle_name="limex_us_polars_minute",
     )
+    result = uvloop.run(run_live_trading(simulation_parameters=sim_params, algorithm_file=algorithm_file))
 
-    uvloop.run(run_live_trading(simulation_parameters=sim_params, algorithm_file=algorithm_file))
+    print(result.head())

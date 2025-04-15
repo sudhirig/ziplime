@@ -7,7 +7,7 @@ from ziplime.finance.domain.ledger import Ledger
 
 
 class DailyLedgerField:
-    """Like :class:`~zipline.finance.metrics.metric.SimpleLedgerField` but
+    """Like :class:`~ziplime.finance.metrics.metric.SimpleLedgerField` but
     also puts the current value in the ``cumulative_perf`` section.
 
     Parameters

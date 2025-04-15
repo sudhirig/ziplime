@@ -10,14 +10,14 @@ implements the following algorithm for executing pipelines:
    top-level set of dates and assets that serve as row- and
    column-labels for the computations performed by this
    pipeline. This logic lives in
-   zipline.pipeline.domain.infer_domain.
+   ziplime.pipeline.domain.infer_domain.
 
 2. Build a dependency graph of all terms in `pipeline`, with
    information about how many extra rows each term needs from its
    inputs. At this point we also **specialize** any generic
    LoadableTerms to the domain determined in (1). This logic lives in
-   zipline.pipeline.graph.TermGraph and
-   zipline.pipeline.graph.ExecutionPlan.
+   ziplime.pipeline.graph.TermGraph and
+   ziplime.pipeline.graph.ExecutionPlan.
 
 3. Combine the domain computed in (2) with our AssetFinder to produce
    a "lifetimes matrix". The lifetimes matrix is a DataFrame of
@@ -64,7 +64,7 @@ from numpy import arange, array
 from toolz import groupby
 
 from ziplime.errors import NoFurtherDataError
-from zipline.lib.adjusted_array import ensure_adjusted_array, ensure_ndarray
+from ziplime.lib.adjusted_array import ensure_adjusted_array, ensure_ndarray
 from ziplime.utils.date_utils import compute_date_range_chunks
 from ziplime.utils.numpy_utils import as_column, repeat_first_axis, repeat_last_axis
 from ziplime.utils.pandas_utils import categorical_df_concat, explode
@@ -83,7 +83,7 @@ class PipelineEngine(ABC):
 
         Parameters
         ----------
-        pipeline : zipline.pipeline.Pipeline
+        pipeline : ziplime.pipeline.Pipeline
             The pipeline to run.
         start_date : pd.Timestamp
             Start date of the computed matrix.
@@ -99,7 +99,7 @@ class PipelineEngine(ABC):
 
             The ``result`` columns correspond to the entries of
             `pipeline.columns`, which should be a dictionary mapping strings to
-            instances of :class:`zipline.pipeline.Term`.
+            instances of :class:`ziplime.pipeline.Term`.
 
             For each date between ``start_date`` and ``end_date``, ``result``
             will contain a row for each asset that passed `pipeline.screen`.
@@ -138,7 +138,7 @@ class PipelineEngine(ABC):
 
             The ``result`` columns correspond to the entries of
             `pipeline.columns`, which should be a dictionary mapping strings to
-            instances of :class:`zipline.pipeline.Term`.
+            instances of :class:`ziplime.pipeline.Term`.
 
             For each date between ``start_date`` and ``end_date``, ``result``
             will contain a row for each asset that passed `pipeline.screen`.
@@ -147,7 +147,7 @@ class PipelineEngine(ABC):
 
         See Also
         --------
-        :meth:`zipline.pipeline.engine.PipelineEngine.run_pipeline`
+        :meth:`ziplime.pipeline.engine.PipelineEngine.run_pipeline`
         """
         raise NotImplementedError("run_chunked_pipeline")
 
@@ -214,13 +214,13 @@ class SimplePipelineEngine(PipelineEngine):
     get_loader : callable
         A function that is given a loadable term and returns a PipelineLoader
         to use to retrieve raw data for that term.
-    asset_finder : zipline.assets.AssetFinder
+    asset_finder : ziplime.assets.AssetFinder
         An AssetFinder instance.  We depend on the AssetFinder to determine
         which assets are in the top-level universe at any point in time.
     populate_initial_workspace : callable, optional
         A function which will be used to populate the initial workspace when
         computing a pipeline. See
-        :func:`zipline.pipeline.engine.default_populate_initial_workspace`
+        :func:`ziplime.pipeline.engine.default_populate_initial_workspace`
         for more info.
     default_hooks : list, optional
         List of hooks that should be used to instrument all pipelines executed
@@ -228,7 +228,7 @@ class SimplePipelineEngine(PipelineEngine):
 
     See Also
     --------
-    :func:`zipline.pipeline.engine.default_populate_initial_workspace`
+    :func:`ziplime.pipeline.engine.default_populate_initial_workspace`
     """
 
     __slots__ = (
@@ -292,7 +292,7 @@ class SimplePipelineEngine(PipelineEngine):
 
             The ``result`` columns correspond to the entries of
             `pipeline.columns`, which should be a dictionary mapping strings to
-            instances of :class:`zipline.pipeline.Term`.
+            instances of :class:`ziplime.pipeline.Term`.
 
             For each date between ``start_date`` and ``end_date``, ``result``
             will contain a row for each asset that passed `pipeline.screen`.
@@ -301,7 +301,7 @@ class SimplePipelineEngine(PipelineEngine):
 
         See Also
         --------
-        :meth:`zipline.pipeline.engine.PipelineEngine.run_pipeline`
+        :meth:`ziplime.pipeline.engine.PipelineEngine.run_pipeline`
         """
         domain = self.resolve_domain(pipeline)
         ranges = compute_date_range_chunks(
@@ -331,7 +331,7 @@ class SimplePipelineEngine(PipelineEngine):
 
         Parameters
         ----------
-        pipeline : zipline.pipeline.Pipeline
+        pipeline : ziplime.pipeline.Pipeline
             The pipeline to run.
         start_date : pd.Timestamp
             Start date of the computed matrix.
@@ -347,7 +347,7 @@ class SimplePipelineEngine(PipelineEngine):
 
             The ``result`` columns correspond to the entries of
             `pipeline.columns`, which should be a dictionary mapping strings to
-            instances of :class:`zipline.pipeline.Term`.
+            instances of :class:`ziplime.pipeline.Term`.
 
             For each date between ``start_date`` and ``end_date``, ``result``
             will contain a row for each asset that passed `pipeline.screen`.
@@ -429,7 +429,7 @@ class SimplePipelineEngine(PipelineEngine):
 
         Parameters
         ----------
-        domain : zipline.pipeline.domain.Domain
+        domain : ziplime.pipeline.domain.Domain
             Domain for which we're computing a pipeline.
         start_date : pd.Timestamp
             Base start date for the matrix.
@@ -568,7 +568,7 @@ class SimplePipelineEngine(PipelineEngine):
 
         Parameters
         ----------
-        graph : zipline.pipeline.graph.ExecutionPlan
+        graph : ziplime.pipeline.graph.ExecutionPlan
             Dependency graph of the terms to be executed.
         dates : pd.DatetimeIndex
             Row labels for our root mask.

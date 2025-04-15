@@ -8,7 +8,6 @@ packages = [{include = "ziplime"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
-zipline-reloaded = "3.1"
 dask = "^2024.9.1"
 setuptools = "^72.1.0"
 lime-trader-sdk = "^0.3.9"
@@ -26,6 +25,15 @@ aiosqlite = "^0.21.0"
 pydantic = "^2.11.2"
 uvloop = "^0.21.0"
 aiocache = "^0.12.3"
+exchange-calendars = "^4.10"
+alembic = "^1.15.2"
+iso3166 = "^2.1.1"
+scipy = "^1.15.2"
+numexpr = "^2.10.2"
+iso4217 = "^1.12.20240625"
+h5py = "^3.13.0"
+networkx = "^3.4.2"
+empyrical-reloaded = "^0.5.11"
 
 [tool.poetry.scripts]
 ziplime = "ziplime.__main__:main"

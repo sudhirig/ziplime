@@ -23,9 +23,9 @@ class Ledger:
 
     Attributes
     ----------
-    portfolio : zipline.protocol.Portfolio
+    portfolio : ziplime.protocol.Portfolio
         The updated portfolio being managed.
-    account : zipline.protocol.Account
+    account : ziplime.protocol.Account
         The updated account being managed.
     position_tracker : PositionTracker
         The current set of positions.

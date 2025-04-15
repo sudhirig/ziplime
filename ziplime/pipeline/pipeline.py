@@ -15,8 +15,8 @@ class Pipeline:
     compiled and executed by a PipelineEngine.
 
     A Pipeline has two important attributes: 'columns', a dictionary of named
-    :class:`~zipline.pipeline.Term` instances, and 'screen', a
-    :class:`~zipline.pipeline.Filter` representing criteria for
+    :class:`~ziplime.pipeline.Term` instances, and 'screen', a
+    :class:`~ziplime.pipeline.Filter` representing criteria for
     including an asset in the results of a Pipeline.
 
     To compute a pipeline in the context of a TradingAlgorithm, users must call
@@ -29,7 +29,7 @@ class Pipeline:
     ----------
     columns : dict, optional
         Initial columns.
-    screen : zipline.pipeline.Filter, optional
+    screen : ziplime.pipeline.Filter, optional
         Initial screen.
     """
 
@@ -61,7 +61,7 @@ class Pipeline:
 
         Returns
         -------
-        columns : dict[str, zipline.pipeline.ComputableTerm]
+        columns : dict[str, ziplime.pipeline.ComputableTerm]
             Map from column name to expression computing that column's output.
         """
         return self._columns
@@ -73,7 +73,7 @@ class Pipeline:
 
         Returns
         -------
-        screen : zipline.pipeline.Filter or None
+        screen : ziplime.pipeline.Filter or None
             Term defining the screen for this pipeline. If ``screen`` is a
             filter, rows that do not pass the filter (i.e., rows for which the
             filter computed ``False``) will be dropped from the output of this
@@ -97,7 +97,7 @@ class Pipeline:
 
         Parameters
         ----------
-        column : zipline.pipeline.Term
+        column : ziplime.pipeline.Term
             A Filter, Factor, or Classifier to add to the pipeline.
         name : str
             Name of the column to add.
@@ -137,7 +137,7 @@ class Pipeline:
 
         Returns
         -------
-        removed : zipline.pipeline.Term
+        removed : ziplime.pipeline.Term
             The removed term.
         """
         return self.columns.pop(name)
@@ -147,7 +147,7 @@ class Pipeline:
 
         Parameters
         ----------
-        filter : zipline.pipeline.Filter
+        filter : ziplime.pipeline.Filter
             The filter to apply as a screen.
         overwrite : bool
             Whether to overwrite any existing screen.  If overwrite is False
@@ -170,9 +170,9 @@ class Pipeline:
 
         Parameters
         ----------
-        domain : zipline.pipeline.domain.Domain
+        domain : ziplime.pipeline.domain.Domain
             Domain on which the pipeline will be executed.
-        default_screen : zipline.pipeline.Term
+        default_screen : ziplime.pipeline.Term
             Term to use as a screen if self.screen is None.
         all_dates : pd.DatetimeIndex
             A calendar of dates to use to calculate starts and ends for each
@@ -184,7 +184,7 @@ class Pipeline:
 
         Returns
         -------
-        graph : zipline.pipeline.graph.ExecutionPlan
+        graph : ziplime.pipeline.graph.ExecutionPlan
             Graph encoding term dependencies, including metadata about extra
             row requirements.
         """
@@ -207,12 +207,12 @@ class Pipeline:
 
         Parameters
         ----------
-        default_screen : zipline.pipeline.Term
+        default_screen : ziplime.pipeline.Term
             Term to use as a screen if self.screen is None.
 
         Returns
         -------
-        graph : zipline.pipeline.graph.TermGraph
+        graph : ziplime.pipeline.graph.TermGraph
             Graph encoding term dependencies.
         """
         return TermGraph(self._prepare_graph_terms(default_screen))
@@ -277,13 +277,13 @@ class Pipeline:
 
         Parameters
         ----------
-        default : zipline.pipeline.domain.Domain
+        default : ziplime.pipeline.domain.Domain
             Domain to use if no domain can be inferred from this pipeline by
             itself.
 
         Returns
         -------
-        domain : zipline.pipeline.domain.Domain
+        domain : ziplime.pipeline.domain.Domain
             The domain for the pipeline.
 
         Raises

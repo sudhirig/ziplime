@@ -23,7 +23,7 @@ from ziplime.errors import (
     NonExistentAssetInTimeFrame,
     NoFurtherDataError,
 )
-from zipline.lib.labelarray import LabelArray, labelarray_where
+from ziplime.lib.labelarray import LabelArray, labelarray_where
 from ziplime.utils.context_tricks import nop_context
 from ziplime.utils.input_validation import expect_dtypes
 from ziplime.utils.numpy_utils import bool_dtype
@@ -234,9 +234,9 @@ class CustomTermMixin(Term):
 
 class LatestMixin(SingleInputMixin):
     """
-    Common behavior for :attr:`zipline.pipeline.data.BoundColumn.latest`.
+    Common behavior for :attr:`ziplime.pipeline.data.BoundColumn.latest`.
 
-    Given a :class:`~zipline.pipeline.data.DataSet` named ``MyData`` with a
+    Given a :class:`~ziplime.pipeline.data.DataSet` named ``MyData`` with a
     column ``col`` of numeric dtype, the following expression:
 
     .. code-block:: python
@@ -257,9 +257,9 @@ class LatestMixin(SingleInputMixin):
        factor = Latest()
 
     The behavior is the same for columns of boolean or string dtype, except the
-    resulting expression will be a :class:`~zipline.pipeline.CustomFilter` for
+    resulting expression will be a :class:`~ziplime.pipeline.CustomFilter` for
     boolean columns, and the resulting object will be a
-    :class:`~zipline.pipeline.CustomClassifier` for string or integer columns.
+    :class:`~ziplime.pipeline.CustomClassifier` for string or integer columns.
     """
 
     window_length = 1
@@ -584,9 +584,9 @@ class SliceMixin(UniversalMixin):
 
     Parameters
     ----------
-    term : zipline.pipeline.Term
+    term : ziplime.pipeline.Term
         The term from which to extract a column of data.
-    asset : zipline.assets.Asset
+    asset : ziplime.assets.Asset
         The asset corresponding to the column of `term` to be extracted.
 
     Notes

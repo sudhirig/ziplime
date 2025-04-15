@@ -4,12 +4,11 @@ PipelineLoader accepting a DataFrame as input.
 
 from functools import partial
 
-from interface import implements
 import numpy as np
 import pandas as pd
 
-from zipline.lib.adjusted_array import AdjustedArray
-from zipline.lib.adjustment import make_adjustment_from_labels
+from ziplime.lib.adjusted_array import AdjustedArray
+from ziplime.lib.adjustment import make_adjustment_from_labels
 from ziplime.utils.numpy_utils import as_column
 from .base import PipelineLoader
 
@@ -25,7 +24,7 @@ ADJUSTMENT_COLUMNS = pd.Index(
 )
 
 
-class DataFrameLoader(implements(PipelineLoader)):
+class DataFrameLoader(PipelineLoader):
     """A PipelineLoader that reads its input from DataFrames.
 
     Mostly useful for testing, but can also be used for real work if your data
@@ -33,7 +32,7 @@ class DataFrameLoader(implements(PipelineLoader)):
 
     Parameters
     ----------
-    column : zipline.pipeline.data.BoundColumn
+    column : ziplime.pipeline.data.BoundColumn
         The column whose data is loadable by this loader.
     baseline : pandas.DataFrame
         A DataFrame with index of type DatetimeIndex and columns of type
@@ -46,7 +45,7 @@ class DataFrameLoader(implements(PipelineLoader)):
         A DataFrame with the following columns:
             sid : int
             value : any
-            kind : int (zipline.pipeline.loaders.frame.ADJUSTMENT_TYPES)
+            kind : int (ziplime.pipeline.loaders.frame.ADJUSTMENT_TYPES)
             start_date : datetime64 (can be NaT)
             end_date : datetime64 (must be set)
             apply_date : datetime64 (must be set)

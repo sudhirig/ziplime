@@ -1,21 +1,15 @@
-import warnings
 from datetime import datetime
 from os import listdir
 import os.path
 
 import pandas as pd
 
-# import pytz
-import zipline
 
 from ziplime.errors import SymbolNotFound
-from zipline.finance.asset_restrictions import SecurityListRestrictions
-from zipline.zipline_warnings import ZiplineDeprecationWarning
+from ziplime.finance.asset_restrictions import SecurityListRestrictions
 
 
 DATE_FORMAT = "%Y%m%d"
-zipline_dir = os.path.dirname(zipline.__file__)
-SECURITY_LISTS_DIR = os.path.join(zipline_dir, "resources", "security_lists")
 
 
 class SecurityList:
@@ -38,24 +32,6 @@ class SecurityList:
     def make_knowledge_dates(self, data):
         knowledge_dates = sorted([pd.Timestamp(k) for k in data.keys()])
         return knowledge_dates
-
-    def __iter__(self):
-        warnings.warn(
-            "Iterating over security_lists is deprecated. Use "
-            "`for sid in <security_list>.current_securities(dt)` instead.",
-            category=ZiplineDeprecationWarning,
-            stacklevel=2,
-        )
-        return iter(self.current_securities(self.current_date()))
-
-    def __contains__(self, item):
-        warnings.warn(
-            "Evaluating inclusion in security_lists is deprecated. Use "
-            "`sid in <security_list>.current_securities(dt)` instead.",
-            category=ZiplineDeprecationWarning,
-            stacklevel=2,
-        )
-        return item in self.current_securities(self.current_date())
 
     def current_securities(self, dt):
         for kd in self._knowledge_dates:
@@ -132,7 +108,8 @@ def load_from_directory(list_name):
        {add: [symbol list], 'delete': [symbol list]}
     """
     data = {}
-    dir_path = os.path.join(SECURITY_LISTS_DIR, list_name)
+    # TODO: fix this
+    dir_path = os.path.join(list_name)
     for kd_name in listdir(dir_path):
         kd = datetime.strptime(kd_name, DATE_FORMAT)
         data[kd] = {}

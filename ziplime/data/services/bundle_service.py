@@ -252,7 +252,7 @@ class BundleService:
     async def clean(self, bundle_name: str, before: datetime.datetime = None, after: datetime.datetime = None,
                     keep_last: bool = None):
         """Clean up data that was created with ``ingest`` or
-        ``$ python -m zipline ingest``
+        ``$ python -m ziplime ingest``
 
         Parameters
         ----------

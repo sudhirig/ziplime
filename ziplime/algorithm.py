@@ -5,7 +5,6 @@ from copy import copy
 import warnings
 import logging
 from typing import Callable
-import polars as pl
 import pandas as pd
 import numpy as np
 import ziplime
@@ -55,12 +54,10 @@ from ziplime.errors import (
 )
 
 from ziplime.finance.execution import ExecutionStyle
-from zipline.finance.asset_restrictions import Restrictions
-from zipline.finance.cancel_policy import CancelPolicy
-from zipline.finance.asset_restrictions import (
+from ziplime.finance.asset_restrictions import Restrictions
+from ziplime.finance.cancel_policy import CancelPolicy
+from ziplime.finance.asset_restrictions import (
     NoRestrictions,
-    StaticRestrictions,
-    SecurityListRestrictions,
 )
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.assets.domain.db.futures_contract import FuturesContract
@@ -68,7 +65,7 @@ from ziplime.assets.domain.db.equity import Equity
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.finance.metrics_tracker import MetricsTracker
 from ziplime.pipeline import Pipeline
-import zipline.pipeline.domain as domain
+import ziplime.pipeline.domain as domain
 from ziplime.pipeline.engine import (
     ExplodingPipelineEngine,
     SimplePipelineEngine,
@@ -97,11 +94,7 @@ from ziplime.utils.math_utils import (
     tolerant_equals,
     round_if_near_integer,
 )
-from ziplime.utils.security_list import SecurityList
-
-from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.sources.benchmark_source import BenchmarkSource
-from zipline.zipline_warnings import ZiplineDeprecationWarning
 
 from ziplime.utils.calendar_utils import add_tz_info
 
@@ -414,7 +407,7 @@ class TradingAlgorithm:
         # this late in the long term, but this is needed for now for backwards
         # compat downstream.
 
-        # Create zipline and loop through simulated_trading.
+        # Create ziplime and loop through simulated_trading.
         # Each iteration returns a perf dictionary
         try:
             perfs = []
@@ -538,10 +531,10 @@ class TradingAlgorithm:
         func : callable
             The function to execute when the rule is triggered. ``func`` should
             have the same signature as ``handle_data``.
-        date_rule : zipline.utils.events.EventRule, optional
+        date_rule : ziplime.utils.events.EventRule, optional
             Rule for the dates on which to execute ``func``. If not
             passed, the function will run every trading day.
-        time_rule : zipline.utils.events.EventRule, optional
+        time_rule : ziplime.utils.events.EventRule, optional
             Rule for the time at which to execute ``func``. If not passed, the
             function will execute at the end of the first market minute of the
             day.
@@ -552,8 +545,8 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :class:`zipline.api.date_rules`
-        :class:`zipline.api.time_rules`
+        :class:`ziplime.api.date_rules`
+        :class:`ziplime.api.time_rules`
         """
 
         # When the user calls schedule_function(func, <time_rule>), assume that
@@ -610,7 +603,7 @@ class TradingAlgorithm:
         -----
         These values will appear in the performance packets and the performance
         dataframe passed to ``analyze`` and returned from
-        :func:`~zipline.run_algorithm`.
+        :func:`~ziplime.run_algorithm`.
         """
         # Make 2 objects both referencing the same iterator
         args = [iter(args)] * 2
@@ -646,7 +639,7 @@ class TradingAlgorithm:
 
         Returns
         -------
-        continuous_future : zipline.assets.ContinuousFuture
+        continuous_future : ziplime.assets.ContinuousFuture
             The continuous future specifier.
         """
         return self.data_portal._bundle_data.asset_repository.create_continuous_future(
@@ -673,7 +666,7 @@ class TradingAlgorithm:
 
         Returns
         -------
-        equity : zipline.assets.Equity
+        equity : ziplime.assets.Equity
             The equity that held the ticker symbol on the current
             symbol lookup date.
 
@@ -684,7 +677,7 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :func:`zipline.api.set_symbol_lookup_date`
+        :func:`ziplime.api.set_symbol_lookup_date`
         """
         # If the user has not set the symbol lookup date,
         # use the end_session as the date for symbol->sid resolution.
@@ -717,7 +710,7 @@ class TradingAlgorithm:
 
         Returns
         -------
-        equities : list[zipline.assets.Equity]
+        equities : list[ziplime.assets.Equity]
             The equities that held the given ticker symbols on the current
             symbol lookup date.
 
@@ -729,7 +722,7 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :func:`zipline.api.set_symbol_lookup_date`
+        :func:`ziplime.api.set_symbol_lookup_date`
         """
         return [self.symbol(identifier, **kwargs) for identifier in args]
 
@@ -744,7 +737,7 @@ class TradingAlgorithm:
 
         Returns
         -------
-        asset : zipline.assets.Asset
+        asset : ziplime.assets.Asset
             The asset with the given ``sid``.
 
         Raises
@@ -765,7 +758,7 @@ class TradingAlgorithm:
 
         Returns
         -------
-        future : zipline.assets.Future
+        future : ziplime.assets.Future
             The future that trades with the name ``symbol``.
 
         Raises
@@ -903,9 +896,9 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :class:`zipline.finance.execution.ExecutionStyle`
-        :func:`zipline.api.order_value`
-        :func:`zipline.api.order_percent`
+        :class:`ziplime.finance.execution.ExecutionStyle`
+        :func:`ziplime.api.order_value`
+        :func:`ziplime.api.order_percent`
         """
         if not self._can_order_asset(asset=asset):
             return None
@@ -1016,14 +1009,14 @@ class TradingAlgorithm:
 
         Notes
         -----
-        See :func:`zipline.api.order` for more information about
+        See :func:`ziplime.api.order` for more information about
         ``limit_price``, ``stop_price``, and ``style``
 
         See Also
         --------
-        :class:`zipline.finance.execution.ExecutionStyle`
-        :func:`zipline.api.order`
-        :func:`zipline.api.order_percent`
+        :class:`ziplime.finance.execution.ExecutionStyle`
+        :func:`ziplime.api.order`
+        :func:`ziplime.api.order_percent`
         """
         if not self._can_order_asset(asset):
             return None
@@ -1116,11 +1109,11 @@ class TradingAlgorithm:
         Notes
         -----
         This function can only be called during
-        :func:`~zipline.api.initialize`.
+        :func:`~ziplime.api.initialize`.
 
         See Also
         --------
-        :class:`zipline.finance.slippage.SlippageModel`
+        :class:`ziplime.finance.slippage.SlippageModel`
         """
         if self.initialized:
             raise SetSlippagePostInit()
@@ -1157,13 +1150,13 @@ class TradingAlgorithm:
         Notes
         -----
         This function can only be called during
-        :func:`~zipline.api.initialize`.
+        :func:`~ziplime.api.initialize`.
 
         See Also
         --------
-        :class:`zipline.finance.commission.PerShare`
-        :class:`zipline.finance.commission.PerTrade`
-        :class:`zipline.finance.commission.PerDollar`
+        :class:`ziplime.finance.commission.PerShare`
+        :class:`ziplime.finance.commission.PerTrade`
+        :class:`ziplime.finance.commission.PerDollar`
         """
         if self.initialized:
             raise SetCommissionPostInit()
@@ -1197,8 +1190,8 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :class:`zipline.api.EODCancel`
-        :class:`zipline.api.NeverCancel`
+        :class:`ziplime.api.EODCancel`
+        :class:`ziplime.api.NeverCancel`
         """
         if not isinstance(cancel_policy, CancelPolicy):
             raise UnsupportedCancelPolicy()
@@ -1262,14 +1255,14 @@ class TradingAlgorithm:
 
         Notes
         -----
-        See :func:`zipline.api.order` for more information about
+        See :func:`ziplime.api.order` for more information about
         ``limit_price``, ``stop_price``, and ``style``
 
         See Also
         --------
-        :class:`zipline.finance.execution.ExecutionStyle`
-        :func:`zipline.api.order`
-        :func:`zipline.api.order_value`
+        :class:`ziplime.finance.execution.ExecutionStyle`
+        :func:`ziplime.api.order`
+        :func:`ziplime.api.order_value`
         """
         if not self._can_order_asset(asset=asset):
             return None
@@ -1329,15 +1322,15 @@ class TradingAlgorithm:
         call to ``order_target`` will not have been filled when the second
         ``order_target`` call is made.
 
-        See :func:`zipline.api.order` for more information about
+        See :func:`ziplime.api.order` for more information about
         ``limit_price``, ``stop_price``, and ``style``
 
         See Also
         --------
-        :class:`zipline.finance.execution.ExecutionStyle`
-        :func:`zipline.api.order`
-        :func:`zipline.api.order_target_percent`
-        :func:`zipline.api.order_target_value`
+        :class:`ziplime.finance.execution.ExecutionStyle`
+        :func:`ziplime.api.order`
+        :func:`ziplime.api.order_target_percent`
+        :func:`ziplime.api.order_target_value`
         """
         if not self._can_order_asset(asset=asset):
             return None
@@ -1399,10 +1392,10 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :class:`zipline.finance.execution.ExecutionStyle`
-        :func:`zipline.api.order`
-        :func:`zipline.api.order_target`
-        :func:`zipline.api.order_target_percent`
+        :class:`ziplime.finance.execution.ExecutionStyle`
+        :func:`ziplime.api.order`
+        :func:`ziplime.api.order_target`
+        :func:`ziplime.api.order_target_percent`
         """
         if not self._can_order_asset(asset):
             return None
@@ -1461,15 +1454,15 @@ class TradingAlgorithm:
         because the first call to ``order_target_percent`` will not have been
         filled when the second ``order_target_percent`` call is made.
 
-        See :func:`zipline.api.order` for more information about
+        See :func:`ziplime.api.order` for more information about
         ``limit_price``, ``stop_price``, and ``style``
 
         See Also
         --------
-        :class:`zipline.finance.execution.ExecutionStyle`
-        :func:`zipline.api.order`
-        :func:`zipline.api.order_target`
-        :func:`zipline.api.order_target_value`
+        :class:`ziplime.finance.execution.ExecutionStyle`
+        :func:`ziplime.api.order`
+        :func:`ziplime.api.order_target`
+        :func:`ziplime.api.order_target_value`
         """
         if not self._can_order_asset(asset):
             return None
@@ -1756,37 +1749,6 @@ class TradingAlgorithm:
         control = MaxOrderCount(on_error, max_count)
         self.register_trading_control(control)
 
-    @api_method
-    def set_do_not_order_list(self, restricted_list, on_error="fail"):
-        """Set a restriction on which assets can be ordered.
-
-        Parameters
-        ----------
-        restricted_list : container[Asset], SecurityList
-            The assets that cannot be ordered.
-        """
-        if isinstance(restricted_list, SecurityList):
-            warnings.warn(
-                "`set_do_not_order_list(security_lists.leveraged_etf_list)` "
-                "is deprecated. Use `set_asset_restrictions("
-                "security_lists.restrict_leveraged_etfs)` instead.",
-                category=ZiplineDeprecationWarning,
-                stacklevel=2,
-            )
-            restrictions = SecurityListRestrictions(restricted_list)
-        else:
-            warnings.warn(
-                "`set_do_not_order_list(container_of_assets)` is deprecated. "
-                "Create a zipline.finance.asset_restrictions."
-                "StaticRestrictions object with a container of assets and use "
-                "`set_asset_restrictions(StaticRestrictions("
-                "container_of_assets))` instead.",
-                category=ZiplineDeprecationWarning,
-                stacklevel=2,
-            )
-            restrictions = StaticRestrictions(restricted_list)
-
-        self.set_asset_restrictions(restrictions, on_error)
 
     @api_method
     def set_asset_restrictions(self, restrictions: Restrictions, on_error: str = "fail"):
@@ -1799,7 +1761,7 @@ class TradingAlgorithm:
 
         See Also
         --------
-        zipline.finance.asset_restrictions.Restrictions
+        ziplime.finance.asset_restrictions.Restrictions
         """
         control = RestrictedListOrder(on_error, restrictions)
         self.register_trading_control(control)
@@ -1843,7 +1805,7 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :func:`zipline.api.pipeline_output`
+        :func:`ziplime.api.pipeline_output`
         """
         if chunks is None:
             # Make the first chunk smaller to get more immediate results:
@@ -1884,8 +1846,8 @@ class TradingAlgorithm:
 
         See Also
         --------
-        :func:`zipline.api.attach_pipeline`
-        :meth:`zipline.pipeline.engine.PipelineEngine.run_pipeline`
+        :func:`ziplime.api.attach_pipeline`
+        :meth:`ziplime.pipeline.engine.PipelineEngine.run_pipeline`
         """
         try:
             pipe, chunks, _ = self._pipelines[name]

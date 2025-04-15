@@ -35,13 +35,13 @@ class InMemoryBlotter(Blotter):
 
         Parameters
         ----------
-        asset : zipline.assets.Asset
+        asset : ziplime.assets.Asset
             The asset that this order is for.
         amount : int
             The amount of shares to order. If ``amount`` is positive, this is
             the number of shares to buy or cover. If ``amount`` is negative,
             this is the number of shares to sell or short.
-        style : zipline.finance.execution.ExecutionStyle
+        style : ziplime.finance.execution.ExecutionStyle
             The execution style for the order.
         order_id : str, optional
             The unique identifier for this order.
@@ -164,7 +164,7 @@ class InMemoryBlotter(Blotter):
 
         Parameters
         ----------
-        bar_data: zipline._protocol.BarData
+        bar_data: ziplime.protocol.BarData
 
         Notes
         -----

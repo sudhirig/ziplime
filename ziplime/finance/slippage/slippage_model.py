@@ -28,7 +28,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
     fill during a simulation.
 
     To implement a new slippage model, create a subclass of
-    :class:`~zipline.finance.slippage.SlippageModel` and implement
+    :class:`~ziplime.finance.slippage.SlippageModel` and implement
     :meth:`process_order`.
 
     Methods
@@ -68,9 +68,9 @@ class SlippageModel(metaclass=FinancialModelMeta):
 
         Parameters
         ----------
-        data : zipline.protocol.BarData
+        data : ziplime.protocol.BarData
             The data for the given bar.
-        order : zipline.finance.order.Order
+        order : ziplime.finance.order.Order
             The order to simulate.
 
         Returns
@@ -85,7 +85,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
 
         Raises
         ------
-        zipline.finance.slippage.LiquidityExceeded
+        ziplime.finance.slippage.LiquidityExceeded
             May be raised if no more orders should be processed for the current
             asset during the current bar.
 

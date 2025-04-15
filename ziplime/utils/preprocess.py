@@ -3,12 +3,13 @@ Utilities for validating inputs to user-facing API functions.
 """
 
 import sys
+from toolz import curry
+from operator import getitem
 from textwrap import dedent
 from types import CodeType
 from uuid import uuid4
 
-from toolz.curried.operator import getitem
-
+curried_getitem = curry(getitem)
 from ziplime.utils.compat import getargspec, wraps
 
 if sys.version_info[0:2] < (3, 7):
@@ -266,5 +267,5 @@ def _build_preprocessed_function(func, processors, args_defaults, varargs, varkw
             # nothing for us to correct.
             return new_func
 
-    new_func.__code__ = CodeType(*map(getitem(args), _code_argorder))
+    new_func.__code__ = CodeType(*map(curried_getitem(args), _code_argorder))
     return new_func

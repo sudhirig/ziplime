@@ -1,7 +1,6 @@
 from abc import abstractmethod
 
 from ziplime.assets.domain.db.asset import Asset
-from zipline.finance.order import Order as ZPOrder
 
 from ziplime.domain.bar_data import BarData
 from ziplime.domain.position import Position
@@ -41,7 +40,7 @@ class Exchange:
     def is_alive(self): ...
 
     @abstractmethod
-    def get_orders(self) -> dict[str, ZPOrder]: ...
+    def get_orders(self) -> dict[str, Order]: ...
 
     @abstractmethod
     async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData): ...

@@ -18,20 +18,19 @@ Currently, this means that a domain defines two things:
 import datetime
 from textwrap import dedent
 
-from interface import default, implements, Interface
 import numpy as np
 import pandas as pd
 import pytz
 
 from ziplime.utils.calendar_utils import get_calendar
 
-from zipline.country import CountryCode
+from ziplime.country import CountryCode
 from ziplime.utils.formatting import bulleted_list
 from ziplime.utils.memoize import lazyval
 from ziplime.utils.pandas_utils import days_at_time
 
 
-class IDomain(Interface):
+class Domain:
     """Domain interface."""
 
     def sessions(self):
@@ -72,7 +71,6 @@ class IDomain(Interface):
             "available" on each session.
         """
 
-    @default
     def roll_forward(self, dt):
         """Given a date, align it to the calendar of the pipeline's domain.
 
@@ -95,7 +93,6 @@ class IDomain(Interface):
             ) from exc
 
 
-Domain = implements(IDomain)
 Domain.__doc__ = """A domain represents a set of labels for the arrays computed by a Pipeline.
 
 A domain defines two things:
@@ -111,7 +108,7 @@ A domain defines two things:
    concepts.
 """
 Domain.__name__ = "Domain"
-Domain.__qualname__ = "zipline.pipeline.domain.Domain"
+Domain.__qualname__ = "ziplime.pipeline.domain.Domain"
 
 
 class GenericDomain(Domain):
@@ -306,7 +303,7 @@ def infer_domain(terms):
 
     Parameters
     ----------
-    terms : iterable[zipline.pipeline.Term]
+    terms : iterable[ziplime.pipeline.Term]
 
     Returns
     -------

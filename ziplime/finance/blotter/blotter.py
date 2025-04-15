@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from zipline.finance.cancel_policy import NeverCancel
+from ziplime.finance.cancel_policy import NeverCancel
 
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.finance.commission import CommissionModel
@@ -91,7 +91,7 @@ class Blotter(ABC):
 
         Parameters
         ----------
-        bar_data: zipline._protocol.BarData
+        bar_data: ziplime._protocol.BarData
 
         Notes
         -----

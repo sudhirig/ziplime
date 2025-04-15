@@ -6,7 +6,7 @@ def fill_price_worse_than_limit_price(fill_price, order):
     fill_price: float
         The price to check.
 
-    order: zipline.finance.order.Order
+    order: ziplime.finance.order.Order
         The order whose limit price to check.
 
     Returns

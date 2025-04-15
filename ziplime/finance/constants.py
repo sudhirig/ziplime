@@ -96,7 +96,7 @@ FUTURE_EXCHANGE_FEES_BY_SYMBOL = {
     "YS": 0.75,  # Silver e-mini
 }
 
-# See `zipline.finance.slippage.VolatilityVolumeShare` for more information on
+# See `ziplime.finance.slippage.VolatilityVolumeShare` for more information on
 # how these constants are used.
 DEFAULT_ETA = 0.049018143225019836
 ROOT_SYMBOL_TO_ETA = {

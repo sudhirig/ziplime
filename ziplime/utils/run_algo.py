@@ -67,7 +67,6 @@ class _RunAlgoError(click.ClickException, ValueError):
 async def run_algorithm(
         algofile: str,
         algotext: str,
-        output,
         print_algo: bool,
         metrics_set: str,
         custom_loader,
@@ -79,7 +78,7 @@ async def run_algorithm(
 ):
     """Run a backtest for the given algorithm.
 
-    This is shared between the cli and :func:`zipline.run_algo`.
+    This is shared between the cli and :func:`ziplime.run_algo`.
     """
     # benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
     bundle_service = BundleService(bundle_registry=bundle_registry)
@@ -189,10 +188,4 @@ async def run_algorithm(
         # tr.bundle_data = bundle_data
         # tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
     perf = await tr.run()
-
-    if output == "-":
-        click.echo(str(perf))
-    elif output != os.devnull:  # make the zipline magic not write any data
-        perf.to_pickle(output)
-
     return perf

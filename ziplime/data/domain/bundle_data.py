@@ -1,5 +1,7 @@
 import datetime
 from dataclasses import dataclass
+from functools import reduce
+from operator import mul
 from typing import Any
 
 import pandas as pd

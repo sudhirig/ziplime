@@ -7,7 +7,7 @@ class RestrictedListOrder(TradingControl):
 
     Parameters
     ----------
-    restrictions : zipline.finance.asset_restrictions.Restrictions
+    restrictions : ziplime.finance.asset_restrictions.Restrictions
         Object representing restrictions of a group of assets.
     """
 

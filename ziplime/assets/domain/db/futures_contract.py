@@ -3,8 +3,7 @@ import datetime
 from sqlalchemy.orm import Mapped
 
 from ziplime.assets.domain.db.asset import Asset
-from ziplime.db.annotated_types import IntegerPK, StringUnique, FuturesRootSymbolFK, ExchangeFK
-from ziplime.db.base_model import BaseModel
+from ziplime.db.annotated_types import StringUnique, FuturesRootSymbolFK, ExchangeFK
 
 
 class FuturesContract(Asset):

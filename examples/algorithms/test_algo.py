@@ -1,5 +1,6 @@
 import datetime
 
+from ziplime.assets.domain.asset_type import AssetType
 from ziplime.finance.execution import ExecutionStyle, LimitOrder, MarketOrder
 
 from ziplime.algorithm import TradingAlgorithm
@@ -7,7 +8,7 @@ from ziplime.domain.bar_data import BarData
 
 
 async def initialize(context: TradingAlgorithm):
-    context.assets = [await context.symbol('AAPL')]
+    context.assets = [await context.symbol('AAPL', asset_type=AssetType.EQUITY)]
     context.assett = await context.symbol("AMZN")  # Apple and Amazon
     context.counter = 0
 

@@ -30,8 +30,8 @@ class BarData:
     has recent trade data.
 
     An instance of this object is passed as ``data`` to
-    :func:`~zipline.api.handle_data` and
-    :func:`~zipline.api.before_trading_start`.
+    :func:`~ziplime.api.handle_data` and
+    :func:`~ziplime.api.before_trading_start`.
 
     Parameters
     ----------
@@ -43,7 +43,7 @@ class BarData:
     data_frequency : {'minute', 'daily'}
         The frequency of the bar data; i.e. whether the data is
         daily or minute bars
-    restrictions : zipline.finance.asset_restrictions.Restrictions
+    restrictions : ziplime.finance.asset_restrictions.Restrictions
         Object that combines and returns restricted list information from
         multiple sources
     """
@@ -95,7 +95,7 @@ class BarData:
 
         Parameters
         ----------
-        assets : zipline.assets.Asset or iterable of zipline.assets.Asset
+        assets : ziplime.assets.Asset or iterable of ziplime.assets.Asset
             The asset(s) for which data is requested.
         fields : str or iterable[str].
             Requested data field(s). Valid field names are: "price",
@@ -193,7 +193,7 @@ class BarData:
 
         Parameters
         ----------
-        assets: zipline.assets.Asset or iterable of zipline.assets.Asset
+        assets: ziplime.assets.Asset or iterable of ziplime.assets.Asset
             Asset(s) for which tradability should be determined.
 
         Notes
@@ -282,7 +282,7 @@ class BarData:
 
         Parameters
         ----------
-        assets: zipline.assets.Asset or iterable of zipline.assets.Asset
+        assets: ziplime.assets.Asset or iterable of ziplime.assets.Asset
             The asset(s) for which data is requested.
         fields: string or iterable of string.
             Requested data field(s). Valid field names are: "price",

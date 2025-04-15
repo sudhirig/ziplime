@@ -13,7 +13,6 @@ from numpy import (
     dtype as dtype_class,
     ndarray,
 )
-from zipline.assets import Asset
 from ziplime.errors import (
     DTypeNotSpecified,
     InvalidOutputName,
@@ -26,8 +25,8 @@ from ziplime.errors import (
     UnsupportedDType,
     WindowLengthNotSpecified,
 )
-from zipline.lib.adjusted_array import can_represent_dtype
-from zipline.lib.labelarray import LabelArray
+from ziplime.lib.adjusted_array import can_represent_dtype
+from ziplime.lib.labelarray import LabelArray
 from ziplime.utils.memoize import classlazyval, lazyval
 from ziplime.utils.numpy_utils import (
     bool_dtype,
@@ -45,21 +44,22 @@ from ziplime.utils.sharedoc import (
 from .domain import Domain, GENERIC, infer_domain
 from .downsample_helpers import expect_downsample_frequency
 from .sentinels import NotSpecified
+from ..assets.domain.db.asset import Asset
 
 
 class Term(ABC):
     """
     Base class for objects that can appear in the compute graph of a
-    :class:`zipline.pipeline.Pipeline`.
+    :class:`ziplime.pipeline.Pipeline`.
 
     Notes
     -----
     Most Pipeline API users only interact with :class:`Term` via subclasses:
 
-    - :class:`~zipline.pipeline.data.BoundColumn`
-    - :class:`~zipline.pipeline.Factor`
-    - :class:`~zipline.pipeline.Filter`
-    - :class:`~zipline.pipeline.Classifier`
+    - :class:`~ziplime.pipeline.data.BoundColumn`
+    - :class:`~ziplime.pipeline.Factor`
+    - :class:`~ziplime.pipeline.Filter`
+    - :class:`~ziplime.pipeline.Classifier`
 
     Instances of :class:`Term` are **memoized**. If you call a Term's
     constructor with the same arguments twice, the same object will be returned
@@ -268,7 +268,7 @@ class Term(ABC):
         """
         Parameters
         ----------
-        domain : zipline.pipeline.domain.Domain
+        domain : ziplime.pipeline.domain.Domain
             The domain of this term.
         dtype : np.dtype
             Dtype of this term's output.
@@ -372,7 +372,7 @@ class Term(ABC):
     @abstractmethod
     def mask(self):
         """
-        A :class:`~zipline.pipeline.Filter` representing asset/date pairs to
+        A :class:`~ziplime.pipeline.Filter` representing asset/date pairs to
         while computing this Term. True means include; False means exclude.
         """
         raise NotImplementedError("mask")
@@ -412,7 +412,7 @@ class AssetExists(Term):
 
     See Also
     --------
-    zipline.assets.AssetFinder.lifetimes
+    ziplime.assets.AssetFinder.lifetimes
     """
 
     dtype = bool_dtype
@@ -467,7 +467,7 @@ class LoadableTerm(Term):
     """
     A Term that should be loaded from an external resource by a PipelineLoader.
 
-    This is the base class for :class:`zipline.pipeline.data.BoundColumn`.
+    This is the base class for :class:`ziplime.pipeline.data.BoundColumn`.
     """
 
     windowed = False
@@ -482,8 +482,8 @@ class ComputableTerm(Term):
     """
     A Term that should be computed from a tuple of inputs.
 
-    This is the base class for :class:`zipline.pipeline.Factor`,
-    :class:`zipline.pipeline.Filter`, and :class:`zipline.pipeline.Classifier`.
+    This is the base class for :class:`ziplime.pipeline.Factor`,
+    :class:`ziplime.pipeline.Filter`, and :class:`ziplime.pipeline.Classifier`.
     """
 
     inputs = NotSpecified
@@ -759,7 +759,7 @@ class ComputableTerm(Term):
 
         Returns
         -------
-        filter : zipline.pipeline.Filter
+        filter : ziplime.pipeline.Filter
         """
         if self.dtype == bool_dtype:
             raise TypeError("isnull() is not supported for Filters")
@@ -782,7 +782,7 @@ class ComputableTerm(Term):
 
         Returns
         -------
-        filter : zipline.pipeline.Filter
+        filter : ziplime.pipeline.Filter
         """
         if self.dtype == bool_dtype:
             raise TypeError("notnull() is not supported for Filters")
@@ -798,7 +798,7 @@ class ComputableTerm(Term):
 
         Parameters
         ----------
-        fill_value : zipline.pipeline.ComputableTerm, or object.
+        fill_value : ziplime.pipeline.ComputableTerm, or object.
             Object to use as replacement for missing values.
 
             If a ComputableTerm (e.g. a Factor) is passed, that term's results
@@ -841,7 +841,7 @@ class ComputableTerm(Term):
 
         Returns
         -------
-        filled : zipline.pipeline.ComputableTerm
+        filled : ziplime.pipeline.ComputableTerm
             A term computing the same results as ``self``, but with missing
             values filled in using values from ``fill_value``.
         """

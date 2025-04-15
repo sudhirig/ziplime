@@ -2,10 +2,8 @@
 Base class for Pipeline API data loaders.
 """
 
-from interface import default, Interface
 
-
-class PipelineLoader(Interface):
+class PipelineLoader:
     """Interface for PipelineLoaders."""
 
     def load_adjusted_array(self, domain, columns, dates, sids, mask):
@@ -14,10 +12,10 @@ class PipelineLoader(Interface):
 
         Parameters
         ----------
-        domain : zipline.pipeline.domain.Domain
+        domain : ziplime.pipeline.domain.Domain
             The domain of the pipeline for which the requested data must be
             loaded.
-        columns : list[zipline.pipeline.data.dataset.BoundColumn]
+        columns : list[ziplime.pipeline.data.dataset.BoundColumn]
             Columns for which data is being requested.
         dates : pd.DatetimeIndex
             Dates for which data is being requested.
@@ -30,12 +28,11 @@ class PipelineLoader(Interface):
 
         Returns
         -------
-        arrays : dict[BoundColumn -> zipline.lib.adjusted_array.AdjustedArray]
+        arrays : dict[BoundColumn -> ziplime.lib.adjusted_array.AdjustedArray]
             Map from column to an AdjustedArray representing a point-in-time
             rolling view over the requested dates for the requested sids.
         """
 
-    @default
     @property
     def currency_aware(self):
         """Whether or not this loader supports currency-conversions.

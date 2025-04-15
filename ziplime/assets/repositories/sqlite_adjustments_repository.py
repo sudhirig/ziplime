@@ -21,7 +21,7 @@ from ziplime.utils.numpy_utils import (
 from ziplime.utils.pandas_utils import empty_dataframe
 from ziplime.utils.sqlite_utils import group_into_chunks
 
-from zipline.data._adjustments import load_adjustments_from_sqlite
+from ziplime.data.adjustments import load_adjustments_from_sqlite
 
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 
@@ -94,7 +94,7 @@ class SQLiteAdjustmentRepository(AdjustmentRepository):
 
     See Also
     --------
-    :class:`zipline.data.adjustments.SQLiteAdjustmentWriter`
+    :class:`ziplime.data.adjustments.SQLiteAdjustmentWriter`
     """
 
     _datetime_int_cols = {
@@ -373,7 +373,7 @@ class SQLiteAdjustmentRepository(AdjustmentRepository):
 
     See Also
     --------
-    zipline.data.adjustments.SQLiteAdjustmentReader
+    ziplime.data.adjustments.SQLiteAdjustmentReader
     """
 
     def _write(self, tablename, expected_dtypes, frame):
@@ -671,7 +671,7 @@ class SQLiteAdjustmentRepository(AdjustmentRepository):
 
         See Also
         --------
-        zipline.data.adjustments.SQLiteAdjustmentReader
+        ziplime.data.adjustments.SQLiteAdjustmentReader
         """
         self.write_frame("splits", splits)
         self.write_frame("mergers", mergers)

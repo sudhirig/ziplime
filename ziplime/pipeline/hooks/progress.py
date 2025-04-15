@@ -4,15 +4,13 @@
 from collections import namedtuple
 import time
 
-from interface import implements
-
 from ziplime.utils.compat import contextmanager, escape_html
 from ziplime.utils.string_formatting import bulleted_list
 
 from .iface import PipelineHooks
 
 
-class ProgressHooks(implements(PipelineHooks)):
+class ProgressHooks(PipelineHooks):
     """
     Hooks implementation for displaying progress.
 
@@ -148,7 +146,7 @@ class ProgressModel:
         Pair of (start_date, end_date) for the entire execution.
     current_chunk_bounds : (pd.Timestamp, pd.Timestamp)
         Pair of (start_date, end_date) for the currently executing chunk.
-    current_work : [zipline.pipeline.Term]
+    current_work : [ziplime.pipeline.Term]
         List of terms currently being loaded or computed.
     """
 

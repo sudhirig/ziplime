@@ -112,9 +112,9 @@ class BadBinaryOperator(TypeError):
     ----------
     op : str
         The attempted operation
-    left : zipline.computable.Term
+    left : ziplime.computable.Term
         The left hand side of the operation.
-    right : zipline.computable.Term
+    right : ziplime.computable.Term
         The right hand side of the operation.
     """
 

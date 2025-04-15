@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+import os
 from pathlib import Path
 
 import asyncclick as click
@@ -34,7 +35,7 @@ from exchange_calendars import get_calendar as ec_get_calendar
 from asyncclick import DateTime
 from ziplime.utils.cli import Timestamp
 
-from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_live_market_data_provider, get_exchange, \
+from ziplime.utils.bundle_utils import get_fundamental_data_provider,  get_exchange, \
     get_data_source
 
 
@@ -470,10 +471,9 @@ async def run(
     #     timedelta_diff_from_current_time=-timedelta_diff_from_current_time
     # )
 
-    return await run_algorithm(
+    result = await run_algorithm(
         algofile=getattr(algofile, "name", "<algorithm>"),
         algotext=algotext,
-        output=output,
         print_algo=print_algo,
         metrics_set=default_metrics(),
         benchmark_spec=benchmark_spec,
@@ -485,6 +485,13 @@ async def run(
         clock=clock
 
     )
+
+    if output == "-":
+        click.echo(str(result))
+    elif output != os.devnull:  # make the ziplime magic not write any data
+        # TODO: test this
+        result.to_pickle(output)
+    return result
 
 
 if __name__ == "__main__":

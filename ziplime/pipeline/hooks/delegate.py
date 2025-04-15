@@ -1,5 +1,3 @@
-from interface import implements
-
 from ziplime.utils.compat import ExitStack, contextmanager, wraps
 
 from .iface import PipelineHooks, PIPELINE_HOOKS_CONTEXT_MANAGERS
@@ -31,7 +29,7 @@ def delegating_hooks_method(method_name):
         return method
 
 
-class DelegatingHooks(implements(PipelineHooks)):
+class DelegatingHooks(PipelineHooks):
     """A PipelineHooks that delegates to one or more other hooks.
 
     Parameters
@@ -56,13 +54,13 @@ class DelegatingHooks(implements(PipelineHooks)):
 
     # Implement all interface methods by delegating to corresponding methods on
     # input hooks.
-    locals().update(
-        {
-            name: delegating_hooks_method(name)
-            # TODO: Expose this publicly on interface.
-            for name in PipelineHooks._signatures
-        }
-    )
+    # locals().update(
+    #     {
+    #         name: delegating_hooks_method(name)
+    #         # TODO: Expose this publicly on interface.
+    #         for name in PipelineHooks._signatures
+    #     }
+    # )
 
 
 del delegating_hooks_method

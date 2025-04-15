@@ -798,7 +798,7 @@ class UnsupportedPipelineOutput(ZiplineError):
 class NonSliceableTerm(ZiplineError):
     """
     Raised when attempting to index into a non-sliceable term, e.g. instances
-    of `zipline.pipeline.term.LoadableTerm`.
+    of `ziplime.pipeline.term.LoadableTerm`.
     """
 
     msg = "Taking slices of {term} is not currently supported."
@@ -817,4 +817,16 @@ class IncompatibleTerms(ZiplineError):
 
 
 class LiquidityExceeded(Exception):
+    pass
+
+
+class NoDataOnDate(Exception):
+    """
+    Raised when a spot price cannot be found for the sid and date.
+    """
+
+    pass
+
+
+class NotAssetConvertible(ValueError):
     pass

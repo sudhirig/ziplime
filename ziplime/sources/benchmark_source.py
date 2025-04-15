@@ -67,7 +67,7 @@ class BenchmarkSource:
 
         See Also
         --------
-        :class:`zipline.sources.benchmark_source.BenchmarkSource.daily_returns`
+        :class:`ziplime.sources.benchmark_source.BenchmarkSource.daily_returns`
 
         .. warning::
 
@@ -93,7 +93,7 @@ class BenchmarkSource:
 
         See Also
         --------
-        :class:`zipline.sources.benchmark_source.BenchmarkSource.daily_returns`
+        :class:`ziplime.sources.benchmark_source.BenchmarkSource.daily_returns`
 
         .. warning::
 

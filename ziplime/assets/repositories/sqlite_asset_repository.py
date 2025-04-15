@@ -38,18 +38,14 @@ from ziplime.errors import (
     SameSymbolUsedAcrossCountries,
     SidsNotFound,
     SymbolNotFound,
-    ValueNotFoundForField,
+    ValueNotFoundForField, NotAssetConvertible,
 )
 from ziplime.utils.functional import invert
 from ziplime.utils.memoize import lazyval
 from ziplime.utils.numpy_utils import as_column
-from ziplime.utils.sqlite_utils import group_into_chunks
+from ziplime.utils.sqlite_utils import group_into_chunks, SQLITE_MAX_VARIABLE_NUMBER
 
-from zipline.assets.asset_writer import (
-    SQLITE_MAX_VARIABLE_NUMBER,
-    split_delimited_symbol,
-    symbol_columns as SYMBOL_COLUMNS,
-)
+
 
 from ziplime.assets.domain.db.exchange_info import ExchangeInfo
 
@@ -65,7 +61,7 @@ from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES, OrderedCon
 from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.assets.utils import build_ownership_map, _convert_asset_timestamp_fields, _filter_future_kwargs, \
     _filter_equity_kwargs, _encode_continuous_future_sid, Lifetimes, \
-    build_grouped_ownership_map, OwnershipPeriod
+    build_grouped_ownership_map, OwnershipPeriod, SYMBOL_COLUMNS, split_delimited_symbol
 
 
 class SqliteAssetRepository(AssetRepository):
@@ -87,7 +83,7 @@ class SqliteAssetRepository(AssetRepository):
 
     See Also
     --------
-    :class:`zipline.assets.AssetDBWriter`
+    :class:`ziplime.assets.repositories.AssetsRepository`
     """
 
     def __init__(self, base_storage_path: str,
@@ -1200,7 +1196,7 @@ class SqliteAssetRepository(AssetRepository):
         See Also
         --------
         numpy.putmask
-        zipline.pipeline.engine.SimplePipelineEngine._compute_root_mask
+        ziplime.pipeline.engine.SimplePipelineEngine._compute_root_mask
         """
         if isinstance(country_codes, str):
             raise TypeError(

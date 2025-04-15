@@ -1,10 +1,10 @@
 import math
 
-from zipline.protocol import DATASOURCE_TYPE
 
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.execution import ExecutionStyle
+from ziplime.protocol import DataSourceType
 
 SELL = 1 << 0
 BUY = 1 << 1
@@ -54,7 +54,7 @@ class Order:
         self.stop_reached = False
         self.limit_reached = False
         self.direction = math.copysign(1, self.amount)
-        self.type = DATASOURCE_TYPE.ORDER
+        self.type = DataSourceType.ORDER
         self.execution_style = execution_style
         self.exchange_order_id = exchange_order_id
 

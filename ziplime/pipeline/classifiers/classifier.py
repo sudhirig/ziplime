@@ -11,8 +11,8 @@ from numpy import where, isnan, nan, zeros
 import pandas as pd
 
 from ziplime.errors import UnsupportedDataType
-from zipline.lib.labelarray import LabelArray
-from zipline.lib.quantiles import quantiles
+from ziplime.lib.labelarray import LabelArray
+from ziplime.lib.quantiles import quantiles
 from ziplime.pipeline.api_utils import restrict_to_dtype
 from ziplime.pipeline.dtypes import (
     CLASSIFIER_DTYPES,
@@ -329,7 +329,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
         Called with the result of a pipeline. This needs to return an object
         which can be put into the workspace to continue doing computations.
 
-        This is the inverse of :func:`~zipline.pipeline.term.Term.postprocess`.
+        This is the inverse of :func:`~ziplime.pipeline.term.Term.postprocess`.
         """
         if self.dtype == int64_dtype:
             return super(Classifier, self).to_workspace_value(result, assets)
@@ -381,7 +381,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
 
         Parameters
         ----------
-        mask : zipline.pipeline.Filter, optional
+        mask : ziplime.pipeline.Filter, optional
             If passed, only count assets passing the filter.  Default behavior
             is to count all assets.
 
@@ -469,7 +469,7 @@ class Relabel(SingleInputMixin, Classifier):
 
     Parameters
     ----------
-    arg : zipline.pipeline.Classifier
+    arg : ziplime.pipeline.Classifier
         Term produceing the input to be relabeled.
     relabel_func : function(LabelArray) -> LabelArray
         Function to apply to the result of `term`.
@@ -513,8 +513,8 @@ class CustomClassifier(
 
     See Also
     --------
-    zipline.pipeline.CustomFactor
-    zipline.pipeline.CustomFilter
+    ziplime.pipeline.CustomFactor
+    ziplime.pipeline.CustomFilter
     """
 
     def _validate(self):
@@ -558,7 +558,7 @@ class Latest(LatestMixin, CustomClassifier):
 
     See Also
     --------
-    zipline.pipeline.data.dataset.BoundColumn.latest
+    ziplime.pipeline.data.dataset.BoundColumn.latest
     """
 
     pass

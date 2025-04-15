@@ -2,7 +2,7 @@
 Datasets for testing use.
 
 Loaders for datasets in this file can be found in
-zipline.pipeline.data.testing.
+ziplime.pipeline.data.testing.
 """
 
 from .dataset import Column, DataSet

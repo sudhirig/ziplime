@@ -22,13 +22,12 @@ from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, Orde
 from ziplime.assets.domain.db.asset import Asset
 from ziplime.finance.execution import (MarketOrder,
                                        LimitOrder,
-                                       ExecutionStyle)
+                                       )
 
 from ziplime.finance.commission import CommissionModel
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.domain.transaction import Transaction
-from zipline.api import symbol as symbol_lookup
 import pandas as pd
 import numpy as np
 import uuid
@@ -181,10 +180,10 @@ class LimeTraderSdkExchange(Exchange):
 
         result = {}
         for o in self._tracked_orders.values():
-            zipline_order = self._order2zp(order=o)
-            if zipline_order is None:
+            ziplime_order = self._order2zp(order=o)
+            if ziplime_order is None:
                 continue
-            result[o.client_order_id] = zipline_order
+            result[o.client_order_id] = ziplime_order
 
         return result
 

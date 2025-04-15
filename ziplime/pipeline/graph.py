@@ -9,7 +9,6 @@ from ziplime.utils.memoize import lazyval
 from ziplime.pipeline.visualize import display_graph
 
 from .term import LoadableTerm
-from pprint import pprint
 
 
 class CyclicDependency(Exception):
@@ -194,7 +193,7 @@ class TermGraph:
         -----
         This should only be used to build the initial workspace, after that we
         should use:
-        :meth:`~zipline.pipeline.graph.TermGraph.decref_dependencies`
+        :meth:`~ziplime.pipeline.graph.TermGraph.decref_dependencies`
         """
         # Edges are tuple of (from, to).
         for parent, _ in self.graph.in_edges([term]):
@@ -211,7 +210,7 @@ class TermGraph:
 
         Parameters
         ----------
-        term : zipline.pipeline.Term
+        term : ziplime.pipeline.Term
             The term whose parents should be decref'ed.
         refcounts : dict[Term -> int]
             Dictionary of refcounts.
@@ -248,7 +247,7 @@ class ExecutionPlan(TermGraph):
 
     Parameters
     ----------
-    domain : zipline.pipeline.domain.Domain
+    domain : ziplime.pipeline.domain.Domain
         The domain of execution for which we need to build a plan.
     terms : dict
         A dict mapping names to final output terms.
@@ -392,9 +391,9 @@ class ExecutionPlan(TermGraph):
 
         See Also
         --------
-        :meth:`zipline.pipeline.graph.ExecutionPlan.offset`
-        :meth:`zipline.pipeline.engine.ExecutionPlan.mask_and_dates_for_term`
-        :meth:`zipline.pipeline.engine.SimplePipelineEngine._inputs_for_term`
+        :meth:`ziplime.pipeline.graph.ExecutionPlan.offset`
+        :meth:`ziplime.pipeline.engine.ExecutionPlan.mask_and_dates_for_term`
+        :meth:`ziplime.pipeline.engine.SimplePipelineEngine._inputs_for_term`
         """
         extra = self.extra_rows
 
@@ -444,8 +443,8 @@ class ExecutionPlan(TermGraph):
 
         See Also
         --------
-        :meth:`zipline.pipeline.graph.ExecutionPlan.offset`
-        :meth:`zipline.pipeline.Term.dependencies`
+        :meth:`ziplime.pipeline.graph.ExecutionPlan.offset`
+        :meth:`ziplime.pipeline.Term.dependencies`
         """
 
         return {term: self.graph.nodes[term]["extra_rows"] for term in self.graph.nodes}

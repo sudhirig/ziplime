@@ -10,7 +10,7 @@ from .dataset import Column, DataSet
 
 class EquityPricing(DataSet):
     """
-    :class:`~zipline.pipeline.data.DataSet` containing daily trading prices and
+    :class:`~ziplime.pipeline.data.DataSet` containing daily trading prices and
     volumes.
     """
 

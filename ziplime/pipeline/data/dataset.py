@@ -5,8 +5,8 @@ from textwrap import dedent
 from weakref import WeakKeyDictionary
 
 from toolz import first
-from zipline.currency import Currency
-from zipline.data.fx import DEFAULT_FX_RATE
+from ziplime.currency import Currency
+from ziplime.data.fx import DEFAULT_FX_RATE
 
 from ziplime.pipeline.classifiers import Classifier, Latest as LatestClassifier
 from ziplime.pipeline.domain import Domain, GENERIC
@@ -133,12 +133,12 @@ class BoundColumn(LoadableTerm):
     ----------
     dtype : numpy.dtype
         The dtype of data produced when this column is loaded.
-    latest : zipline.pipeline.LoadableTerm
-        A :class:`~zipline.pipeline.Filter`, :class:`~zipline.pipeline.Factor`,
-        or :class:`~zipline.pipeline.Classifier` computing the most recently
+    latest : ziplime.pipeline.LoadableTerm
+        A :class:`~ziplime.pipeline.Filter`, :class:`~ziplime.pipeline.Factor`,
+        or :class:`~ziplime.pipeline.Classifier` computing the most recently
         known value of this column on each date.
-        See :class:`zipline.pipeline.mixins.LatestMixin` for more details.
-    dataset : zipline.pipeline.data.DataSet
+        See :class:`ziplime.pipeline.mixins.LatestMixin` for more details.
+    dataset : ziplime.pipeline.data.DataSet
         The dataset to which this column is bound.
     name : str
         The name of this column.
@@ -150,8 +150,8 @@ class BoundColumn(LoadableTerm):
     Notes
     -----
     Instances of this class are dynamically created upon access to attributes
-    of :class:`~zipline.pipeline.data.DataSet`. For example,
-    :attr:`~zipline.pipeline.data.EquityPricing.close` is an instance of this
+    of :class:`~ziplime.pipeline.data.DataSet`. For example,
+    :attr:`~ziplime.pipeline.data.EquityPricing.close` is an instance of this
     class. Pipeline API users should never construct instances of this
     directly.
     """
@@ -279,7 +279,7 @@ class BoundColumn(LoadableTerm):
 
         Parameters
         ----------
-        currency : str or zipline.currency.Currency
+        currency : str or ziplime.currency.Currency
             Currency into which to convert this column's data.
 
         Returns
@@ -443,13 +443,13 @@ class DataSetMeta(type):
 
         Parameters
         ----------
-        domain : zipline.pipeline.domain.Domain
+        domain : ziplime.pipeline.domain.Domain
             Domain to which we should generate a specialization.
 
         Returns
         -------
         specialized : type
-            A new :class:`~zipline.pipeline.data.DataSet` subclass with the
+            A new :class:`~ziplime.pipeline.data.DataSet` subclass with the
             same columns as ``self``, but specialized to ``domain``.
         """
         # We're already the specialization to this domain, so just return self.
@@ -552,10 +552,10 @@ class DataSet(object, metaclass=DataSetMeta):
 
     A :class:`DataSet` is defined by two parts:
 
-    1. A collection of :class:`~zipline.pipeline.data.Column` objects that
+    1. A collection of :class:`~ziplime.pipeline.data.Column` objects that
        describe the queryable attributes of the dataset.
 
-    2. A :class:`~zipline.pipeline.domain.Domain` describing the assets and
+    2. A :class:`~ziplime.pipeline.domain.Domain` describing the assets and
        calendar of the data represented by the :class:`DataSet`.
 
     To create a new Pipeline dataset, define a subclass of :class:`DataSet` and
@@ -566,7 +566,7 @@ class DataSet(object, metaclass=DataSetMeta):
     asset/date combination.
 
     By default, the domain of a dataset is the special singleton value,
-    :data:`~zipline.pipeline.domain.GENERIC`, which means that they can be used
+    :data:`~ziplime.pipeline.domain.GENERIC`, which means that they can be used
     in a Pipeline running on **any** domain.
 
     In some cases, it may be preferable to restrict a dataset to only allow
@@ -638,7 +638,7 @@ class DataSet(object, metaclass=DataSetMeta):
 
         Returns
         -------
-        column : zipline.pipeline.data.BoundColumn
+        column : ziplime.pipeline.data.BoundColumn
             Column with the given name.
 
         Raises
@@ -783,7 +783,7 @@ class DataSetFamilyMeta(abc.ABCMeta):
 
 class DataSetFamilySlice(DataSet):
     """Marker type for slices of a
-    :class:`zipline.pipeline.data.dataset.DataSetFamily` objects
+    :class:`ziplime.pipeline.data.dataset.DataSetFamily` objects
     """
 
 
@@ -796,11 +796,11 @@ class DataSetFamily(metaclass=DataSetFamilyMeta):
     Dataset families are used to represent data where the unique identifier for
     a row requires more than just asset and date coordinates. A
     :class:`DataSetFamily` can also be thought of as a collection of
-    :class:`~zipline.pipeline.data.DataSet` objects, each of which has the same
+    :class:`~ziplime.pipeline.data.DataSet` objects, each of which has the same
     columns, domain, and ndim.
 
     :class:`DataSetFamily` objects are defined with one or more
-    :class:`~zipline.pipeline.data.Column` objects, plus one additional field:
+    :class:`~ziplime.pipeline.data.Column` objects, plus one additional field:
     ``extra_dims``.
 
     The ``extra_dims`` field defines coordinates other than asset and date that
@@ -813,7 +813,7 @@ class DataSetFamily(metaclass=DataSetFamilyMeta):
 
     To work with a :class:`DataSetFamily` in a pipeline expression, one must
     choose a specific value for each of the extra dimensions using the
-    :meth:`~zipline.pipeline.data.DataSetFamily.slice` method.
+    :meth:`~ziplime.pipeline.data.DataSetFamily.slice` method.
     For example, given a :class:`DataSetFamily`:
 
     .. code-block:: python

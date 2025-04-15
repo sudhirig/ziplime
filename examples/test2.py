@@ -4,11 +4,8 @@ from ziplime.protocol import BarData
 from ziplime.constants.fundamental_data import FundamentalData, FundamentalDataValueType
 from ziplime.utils.run_algo import run_algorithm
 from ziplime.data.bundles import load
-from ziplime.utils.bundle_utils import register_default_bundles, get_exchange, get_live_market_data_provider
+from ziplime.utils.bundle_utils import register_default_bundles, get_exchange
 
-from zipline.api import symbol, order_target, record, order, set_benchmark, order_target
-from zipline import TradingAlgorithm
-from zipline.data import bundles
 
 import exchange_calendars as xcals
 import pandas as pd
@@ -70,7 +67,6 @@ def handler(event, context):
                                bundle=param_bundle,
                                benchmark_spec=benchmark_spec,
                                exchange=get_exchange('lime-trader-sdk'),
-                               market_data_provider=get_live_market_data_provider("lime-trader-sdk")
                                )
         respose = {"period_open": result.period_open.to_json(orient='values'),
                    "period_close": result.period_close.to_json(orient='values'),
@@ -112,7 +108,7 @@ class MyStrategyV1Config:
 ### for local testing of lambda function
 event = {
     'code': """
-from zipline.api import order_target_percent, symbol
+from ziplime.api import order_target_percent, symbol
 def initialize(context):
     # Define the portfolio of 10 S&P 500 symbols, excluding FB
     context.assets = [

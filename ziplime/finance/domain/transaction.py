@@ -1,8 +1,8 @@
 import datetime
 
-from zipline.protocol import DATASOURCE_TYPE
 
 from ziplime.assets.domain.db.asset import Asset
+from ziplime.protocol import DataSourceType
 
 
 class Transaction:
@@ -17,7 +17,7 @@ class Transaction:
         self.dt = dt
         self.price = price
         self.order_id = order_id
-        self.type = DATASOURCE_TYPE.TRANSACTION
+        self.type = DataSourceType.TRANSACTION
         self.commission = commission
 
     def to_dict(self):

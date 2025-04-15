@@ -1,12 +1,11 @@
 from abc import abstractmethod
 
-from interface import implements
 import numpy as np
 import pandas as pd
 from toolz import groupby
 
-from zipline.lib.adjusted_array import AdjustedArray
-from zipline.lib.adjustment import (
+from ziplime.lib.adjusted_array import AdjustedArray
+from ziplime.lib.adjustment import (
     Datetime641DArrayOverwrite,
     Datetime64Overwrite,
     Float641DArrayOverwrite,
@@ -99,7 +98,7 @@ def add_new_adjustments(adjustments_dict, adjustments, column_name, ts):
         adjustments_dict[column_name][ts] = adjustments
 
 
-class EarningsEstimatesLoader(implements(PipelineLoader)):
+class EarningsEstimatesLoader(PipelineLoader):
     """An abstract pipeline loader for estimates data that can load data a
     variable number of quarters forwards/backwards from calendar dates
     depending on the `num_announcements` attribute of the columns' dataset.

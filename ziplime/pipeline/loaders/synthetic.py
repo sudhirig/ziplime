@@ -1,6 +1,5 @@
 """Synthetic data loaders for testing."""
 
-from interface import implements
 import numpy as np
 
 from numpy.random import RandomState
@@ -9,11 +8,7 @@ from sqlite3 import connect as sqlite3_connect
 
 from .base import PipelineLoader
 from .frame import DataFrameLoader
-from zipline.data.adjustments import (
-    SQLiteAdjustmentReader,
-    SQLiteAdjustmentWriter,
-)
-from zipline.data.bcolz_daily_bars import US_EQUITY_PRICING_BCOLZ_COLUMNS
+
 
 from ziplime.utils.numpy_utils import (
     bool_dtype,
@@ -22,7 +17,17 @@ from ziplime.utils.numpy_utils import (
     int64_dtype,
     object_dtype,
 )
+from ...assets.repositories.sqlite_adjustments_repository import SQLiteAdjustmentRepository
 
+US_EQUITY_PRICING_BCOLZ_COLUMNS = (
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "day",
+    "id",
+)
 
 UINT_32_MAX = np.iinfo(np.uint32).max
 
@@ -31,7 +36,7 @@ def nanos_to_seconds(nanos):
     return nanos / (1000 * 1000 * 1000)
 
 
-class PrecomputedLoader(implements(PipelineLoader)):
+class PrecomputedLoader(PipelineLoader):
     """Synthetic PipelineLoader that uses a pre-computed array for each column.
 
     Parameters
@@ -376,14 +381,14 @@ def expected_bar_values_2d(dates, assets, asset_info, colname, holes=None):
     return data
 
 
-class NullAdjustmentReader(SQLiteAdjustmentReader):
+class NullAdjustmentReader(SQLiteAdjustmentRepository):
     """A SQLiteAdjustmentReader that stores no adjustments and uses in-memory
     SQLite.
     """
 
     def __init__(self):
         conn = sqlite3_connect(":memory:")
-        writer = SQLiteAdjustmentWriter(conn, None, None)
+        writer = SQLiteAdjustmentRepository(conn, None, None)
         empty = DataFrame(
             {
                 "sid": np.array([], dtype=np.uint32),

@@ -6,13 +6,12 @@ from math import isnan, copysign
 import numpy as np
 import structlog
 
-from zipline.finance.transaction import Transaction
-import zipline.protocol as zp
 
 from ziplime.assets.domain.db.dividend import Dividend
 from ziplime.assets.domain.db.futures_contract import FuturesContract
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.domain.position import Position
+from ziplime.finance.domain.transaction import Transaction
 from ziplime.finance.finance_ext import (
     PositionStats,
     calculate_position_tracker_stats,
@@ -36,7 +35,7 @@ class PositionTracker:
 
         self._unpaid_dividends = {}
         self._unpaid_stock_dividends = {}
-        self._positions_store = zp.Positions()
+        self._positions_store = {}
 
         self.data_frequency = data_frequency
         self.bundle_data = bundle_data
@@ -142,11 +141,11 @@ class PositionTracker:
 
     def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: float):
         """
-        A note about cost-basis in zipline: all positions are considered
+        A note about cost-basis in ziplime: all positions are considered
         to share a cost basis, even if they were executed in different
         transactions with different commission costs, different prices, etc.
 
-        Due to limitations about how zipline handles positions, zipline will
+        Due to limitations about how ziplime handles positions, ziplime will
         currently spread an externally-delivered commission charge across
         all shares in a position.
         """

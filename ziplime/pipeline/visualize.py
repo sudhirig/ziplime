@@ -83,7 +83,7 @@ def _render(g, out, format_, include_asset_exists=False):
 
     Parameters
     ----------
-    g : zipline.pipeline.graph.TermGraph
+    g : ziplime.pipeline.graph.TermGraph
         Graph to render.
     out : file-like object
     format_ : str {'png', 'svg'}

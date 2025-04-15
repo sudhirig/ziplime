@@ -43,7 +43,7 @@ class RSI(SingleInputMixin, CustomFactor):
     """
     Relative Strength Index
 
-    **Default Inputs**: :data:`zipline.pipeline.data.EquityPricing.close`
+    **Default Inputs**: :data:`ziplime.pipeline.data.EquityPricing.close`
 
     **Default Window Length**: 15
     """
@@ -69,7 +69,7 @@ class BollingerBands(CustomFactor):
     Bollinger Bands technical indicator.
     https://en.wikipedia.org/wiki/Bollinger_Bands
 
-    **Default Inputs:** :data:`zipline.pipeline.data.EquityPricing.close`
+    **Default Inputs:** :data:`ziplime.pipeline.data.EquityPricing.close`
 
     Parameters
     ----------
@@ -99,8 +99,8 @@ class Aroon(CustomFactor):
     Aroon technical indicator.
     https://www.fidelity.com/learning-center/trading-investing/technical-analysis/technical-indicator-guide/aroon-indicator
 
-    **Defaults Inputs:** :data:`zipline.pipeline.data.EquityPricing.low`, \
-                         :data:`zipline.pipeline.data.EquityPricing.high`
+    **Defaults Inputs:** :data:`ziplime.pipeline.data.EquityPricing.low`, \
+                         :data:`ziplime.pipeline.data.EquityPricing.high`
 
     Parameters
     ----------
@@ -143,9 +143,9 @@ class FastStochasticOscillator(CustomFactor):
     market analysis. It is recommended to use the slow stochastic oscillator
     or a moving average of the %K [%D].
 
-    **Default Inputs:** :data:`zipline.pipeline.data.EquityPricing.close`, \
-                        :data:`zipline.pipeline.data.EquityPricing.low`, \
-                        :data:`zipline.pipeline.data.EquityPricing.high`
+    **Default Inputs:** :data:`ziplime.pipeline.data.EquityPricing.close`, \
+                        :data:`ziplime.pipeline.data.EquityPricing.low`, \
+                        :data:`ziplime.pipeline.data.EquityPricing.high`
 
     **Default Window Length:** 14
 
@@ -180,9 +180,9 @@ class IchimokuKinkoHyo(CustomFactor):
     """Compute the various metrics for the Ichimoku Kinko Hyo (Ichimoku Cloud).
     http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:ichimoku_cloud
 
-    **Default Inputs:** :data:`zipline.pipeline.data.EquityPricing.high`, \
-                        :data:`zipline.pipeline.data.EquityPricing.low`, \
-                        :data:`zipline.pipeline.data.EquityPricing.close`
+    **Default Inputs:** :data:`ziplime.pipeline.data.EquityPricing.high`, \
+                        :data:`ziplime.pipeline.data.EquityPricing.low`, \
+                        :data:`ziplime.pipeline.data.EquityPricing.close`
 
     **Default Window Length:** 52
 
@@ -279,9 +279,9 @@ class TrueRange(CustomFactor):
     A technical indicator originally developed by J. Welles Wilder, Jr.
     Indicates the true degree of daily price change in an underlying.
 
-    **Default Inputs:** :data:`zipline.pipeline.data.EquityPricing.high`, \
-                        :data:`zipline.pipeline.data.EquityPricing.low`, \
-                        :data:`zipline.pipeline.data.EquityPricing.close`
+    **Default Inputs:** :data:`ziplime.pipeline.data.EquityPricing.high`, \
+                        :data:`ziplime.pipeline.data.EquityPricing.low`, \
+                        :data:`ziplime.pipeline.data.EquityPricing.close`
 
     **Default Window Length:** 2
     """
@@ -319,7 +319,7 @@ class MovingAverageConvergenceDivergenceSignal(CustomFactor):
     reveals changes in the strength, direction, momentum, and duration of a
     trend in a stock's price.
 
-    **Default Inputs:** :data:`zipline.pipeline.data.EquityPricing.close`
+    **Default Inputs:** :data:`ziplime.pipeline.data.EquityPricing.close`
 
     Parameters
     ----------

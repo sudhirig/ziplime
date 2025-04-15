@@ -1,7 +1,5 @@
 from ziplime.utils.compat import contextmanager as _contextmanager
 
-from interface import Interface
-
 
 # Keep track of which methods of PipelineHooks are contextmanagers. Used by
 # DelegatingHooks to properly delegate to sub-hooks.
@@ -17,7 +15,7 @@ def contextmanager(f):
     return _contextmanager(f)
 
 
-class PipelineHooks(Interface):
+class PipelineHooks:
     """
     Interface for instrumenting SimplePipelineEngine executions.
 
@@ -43,7 +41,7 @@ class PipelineHooks(Interface):
 
         Parameters
         ----------
-        pipeline : zipline.pipeline.Pipeline
+        pipeline : ziplime.pipeline.Pipeline
             The pipeline being executed.
         start_date : pd.Timestamp
             First date of the execution.
@@ -58,7 +56,7 @@ class PipelineHooks(Interface):
 
         Parameters
         ----------
-        terms : list[zipline.pipeline.Term]
+        terms : list[ziplime.pipeline.Term]
             List of terms, in execution order, that will be computed. This
             value may change between chunks if ``populate_initial_workspace``
             prepopulates different terms at different times.
@@ -74,7 +72,7 @@ class PipelineHooks(Interface):
 
         Parameters
         ----------
-        terms : list[zipline.pipeline.LoadableTerm]
+        terms : list[ziplime.pipeline.LoadableTerm]
             Terms being loaded.
         """
 
@@ -84,6 +82,6 @@ class PipelineHooks(Interface):
 
         Parameters
         ----------
-        terms : zipline.pipeline.ComputableTerm
+        terms : ziplime.pipeline.ComputableTerm
             Terms being computed.
         """

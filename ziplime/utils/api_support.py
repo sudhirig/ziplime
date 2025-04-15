@@ -1,12 +1,12 @@
 from functools import wraps
 
-import zipline.api
+import ziplime.api
 from ziplime.utils.algo_instance import get_algo_instance, set_algo_instance
 
 
 class ZiplineAPI(object):
     """
-    Context manager for making an algorithm instance available to zipline API
+    Context manager for making an algorithm instance available to ziplime API
     functions within a scoped block.
     """
 
@@ -29,20 +29,20 @@ class ZiplineAPI(object):
 
 def api_method(f):
     # Decorator that adds the decorated class method as a callable
-    # function (wrapped) to zipline.api
+    # function (wrapped) to ziplime.api
     @wraps(f)
     def wrapped(*args, **kwargs):
         # Get the instance and call the method
         algo_instance = get_algo_instance()
         if algo_instance is None:
             raise RuntimeError(
-                'zipline api method %s must be called during a simulation.'
+                'ziplime api method %s must be called during a simulation.'
                 % f.__name__
             )
         return getattr(algo_instance, f.__name__)(*args, **kwargs)
-    # Add functor to zipline.api
-    setattr(zipline.api, f.__name__, wrapped)
-    zipline.api.__all__.append(f.__name__)
+    # Add functor to ziplime.api
+    setattr(ziplime.api, f.__name__, wrapped)
+    ziplime.api.__all__.append(f.__name__)
     f.is_api_method = True
     return f
 

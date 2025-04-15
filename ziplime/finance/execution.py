@@ -54,7 +54,7 @@ class MarketOrder(ExecutionStyle):
     """
     Execution style for orders to be filled at current market price.
 
-    This is the default for orders placed with :func:`~zipline.api.order`.
+    This is the default for orders placed with :func:`~ziplime.api.order`.
     """
 
     def __init__(self, exchange=None):

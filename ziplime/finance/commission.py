@@ -18,12 +18,11 @@ from collections import defaultdict
 from toolz import merge
 
 from ziplime.assets.domain.db.equity import Equity
-# from zipline.assets import Equity, Future
 
 from ziplime.assets.domain.db.futures_contract import FuturesContract
 from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
 from ziplime.finance.shared import AllowedAssetMarker, FinancialModelMeta
-from zipline.utils.dummy import DummyMapping
+from ziplime.utils.dummy import DummyMapping
 
 DEFAULT_PER_SHARE_COST = 0.001  # 0.1 cents per share
 DEFAULT_PER_CONTRACT_COST = 0.85  # $0.85 per future contract
@@ -40,7 +39,7 @@ class CommissionModel(metaclass=FinancialModelMeta):
     on each transaction.
 
     To implement a new commission model, create a subclass of
-    :class:`~zipline.finance.commission.CommissionModel` and implement
+    :class:`~ziplime.finance.commission.CommissionModel` and implement
     :meth:`calculate`.
     """
 
@@ -55,13 +54,13 @@ class CommissionModel(metaclass=FinancialModelMeta):
 
         Parameters
         ----------
-        order : zipline.finance.order.Order
+        order : ziplime.finance.order.Order
             The order being processed.
 
             The ``commission`` field of ``order`` is a float indicating the
             amount of commission already charged on this order.
 
-        transaction : zipline.finance.transaction.Transaction
+        transaction : ziplime.finance.transaction.Transaction
             The transaction being processed. A single order may generate
             multiple transactions if there isn't enough volume in a given bar
             to fill the full amount requested in the order.
@@ -160,7 +159,7 @@ class PerShare(EquityCommissionModel):
 
     Notes
     -----
-    This is zipline's default commission model for equities.
+    This is ziplime's default commission model for equities.
     """
 
     def __init__(

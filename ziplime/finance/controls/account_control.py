@@ -23,7 +23,7 @@ class AccountControl(metaclass=abc.ABCMeta):
         the information in `portfolio` and `account`, this method should
         return None and have no externally-visible side-effects.
 
-        If the desired order violates this AccountControl's contraint, this
+        If the desired order violates this AccountControl's constraint, this
         method should call self.fail().
         """
         raise NotImplementedError

@@ -348,7 +348,7 @@ class AfterOpen(StatelessRule):
     Example that triggers after 30 minutes of the market opening:
 
     >>> AfterOpen(minutes=30)  # doctest: +ELLIPSIS
-    <zipline.utils.events.AfterOpen object at ...>
+    <ziplime.utils.events.AfterOpen object at ...>
     """
 
     def __init__(self, offset=None, **kwargs):
@@ -403,7 +403,7 @@ class BeforeClose(StatelessRule):
     Example that triggers for the last 30 minutes every day:
 
     >>> BeforeClose(minutes=30)  # doctest: +ELLIPSIS
-    <zipline.utils.events.BeforeClose object at ...>
+    <ziplime.utils.events.BeforeClose object at ...>
     """
 
     def __init__(self, offset=None, **kwargs):
@@ -604,11 +604,11 @@ class OncePerDay(StatefulRule):
 
 
 class date_rules:
-    """Factories for date-based :func:`~zipline.api.schedule_function` rules.
+    """Factories for date-based :func:`~ziplime.api.schedule_function` rules.
 
     See Also
     --------
-    :func:`~zipline.api.schedule_function`
+    :func:`~ziplime.api.schedule_function`
     """
 
     @staticmethod
@@ -617,7 +617,7 @@ class date_rules:
 
         Returns
         -------
-        rule : zipline.utils.events.EventRule
+        rule : ziplime.utils.events.EventRule
         """
         return Always()
 
@@ -636,7 +636,7 @@ class date_rules:
 
         Returns
         -------
-        rule : zipline.utils.events.EventRule
+        rule : ziplime.utils.events.EventRule
         """
         return NthTradingDayOfMonth(n=days_offset)
 
@@ -654,7 +654,7 @@ class date_rules:
 
         Returns
         -------
-        rule : zipline.utils.events.EventRule
+        rule : ziplime.utils.events.EventRule
         """
         return NDaysBeforeLastTradingDayOfMonth(n=days_offset)
 
@@ -688,11 +688,11 @@ class date_rules:
 
 
 class time_rules:
-    """Factories for time-based :func:`~zipline.api.schedule_function` rules.
+    """Factories for time-based :func:`~ziplime.api.schedule_function` rules.
 
     See Also
     --------
-    :func:`~zipline.api.schedule_function`
+    :func:`~ziplime.api.schedule_function`
     """
 
     @staticmethod
@@ -715,7 +715,7 @@ class time_rules:
 
         Returns
         -------
-        rule : zipline.utils.events.EventRule
+        rule : ziplime.utils.events.EventRule
 
         Notes
         -----
@@ -748,7 +748,7 @@ class time_rules:
 
         Returns
         -------
-        rule : zipline.utils.events.EventRule
+        rule : ziplime.utils.events.EventRule
 
         Notes
         -----

@@ -2,12 +2,6 @@ import pandas as pd
 
 from ziplime.domain.benchmark_spec import BenchmarkSpec
 # from ziplime.protocol import BarData
-from zipline.api import symbol, order_target, order_target_value, record, order_target_percent
-from zipline import TradingAlgorithm
-from ziplime.finance.execution import MarketOrder, LimitOrder
-from zipline.finance.ledger import Ledger
-
-from ziplime.finance.blotter.blotter_live import BlotterLive
 
 benchmark_spec = BenchmarkSpec(benchmark_returns=[],
                                        benchmark_file=None,

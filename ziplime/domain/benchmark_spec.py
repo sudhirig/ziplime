@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 import structlog
 
-from zipline.data.benchmarks import get_benchmark_returns_from_file
+from ziplime.data.benchmarks import get_benchmark_returns_from_file
 
 from ziplime.errors import SymbolNotFound
 
@@ -14,7 +14,7 @@ from ziplime.utils.run_algo import _RunAlgoError
 class BenchmarkSpec:
     """
     Helper for different ways we can get benchmark data for the Zipline CLI and
-    zipline.utils.run_algo.run_algorithm.
+    ziplime.utils.run_algo.run_algorithm.
 
     Parameters
     ----------
@@ -59,7 +59,7 @@ class BenchmarkSpec:
 
         Parameters
         ----------
-        asset_repository : zipline.assets.AssetFinder
+        asset_repository : ziplime.assets.AssetFinder
             Asset finder for the algorithm to be run.
         start_date : datetime.datetime
             Start date of the algorithm to be run.

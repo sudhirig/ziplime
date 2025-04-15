@@ -12,6 +12,7 @@ from toolz import flip
 numpy_version = Version(np.__version__)
 
 bool_dtype = np.dtype("bool")
+uint8_dtype = np.dtype("uint8")
 
 uint32_dtype = np.dtype("uint32")
 uint64_dtype = np.dtype("uint64")

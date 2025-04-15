@@ -2,7 +2,6 @@ import uuid
 
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.domain.db.asset import Asset
-from zipline.finance.order import Order as ZPOrder
 
 from ziplime.domain.bar_data import BarData
 from ziplime.domain.position import Position
@@ -60,7 +59,7 @@ class SimulationExchange(Exchange):
     def is_alive(self):
         pass
 
-    def get_orders(self) -> dict[str, ZPOrder]:
+    def get_orders(self) -> dict[str, Order]:
         pass
 
     async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData):
@@ -70,7 +69,7 @@ class SimulationExchange(Exchange):
 
         Parameters
         ----------
-        bar_data: zipline._protocol.BarData
+        bar_data: ziplime._protocol.BarData
 
         Notes
         -----

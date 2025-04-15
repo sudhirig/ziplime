@@ -18,8 +18,8 @@ from ziplime.errors import (
     NonExistentAssetInTimeFrame,
     UnsupportedDataType,
 )
-from zipline.lib.labelarray import LabelArray
-from zipline.lib.rank import is_missing, grouped_masked_is_maximal
+from ziplime.lib.labelarray import LabelArray
+from ziplime.lib.rank import is_missing, grouped_masked_is_maximal
 from ziplime.pipeline.dtypes import (
     CLASSIFIER_DTYPES,
     FACTOR_DTYPES,
@@ -144,13 +144,13 @@ class Filter(RestrictedDTypeMixin, ComputableTerm):
     or exclude for some particular purpose. Many Pipeline API functions accept
     a ``mask`` argument, which can be supplied a Filter indicating that only
     values passing the Filter should be considered when performing the
-    requested computation. For example, :meth:`zipline.pipeline.Factor.top`
+    requested computation. For example, :meth:`ziplime.pipeline.Factor.top`
     accepts a mask indicating that ranks should be computed only on assets that
     passed the specified Filter.
 
     The most common way to construct a Filter is via one of the comparison
     operators (``<``, ``<=``, ``!=``, ``eq``, ``>``, ``>=``) of
-    :class:`~zipline.pipeline.Factor`. For example, a natural way to construct
+    :class:`~ziplime.pipeline.Factor`. For example, a natural way to construct
     a Filter for stocks with a 10-day VWAP less than $20.0 is to first
     construct a Factor computing 10-day VWAP and compare it to the scalar value
     20.0::
@@ -224,16 +224,16 @@ class Filter(RestrictedDTypeMixin, ComputableTerm):
 
         Parameters
         ----------
-        if_true : zipline.pipeline.term.ComputableTerm
+        if_true : ziplime.pipeline.term.ComputableTerm
             Expression whose values should be used at locations where this
             filter outputs True.
-        if_false : zipline.pipeline.term.ComputableTerm
+        if_false : ziplime.pipeline.term.ComputableTerm
             Expression whose values should be used at locations where this
             filter outputs False.
 
         Returns
         -------
-        merged : zipline.pipeline.term.ComputableTerm
+        merged : ziplime.pipeline.term.ComputableTerm
            A term that computes by taking values from either ``if_true`` or
            ``if_false``, depending on the values produced by ``self``.
 
@@ -355,7 +355,7 @@ class NullFilter(SingleInputMixin, Filter):
 
     Parameters
     ----------
-    factor : zipline.pipeline.Term
+    factor : ziplime.pipeline.Term
         The factor to compare against its missing_value.
     """
 
@@ -380,7 +380,7 @@ class NotNullFilter(SingleInputMixin, Filter):
 
     Parameters
     ----------
-    factor : zipline.pipeline.Term
+    factor : ziplime.pipeline.Term
         The factor to compare against its missing_value.
     """
 
@@ -405,7 +405,7 @@ class PercentileFilter(SingleInputMixin, Filter):
 
     Parameters
     ----------
-    factor : zipline.pipeline.factor.Factor
+    factor : ziplime.pipeline.factor.Factor
         The factor over which to compute percentile bounds.
     min_percentile : float [0.0, 1.0]
         The minimum percentile rank of an asset that will pass the filter.
@@ -529,12 +529,12 @@ class CustomFilter(PositiveWindowLengthMixin, CustomTermMixin, Filter):
             Raw data arrays corresponding to the values of `self.inputs`.
 
     See the documentation for
-    :class:`~zipline.pipeline.CustomFactor` for more details on
+    :class:`~ziplime.pipeline.CustomFactor` for more details on
     implementing a custom ``compute`` method.
 
     See Also
     --------
-    zipline.pipeline.CustomFactor
+    ziplime.pipeline.CustomFactor
     """
 
     def _validate(self):
@@ -562,7 +562,7 @@ class ArrayPredicate(SingleInputMixin, Filter):
 
     Parameters
     ----------
-    term : zipline.pipeline.Term
+    term : ziplime.pipeline.Term
         Term producing the array over which the predicate will be computed.
     op : function(ndarray, *args) -> ndarray[bool]
         Function to apply to the result of `term`.

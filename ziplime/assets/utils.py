@@ -1,3 +1,4 @@
+import re
 from collections import namedtuple
 
 import logging
@@ -15,8 +16,6 @@ import numpy as np
 
 from .domain.continuous_future import ContinuousFuture
 
-
-
 log = logging.getLogger("assets.py")
 
 # A set of fields that need to be converted to timestamps in UTC
@@ -30,8 +29,58 @@ _asset_timestamp_fields = frozenset(
         "auto_close_date",
     }
 )
+_delimited_symbol_default_triggers = frozenset({np.nan, None, ""})
+_delimited_symbol_delimiters_regex = re.compile(r"[./\-_]")
 
 OwnershipPeriod = namedtuple("OwnershipPeriod", "start end sid value")
+SYMBOL_COLUMNS = frozenset(
+    {
+        "symbol",
+        "company_symbol",
+        "share_class_symbol",
+    }
+)
+
+
+def split_delimited_symbol(symbol):
+    """
+    Takes in a symbol that may be delimited and splits it in to a company
+    symbol and share class symbol. Also returns the fuzzy symbol, which is the
+    symbol without any fuzzy characters at all.
+
+    Parameters
+    ----------
+    symbol : str
+        The possibly-delimited symbol to be split
+
+    Returns
+    -------
+    company_symbol : str
+        The company part of the symbol.
+    share_class_symbol : str
+        The share class part of a symbol.
+    """
+    # return blank strings for any bad fuzzy symbols, like NaN or None
+    if symbol in _delimited_symbol_default_triggers:
+        return "", ""
+
+    symbol = symbol.upper()
+
+    split_list = re.split(
+        pattern=_delimited_symbol_delimiters_regex,
+        string=symbol,
+        maxsplit=1,
+    )
+
+    # Break the list up in to its two components, the company symbol and the
+    # share class symbol
+    company_symbol = split_list[0]
+    if len(split_list) > 1:
+        share_class_symbol = split_list[1]
+    else:
+        share_class_symbol = ""
+
+    return company_symbol, share_class_symbol
 
 
 def merge_ownership_periods(mappings):
@@ -198,4 +247,3 @@ def _encode_continuous_future_sid(root_symbol, offset, roll_style, adjustment_st
 
 
 Lifetimes = namedtuple("Lifetimes", "sid start end")
-

@@ -34,6 +34,7 @@ iso4217 = "^1.12.20240625"
 h5py = "^3.13.0"
 networkx = "^3.4.2"
 empyrical-reloaded = "^0.5.11"
+greenlet = "^3.1.1"
 
 [tool.poetry.scripts]
 ziplime = "ziplime.__main__:main"

@@ -1,20 +1,14 @@
 import datetime
-
-import click
-import os
 import sys
-from exchange_calendars import ExchangeCalendar
+
+import structlog
 
 from ziplime.data.services.bundle_data_source import BundleDataSource
 from ziplime.data.services.bundle_registry import BundleRegistry
 from ziplime.data.services.bundle_service import BundleService
 
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
-from ziplime.gens.domain.realtime_clock import RealtimeClock
-from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.gens.domain.trading_clock import TradingClock
-from ziplime.gens.exchanges.exchange import Exchange
-from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 from ziplime.sources.benchmark_source import BenchmarkSource
 
 try:
@@ -25,7 +19,6 @@ try:
     PYGMENTS = True
 except ImportError:
     PYGMENTS = False
-import logging
 
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.pipeline.data import USEquityPricing
@@ -33,37 +26,9 @@ from ziplime.pipeline.loaders import USEquityPricingLoader
 
 from ziplime.algorithm import TradingAlgorithm, NoBenchmark
 
-log = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
-class _RunAlgoError(click.ClickException, ValueError):
-    """Signal an error that should have a different message if invoked from
-    the cli.
-
-    Parameters
-    ----------
-    pyfunc_msg : str
-        The message that will be shown when called as a python function.
-    cmdline_msg : str, optional
-        The message that will be shown on the command line. If not provided,
-        this will be the same as ``pyfunc_msg`
-    """
-
-    exit_code = 1
-
-    def __init__(self, pyfunc_msg, cmdline_msg=None):
-        if cmdline_msg is None:
-            cmdline_msg = pyfunc_msg
-
-        super(_RunAlgoError, self).__init__(cmdline_msg)
-        self.pyfunc_msg = pyfunc_msg
-
-    def __str__(self):
-        return self.pyfunc_msg
-
-
-# TODO: simplify
-# flake8: noqa: C901
 async def run_algorithm(
         algorithm_file: str,
         print_algo: bool,
@@ -79,7 +44,6 @@ async def run_algorithm(
 
     This is shared between the cli and :func:`ziplime.run_algo`.
     """
-    # benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
     bundle_service = BundleService(bundle_registry=bundle_registry)
 
     bundle_data = await bundle_service.load_bundle(bundle_name=simulation_params.bundle_name, bundle_version=None,
@@ -87,7 +51,7 @@ async def run_algorithm(
     # date parameter validation
     if simulation_params.trading_calendar.sessions_distance(simulation_params.start_session,
                                                             simulation_params.end_session) < 1:
-        raise _RunAlgoError(
+        raise Exception(
             f"There are no trading days between {simulation_params.start_session} and {simulation_params.end_session}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
@@ -107,7 +71,7 @@ async def run_algorithm(
                 outfile=sys.stdout,
             )
         else:
-            click.echo(algotext)
+            logger.info(f"\n{algotext}")
 
     pipeline_loader = USEquityPricingLoader.without_fx(
         bundle_data,
@@ -149,5 +113,8 @@ async def run_algorithm(
         algorithm_file=algorithm_file,
         clock=clock
     )
+    start_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz)
     perf = await tr.run()
+    end_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz)
+    logger.info(f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds.")
     return perf

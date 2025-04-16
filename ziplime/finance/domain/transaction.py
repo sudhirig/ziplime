@@ -11,8 +11,8 @@ class Transaction:
                  commission: float | None = None):
         self.asset = asset
         self.amount = amount
-        if amount < 1:
-            raise Exception("Transaction magnitude must be at least 1.")
+        # if amount < 1:
+        #     raise Exception("Transaction magnitude must be at least 1.")
 
         self.dt = dt
         self.price = price

@@ -184,7 +184,7 @@ class MetricsTracker:
         A daily perf packet.
         """
 
-        if self.emission_rate == "daily":
+        if self.emission_rate == datetime.timedelta(days=1):
             # this method is called for both minutely and daily emissions, but
             # this chunk of code here only applies for daily emissions. (since
             # it's done every minute, elsewhere, for minutely emission).

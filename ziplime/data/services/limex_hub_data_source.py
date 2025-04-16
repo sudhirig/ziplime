@@ -52,6 +52,7 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
             pl.lit(symbol).alias("symbol"),
             pl.lit("LIME").alias("exchange"),
             pl.lit("US").alias("exchange_country"),
+            pl.col("close").alias("price"),
             date=pl.col("date").dt.replace_time_zone(str(date_from.tzinfo)),
         ).filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
         return df

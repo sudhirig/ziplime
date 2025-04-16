@@ -8,8 +8,6 @@ from ziplime.data.benchmarks import get_benchmark_returns_from_file
 from ziplime.errors import SymbolNotFound
 
 from ziplime.assets.repositories.sqlite_asset_repository import SqliteAssetRepository
-from ziplime.utils.run_algo import _RunAlgoError
-
 
 class BenchmarkSpec:
     """
@@ -93,7 +91,7 @@ class BenchmarkSpec:
                 benchmark_sid = asset.sid
                 benchmark_returns = None
             except SymbolNotFound:
-                raise _RunAlgoError(f"Symbol {self.benchmark_symbol} as a benchmark not found in this bundle.")
+                raise ValueError(f"Symbol {self.benchmark_symbol} as a benchmark not found in this bundle.")
         elif self.no_benchmark:
             benchmark_sid = None
             benchmark_returns = pd.Series(

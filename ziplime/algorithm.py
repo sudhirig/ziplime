@@ -374,16 +374,6 @@ class TradingAlgorithm:
         if not self.initialized:
             await self.initialize()
             self.initialized = True
-
-        # self.trading_client = AlgorithmSimulator(
-        #     algo=self,
-        #     bundle_data=self.bundle_data,
-        #     sim_params=self.sim_params,
-        #     clock=self._create_clock(),
-        #     benchmark_source=self.benchmark_source,
-        #     restrictions=self.restrictions,
-        # )
-
         self.metrics_tracker.handle_start_of_simulation()
         return self.transform()
 
@@ -692,11 +682,6 @@ class TradingAlgorithm:
                                                                            asset_type=asset_type,
                                                                            exchange_name=exchange_name)
 
-        # return await self.bundle_data.asset_repository.get_equity_by_symbol(
-        #     symbol=symbol_str,
-        #     exchange_name=exchange_name,
-        # )
-
     @api_method
     def symbols(self, *args, **kwargs):
         """Lookup multuple Equities as a list.
@@ -778,8 +763,7 @@ class TradingAlgorithm:
         # Make sure the asset exists, and that there is a last price for it.
         # FIXME: we should use BarData's can_trade logic here, but I haven't
         # yet found a good way to do that.
-        normalized_date = add_tz_info(self.sim_params.trading_calendar.minute_to_session(self.datetime),
-                                      tzinfo=datetime.timezone.utc)
+        normalized_date = self.sim_params.trading_calendar.minute_to_session(self.datetime).date()
 
         if normalized_date < asset.start_date:
             raise CannotOrderDelistedAsset(
@@ -790,7 +774,7 @@ class TradingAlgorithm:
                 msg=f"Cannot order sid={asset.sid}, as it stopped trading on {asset.end_date}."
             )
         else:
-            last_price = float(self.current_data.current(asset, "price"))
+            last_price = self.current_data.current([asset], fields=["price"])["price"][0]
 
             if np.isnan(last_price):
                 raise CannotOrderDelistedAsset(
@@ -801,9 +785,10 @@ class TradingAlgorithm:
             self._logger.debug(f"Price of 0 for {asset}; can't infer value")
             # Don't place any order
             return 0
-
-        value_multiplier = asset.price_multiplier
-        return value / (last_price * value_multiplier)
+        if type(asset) is FuturesContract:
+            return value / (last_price * asset.multiplier)
+        else:
+            return value / last_price
 
     def _can_order_asset(self, asset: Asset):
         if asset.auto_close_date:
@@ -910,6 +895,9 @@ class TradingAlgorithm:
             raise OverflowError(f"Can't order more than {self.sim_params.max_shares} shares")
 
         amount = self.round_order(amount)
+        if amount == 0:
+            # self._logger.warning("Not executing order for zero shares.")
+            return None
         # Raises a ZiplineError if invalid parameters are detected.
         self.validate_order_params(asset=asset, amount=amount)
 
@@ -981,8 +969,9 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    def order_value(self, asset: Asset, value: float, limit_price: float | None = None, stop_price: float | None = None,
-                    style: ExecutionStyle | None = None):
+    async def order_value(self, asset: Asset, value: float, limit_price: float | None = None,
+                          stop_price: float | None = None,
+                          style: ExecutionStyle | None = None):
         """Place an order for a fixed amount of money.
 
         Equivalent to ``order(asset, value / data.current(asset, 'price'))``.
@@ -1021,7 +1010,7 @@ class TradingAlgorithm:
             return None
 
         amount = self._calculate_order_value_amount(asset, value)
-        return self.order(
+        return await self.order(
             asset,
             amount,
             limit_price=limit_price,
@@ -1228,7 +1217,7 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    def order_percent(
+    async def order_percent(
             self, asset: Asset, percent: float, style: ExecutionStyle
     ):
         """Place an order in the specified asset corresponding to the given
@@ -1264,7 +1253,7 @@ class TradingAlgorithm:
             return None
 
         amount = self._calculate_order_percent_amount(asset=asset, percent=percent)
-        return self.order(
+        return await self.order(
             asset=asset,
             amount=amount,
             style=style,
@@ -1276,7 +1265,7 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    def order_target(
+    async def order_target(
             self, asset: Asset, target: int, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target number of shares. If
@@ -1332,7 +1321,7 @@ class TradingAlgorithm:
             return None
 
         amount = self._calculate_order_target_amount(asset=asset, target=target)
-        return self.order(
+        return await self.order(
             asset=asset,
             amount=amount,
             style=style,
@@ -1347,7 +1336,7 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    def order_target_value(
+    async def order_target_value(
             self, asset: Asset, target: float, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target value. If
@@ -1398,7 +1387,7 @@ class TradingAlgorithm:
 
         target_amount = self._calculate_order_value_amount(asset, target)
         amount = self._calculate_order_target_amount(asset, target_amount)
-        return self.order(
+        return await self.order(
             asset=asset,
             amount=amount,
             style=style,
@@ -1406,7 +1395,7 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    def order_target_percent(
+    async def order_target_percent(
             self, asset: Asset, target: float,
             style: ExecutionStyle
     ):
@@ -1424,10 +1413,6 @@ class TradingAlgorithm:
             The desired percentage of the portfolio value to allocate to
             ``asset``. This is specified as a decimal, for example:
             0.50 means 50%.
-        limit_price : float, optional
-            The limit price for the order.
-        stop_price : float, optional
-            The stop price for the order.
         style : ExecutionStyle
             The execution style for the order.
 
@@ -1460,11 +1445,13 @@ class TradingAlgorithm:
         :func:`ziplime.api.order_target`
         :func:`ziplime.api.order_target_value`
         """
+        if not 0 <= target <= 1:
+            raise ValueError("target must be between 0 and 1")
         if not self._can_order_asset(asset):
             return None
 
         amount = self._calculate_order_target_percent_amount(asset=asset, target=target)
-        return self.order(
+        return await self.order(
             asset=asset,
             amount=amount,
             style=style,

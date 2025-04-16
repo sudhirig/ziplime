@@ -37,10 +37,10 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
 
             # Submit an order limit/market
             # submitted_order = await context.order(asset=asset, amount=10, style=LimitOrder(limit_price=1))
-            # submitted_order = await context.order(asset=asset, amount=1, style=MarketOrder())
-            # if submitted_order:
-            #     print(f"Submitted order: {submitted_order}")
-            # else:
-            #     print("Order not submitted.")
+            submitted_order = await context.order_target_percent(asset=asset, target=0.1, style=MarketOrder())
+            if submitted_order:
+                print(f"Submitted order: {submitted_order}")
+            else:
+                print("New order not submitted.")
             print(context.portfolio)
             # print(asset_series)

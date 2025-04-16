@@ -107,7 +107,7 @@ class BundleService:
             asset_routers_db.append(asset_router)
             asset_db = Equity(
                 sid=asset_router.sid,
-                start_date=asset["min_date"].date(),
+                start_date=asset["min_date"].date().replace(year=1900),
                 first_traded=asset["min_date"].date(),
                 end_date=asset["max_date"].date().replace(year=2099),
                 asset_name=asset["symbol"],
@@ -119,7 +119,7 @@ class BundleService:
                 company_symbol=asset["symbol"],
                 symbol=asset["symbol"],
                 share_class_symbol="",
-                start_date=asset_db.start_date.replace(year=2000),
+                start_date=asset_db.start_date.replace(year=1900),
                 end_date=asset_db.end_date.replace(year=2099),
                 exchange=asset["exchange"],
             )

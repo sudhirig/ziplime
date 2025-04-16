@@ -65,8 +65,7 @@ class _RunAlgoError(click.ClickException, ValueError):
 # TODO: simplify
 # flake8: noqa: C901
 async def run_algorithm(
-        algofile: str,
-        algotext: str,
+        algorithm_file: str,
         print_algo: bool,
         metrics_set: str,
         custom_loader,
@@ -86,8 +85,10 @@ async def run_algorithm(
     bundle_data = await bundle_service.load_bundle(bundle_name=simulation_params.bundle_name, bundle_version=None,
                                                    missing_bundle_data_source=missing_bundle_data_source)
     # date parameter validation
-    if simulation_params.trading_calendar.sessions_distance(simulation_params.start_session, simulation_params.end_session) < 1:
-        raise _RunAlgoError(f"There are no trading days between {simulation_params.start_session} and {simulation_params.end_session}")
+    if simulation_params.trading_calendar.sessions_distance(simulation_params.start_session,
+                                                            simulation_params.end_session) < 1:
+        raise _RunAlgoError(
+            f"There are no trading days between {simulation_params.start_session} and {simulation_params.end_session}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
         asset_repository=bundle_data.asset_repository,
@@ -96,6 +97,8 @@ async def run_algorithm(
     )
 
     if print_algo:
+        with open(algorithm_file, "r") as f:
+            algotext = f.read()
         if PYGMENTS:
             highlight(
                 algotext,
@@ -118,8 +121,6 @@ async def run_algorithm(
         except KeyError:
             raise ValueError("No PipelineLoader registered for column %s." % column)
 
-
-
     if benchmark_sid is not None:
         benchmark_asset = bundle_data.asset_repository.retrieve_asset(sid=benchmark_sid)
         benchmark_returns = None
@@ -137,26 +138,6 @@ async def run_algorithm(
         benchmark_fields=["close"]
     )
 
-    # clock = SimulationClock(
-    #     sessions=sim_params.sessions,
-    #     market_opens=sim_params.market_opens,
-    #     market_closes=sim_params.market_closes,
-    #     before_trading_start_minutes=sim_params.before_trading_start_minutes,
-    #     emission_rate=sim_params.emission_rate,
-    #     timezone=sim_params.trading_calendar.tz
-    # )
-    # timedelta_diff_from_current_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz) - start_date.replace(tzinfo=simulation_params.trading_calendar.tz)
-    # clock = RealtimeClock(
-    #     sessions=simulation_params.sessions,
-    #     market_opens=simulation_params.market_opens,
-    #     market_closes=simulation_params.market_closes,
-    #     before_trading_start_minutes=simulation_params.before_trading_start_minutes,
-    #     emission_rate=simulation_params.emission_rate,
-    #     timezone=simulation_params.trading_calendar.tz,
-    #     timedelta_diff_from_current_time=-timedelta_diff_from_current_time
-    # )
-
-
     tr = TradingAlgorithm(
         exchange=simulation_params.exchange,
         bundle_data=bundle_data,
@@ -165,27 +146,8 @@ async def run_algorithm(
         metrics_set=metrics_set,
         blotter=InMemoryBlotter(exchange=simulation_params.exchange, cancel_policy=None),
         benchmark_source=benchmark_source,
-        algo_filename=algofile,
-        script=algotext,
+        algorithm_file=algorithm_file,
         clock=clock
     )
-        # else:
-        #
-        #     blotter_live = BlotterLive(data_frequency=emission_rate, exchange=exchange)
-        #     tr = LiveTradingAlgorithm(
-        #         exchange=exchange,
-        #         state_filename=state_filename,
-        #         realtime_bar_target=realtime_bar_target,
-        #         bundle_data=bundle_data,
-        #         get_pipeline_loader=choose_loader,
-        #         sim_params=sim_params,
-        #         metrics_set=metrics_set,
-        #         blotter=blotter_live,
-        #         benchmark_source=benchmark_source,
-        #         algo_filename=algofile,
-        #         script=algotext,
-        #     )
-        # tr.bundle_data = bundle_data
-        # tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
     perf = await tr.run()
     return perf

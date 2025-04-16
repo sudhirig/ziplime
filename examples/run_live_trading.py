@@ -46,16 +46,12 @@ async def run_live_trading(
         timedelta_diff_from_current_time=-timedelta_diff_from_current_time
     )
 
-    with open(algorithm_file, "r") as f:
-        algotext = f.read()
-
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
     missing_data_source = LimeTraderSdkDataSource(lime_sdk_credentials_file=None)
 
     return await run_algorithm(
-        algofile=getattr(algorithm_file, "name", "<algorithm>"),
-        algotext=algotext,
+        algorithm_file=str(algorithm_file),
         print_algo=True,
         metrics_set=default_metrics(),
         benchmark_spec=benchmark_spec,

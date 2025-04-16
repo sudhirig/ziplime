@@ -1,12 +1,15 @@
 import datetime
+import importlib.util
+import sys
 from collections import namedtuple, OrderedDict
 from contextlib import AsyncExitStack
 from copy import copy
 import warnings
-import logging
 from typing import Callable
 import pandas as pd
 import numpy as np
+import structlog
+
 import ziplime
 from itertools import chain, repeat
 
@@ -98,8 +101,6 @@ from ziplime.sources.benchmark_source import BenchmarkSource
 
 from ziplime.utils.calendar_utils import add_tz_info
 
-log = logging.getLogger("ZiplineLog")
-
 # For creating and storing pipeline instances
 AttachedPipeline = namedtuple("AttachedPipeline", "pipe chunks eager")
 
@@ -180,16 +181,14 @@ class TradingAlgorithm:
             bundle_data: BundleData,
             exchange: Exchange,
             # Algorithm API
-            script: str,
             metrics_set,
             blotter: Blotter,
-            algo_filename,
+            algorithm_file: str,
             benchmark_source: BenchmarkSource,
             clock: TradingClock,
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
-            **initialize_kwargs,
     ):
         self.exchange = exchange
         # List of trading controls to be used to validate orders.
@@ -200,8 +199,6 @@ class TradingAlgorithm:
 
         self._recorded_vars = {}
         self.namespace = {}
-
-        self.logger = None
 
         # XXX: This is kind of a mess.
         # We support passing a data_portal in `run`, but we need an asset
@@ -234,10 +231,6 @@ class TradingAlgorithm:
         # symbols to sids, and can be set using set_symbol_lookup_date()
         self._symbol_lookup_date = None
 
-        # If string is passed in, execute and get reference to
-        # functions.
-        self.algoscript = script
-
         self._initialize = None
         self._before_trading_start = None
         self._analyze = None
@@ -254,16 +247,25 @@ class TradingAlgorithm:
         def noop(*args, **kwargs):
             pass
 
-        if algo_filename is None:
-            algo_filename = "<string>"
-        code = compile(self.algoscript, algo_filename, "exec")
-        exec(code, self.namespace)
+        module_name = "ziplime.ziplime_algorithm"  # TODO: check if we need to modify this
+        spec = importlib.util.spec_from_file_location(module_name, algorithm_file)
+        if spec and spec.loader:
+            # Create a module based on the spec
+            module = importlib.util.module_from_spec(spec)
 
-        self._initialize = self.namespace.get("initialize", noop)
-        self._handle_data = self.namespace.get("handle_data", noop)
-        self._before_trading_start = self.namespace.get("before_trading_start", )
+            # Register the module in sys.modules so it can be found by other modules
+            sys.modules[module_name] = module
+
+            # Execute the module in its own namespace
+            spec.loader.exec_module(module)
+        else:
+            raise Exception(f"No module found: {algorithm_file}")
+
+        self._initialize = module.__dict__.get("initialize", noop)
+        self._handle_data = module.__dict__.get("handle_data", noop)
+        self._before_trading_start = module.__dict__.get("before_trading_start", noop)
         # Optional analyze function, gets called after run
-        self._analyze = self.namespace.get("analyze")
+        self._analyze = module.__dict__.get("analyze", noop)
 
         self.event_manager.add_event(
             ziplime.utils.events.Event(
@@ -280,8 +282,6 @@ class TradingAlgorithm:
 
         # Prepare the algo for initialization
         self.initialized = False
-
-        self.initialize_kwargs = initialize_kwargs or {}
 
         # A dictionary of capital changes, keyed by timestamp, indicating the
         # target/delta of the capital changes, along with values
@@ -305,7 +305,7 @@ class TradingAlgorithm:
 
         self.clock = clock
 
-        self._logger = logging.getLogger(__name__)
+        self._logger = structlog.get_logger(__name__)
 
     def init_engine(self, get_loader):
         """Construct and store a PipelineEngine from loader.
@@ -372,7 +372,7 @@ class TradingAlgorithm:
         self.on_dt_changed(dt=self.sim_params.start_session)
 
         if not self.initialized:
-            await self.initialize(**self.initialize_kwargs)
+            await self.initialize()
             self.initialized = True
 
         # self.trading_client = AlgorithmSimulator(
@@ -471,19 +471,19 @@ class TradingAlgorithm:
                     self.portfolio.portfolio_value - portfolio_value_adjustment
             )
 
-            log.info(
+            self._logger.info(
                 "Processing capital change to target %s at %s. Capital "
                 "change delta is %s" % (target, dt, capital_change_amount)
             )
         elif capital_change["type"] == "delta":
             target = None
             capital_change_amount = capital_change["value"]
-            log.info(
+            self._logger.info(
                 "Processing capital change of delta %s at %s"
                 % (capital_change_amount, dt)
             )
         else:
-            log.error(
+            self._logger.error(
                 "Capital change %s does not indicate a valid type "
                 "('target' or 'delta')" % capital_change
             )
@@ -798,8 +798,7 @@ class TradingAlgorithm:
                 )
 
         if tolerant_equals(last_price, 0):
-            if self.logger:
-                self.logger.debug(f"Price of 0 for {asset}; can't infer value")
+            self._logger.debug(f"Price of 0 for {asset}; can't infer value")
             # Don't place any order
             return 0
 
@@ -814,7 +813,7 @@ class TradingAlgorithm:
                 # If we are after the asset's end date or auto close date, warn
                 # the user that they can't place an order for this asset, and
                 # return None.
-                log.warning(
+                self._logger.warning(
                     f"Cannot place order for sid={asset.sid}, as it has de-listed. "
                     f"Any existing positions for this asset will be "
                     f"liquidated on "
@@ -1064,9 +1063,6 @@ class TradingAlgorithm:
     def account(self):
         self._sync_last_sale_prices()
         return self._ledger.account
-
-    def set_logger(self, logger):
-        self.logger = logger
 
     def on_dt_changed(self, dt):
         """Callback triggered by the simulation loop whenever the current dt
@@ -1748,7 +1744,6 @@ class TradingAlgorithm:
         """
         control = MaxOrderCount(on_error, max_count)
         self.register_trading_control(control)
-
 
     @api_method
     def set_asset_restrictions(self, restrictions: Restrictions, on_error: str = "fail"):

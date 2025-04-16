@@ -56,9 +56,9 @@ class SimulationParameters:
             # if the end date is not a valid session in this calendar,
             # pull it backward to the last valid session before the given
             # end date.
-            self._end_session = trading_calendar.minute_to_session(
+            self.end_session = trading_calendar.minute_to_session(
                 self.end_session, direction="previous"
-            ).tz_localize(self.trading_calendar.tz).to_pydatetime()
+            ).tz_localize(self.trading_calendar.tz).to_pydatetime().date()
 
         self.first_open = trading_calendar.session_first_minute(
             self.start_session

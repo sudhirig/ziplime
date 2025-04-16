@@ -85,7 +85,7 @@ if __name__ == "__main__":
     algorithm_file = Path("algorithms/test_algo.py").absolute()
     sim_params = SimulationParameters(
         start_date=datetime.datetime(year=2024, month=10, day=5, tzinfo=calendar.tz),
-        end_date=datetime.datetime(year=2024, month=10, day=24, tzinfo=calendar.tz),
+        end_date=datetime.datetime(year=2024, month=10, day=12, tzinfo=calendar.tz),
         trading_calendar=calendar,
         capital_base=100000.0,
         emission_rate=datetime.timedelta(minutes=1),

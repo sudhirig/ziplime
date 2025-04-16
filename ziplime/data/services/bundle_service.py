@@ -65,9 +65,14 @@ class BundleService:
             date_from=date_start,
             date_to=date_end
         )
+        if data.is_empty():
+            self._logger.warning("No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
+            return
         data = data.with_columns(
             pl.lit(0).alias("sid")
         )
+
+
         equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
                                                            pl.min("date").alias("min_date"))
 

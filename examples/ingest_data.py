@@ -11,19 +11,6 @@ from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
 from ziplime.data.services.file_system_parquet_bundle_storage import FileSystemParquetBundleStorage
 from ziplime.data.services.limex_hub_data_source import LimexHubDataSource
-from ziplime.domain.benchmark_spec import BenchmarkSpec
-from ziplime.domain.data_frequency import DataFrequency
-from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, \
-    PerContract, DEFAULT_PER_CONTRACT_COST, DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
-from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
-from ziplime.finance.domain.simulation_paremeters import SimulationParameters
-from ziplime.finance.metrics import default_metrics
-from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
-from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
-from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
-from ziplime.gens.domain.simulation_clock import SimulationClock
-from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
-from ziplime.utils.run_algo import run_algorithm
 
 
 async def run_ingest(
@@ -68,8 +55,8 @@ async def run_ingest(
 
 if __name__ == "__main__":
     calendar = get_calendar("NYSE")
-    start = datetime.datetime(year=2024, month=10, day=7, tzinfo=calendar.tz)
-    end = datetime.datetime(year=2024, month=10, day=25, tzinfo=calendar.tz)
+    start = datetime.datetime(year=2024, month=10, day=5, tzinfo=calendar.tz)
+    end = datetime.datetime(year=2024, month=10, day=12, tzinfo=calendar.tz)
     data_frequency=datetime.timedelta(minutes=1)
     bundle_name = "limex_us_polars_minute"
     symbols = ["AAPL", "AMZN"]

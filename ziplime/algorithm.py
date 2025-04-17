@@ -354,7 +354,18 @@ class TradingAlgorithm:
         with ZiplineAPI(self):
             self._analyze(self, perf)
 
-    async def _create_generator(self):
+
+    def compute_eager_pipelines(self):
+        """Compute any pipelines attached with eager=True."""
+        for name, pipe in self._pipelines.items():
+            if pipe.eager:
+                self.pipeline_output(name)
+
+    async def get_generator(self):
+        """Override this method to add new logic to the construction
+        of the generator. Overrides can use the _create_generator
+        method to get a standard construction generator.
+        """
         self.metrics_tracker = MetricsTracker(
             bundle_data=self.bundle_data,
             trading_calendar=self.sim_params.trading_calendar,
@@ -376,19 +387,6 @@ class TradingAlgorithm:
             self.initialized = True
         self.metrics_tracker.handle_start_of_simulation()
         return self.transform()
-
-    def compute_eager_pipelines(self):
-        """Compute any pipelines attached with eager=True."""
-        for name, pipe in self._pipelines.items():
-            if pipe.eager:
-                self.pipeline_output(name)
-
-    async def get_generator(self):
-        """Override this method to add new logic to the construction
-        of the generator. Overrides can use the _create_generator
-        method to get a standard construction generator.
-        """
-        return await self._create_generator()
 
     async def run(self):
         """Run the algorithm."""

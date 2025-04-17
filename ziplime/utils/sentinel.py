@@ -14,9 +14,6 @@ class _Sentinel:
     __slots__ = ("__weakref__",)
 
 
-def is_sentinel(obj):
-    return isinstance(obj, _Sentinel)
-
 
 def sentinel(name, doc=None):
     try:

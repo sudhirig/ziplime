@@ -28,7 +28,7 @@ from ziplime.gens.domain.realtime_clock import RealtimeClock
 from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.gens.exchanges.lime_trader_sdk_exchange import LimeTraderSdkExchange
 from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
-from ziplime.utils.date_utils import stripe_time_and_timezone_info
+from ziplime.utils.date_utils import strip_time_and_timezone_info
 from ziplime.utils.run_algo import run_algorithm
 from exchange_calendars import get_calendar as ec_get_calendar
 
@@ -397,7 +397,7 @@ async def run(
     """Run a backtest for the given algorithm."""
 
     calendar = ec_get_calendar(trading_calendar,
-                               start=stripe_time_and_timezone_info(start_date) - datetime.timedelta(days=30))
+                               start=strip_time_and_timezone_info(start_date) - datetime.timedelta(days=30))
 
     benchmark_spec = BenchmarkSpec(
         benchmark_returns=None,

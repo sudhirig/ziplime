@@ -12,14 +12,11 @@ from uuid import uuid4
 curried_getitem = curry(getitem)
 from ziplime.utils.compat import getargspec, wraps
 
-if sys.version_info[0:2] < (3, 7):
-    _code_argorder_head = ("co_argcount", "co_kwonlyargcount")
-else:
-    _code_argorder_head = (
-        "co_argcount",
-        "co_posonlyargcount",
-        "co_kwonlyargcount",
-    )
+_code_argorder_head = (
+    "co_argcount",
+    "co_posonlyargcount",
+    "co_kwonlyargcount",
+)
 
 _code_argorder_body = (
     "co_nlocals",
@@ -38,26 +35,18 @@ _code_argorder_tail = (
     "co_cellvars",
 )
 
-if sys.version_info[0:2] <= (3, 10):
-    _code_argorder = (
-        _code_argorder_head
-        + _code_argorder_body
-        + ("co_firstlineno", "co_lnotab")
-        + _code_argorder_tail
-    )
 
-else:
-    _code_argorder = (
-        _code_argorder_head
-        + _code_argorder_body
-        + (
-            "co_qualname",  # new in 3.11
-            "co_firstlineno",
-            "co_lnotab",
-            "co_exceptiontable",  # new in 3.11
-        )
-        + _code_argorder_tail
+_code_argorder = (
+    _code_argorder_head
+    + _code_argorder_body
+    + (
+        "co_qualname",  # new in 3.11
+        "co_firstlineno",
+        "co_lnotab",
+        "co_exceptiontable",  # new in 3.11
     )
+    + _code_argorder_tail
+)
 NO_DEFAULT = object()
 
 

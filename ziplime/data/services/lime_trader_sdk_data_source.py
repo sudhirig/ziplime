@@ -22,60 +22,6 @@ class LimeTraderSdkDataSource(BundleDataSource):
             self._lime_sdk_client = AsyncLimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
             self._lime_sdk_client_sync = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
 
-    # def fetch_live_data_table(
-    #         self,
-    #         symbols: list[str],
-    #         period: Period,
-    #         date_from: datetime.datetime,
-    #         date_to: datetime.datetime,
-    #         show_progress: bool):
-    #
-    #
-    #     def fetch_live(lime_trader_sdk_credentials_file: str, symbol: str):
-    #         lime_client = LimeClient.from_file(lime_trader_sdk_credentials_file, logger=self._logger)
-    #         try:
-    #             quotes = lime_client.market.get_quotes_history(
-    #                 symbol=symbol, period=period, from_date=date_from,
-    #                 to_date=date_to
-    #             )
-    #             df = LimeTraderSdkLiveMarketDataProvider.load_data_table(
-    #                 quotes=[LimeQuote(symbol=symbol, quote_history=quote) for quote in quotes],
-    #                 show_progress=show_progress
-    #             )
-    #         except Exception as e:
-    #             self._logger.error("Error fetching data using lime trader sdk")
-    #             df = pd.DataFrame()
-    #         return df
-    #     res = Parallel(n_jobs=multiprocessing.cpu_count() * 2, prefer="threads", return_as="generator", )(
-    #         delayed(fetch_live)(self._lime_sdk_credentials_file, symbol) for symbol in symbols)
-    #
-    #     result = []
-    #     for item in res:
-    #         if item is None:
-    #             continue
-    #         result.append(item)
-    #     if show_progress:
-    #         self._logger.info("Downloading live Lime Trader SDK metadata.")
-    #     return result
-    #
-    # @staticmethod
-    # def load_data_table(quotes: list[LimeQuote], show_progress: bool = False):
-    #     if not quotes:
-    #         return pd.DataFrame()
-    #     data_table = pd.DataFrame(
-    #         [dict(**asdict(quote_hist.quote_history), symbol=quote_hist.symbol) for quote_hist in quotes], )
-    #
-    #     data_table.rename(
-    #         columns={
-    #             "timestamp": "date",
-    #         },
-    #         inplace=True,
-    #         copy=False,
-    #     )
-    #     # data_table = data_table.reset_index()
-    #     data_table = data_table.set_index('date', drop=False)
-    #     return data_table
-    #
 
     def get_data_sync(self, symbols: list[str],
                       frequency: datetime.timedelta,
@@ -88,12 +34,13 @@ class LimeTraderSdkDataSource(BundleDataSource):
             to_date=date_to
         ) for symbol in symbols]
 
-        cols = {"open": [], "close": [], "high": [], "low": [], "volume": [], "date": [], "exchange": [],
+        cols = {"open": [], "close": [], "price": [], "high": [], "low": [], "volume": [], "date": [], "exchange": [],
                 "symbol": [], "exchange_country": []}
         for results, symbol in zip(results, symbols):
             for result in results:
                 cols["open"].append(result.open)
                 cols["close"].append(result.close)
+                cols["price"].append(result.close)
                 cols["high"].append(result.high)
                 cols["low"].append(result.low)
                 cols["volume"].append(result.volume)
@@ -102,32 +49,13 @@ class LimeTraderSdkDataSource(BundleDataSource):
                 cols["exchange_country"].append("US")
                 cols["symbol"].append(symbol)
         df = pl.DataFrame(cols, schema=[("open", pl.Float64), ("close", pl.Float64),
+                                        ("price", pl.Float64),
                                         ("high", pl.Float64), ("low", pl.Float64),
                                         ("volume", pl.Int64),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])
         return df.filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
-        for result in results:
-
-            if len(df) > 0:
-                df = df.rename(
-                    {
-                        "o": "open",
-                        "h": "high",
-                        "l": "low",
-                        "c": "close",
-                        "v": "volume",
-                        "Date": "date"
-                    }
-                )
-                df = df.with_columns(
-                    pl.lit(symbol).alias("symbol"),
-                    pl.lit("LIME").alias("exchange"),
-                    pl.lit("US").alias("exchange_country"),
-                    date=pl.col("date").dt.replace_time_zone(str(date_from.tzinfo)),
-                ).filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
-                return df
 
     async def get_data(self, symbols: list[str],
                        frequency: datetime.timedelta,

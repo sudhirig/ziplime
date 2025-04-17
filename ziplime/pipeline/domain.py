@@ -27,7 +27,7 @@ from ziplime.utils.calendar_utils import get_calendar
 from ziplime.country import CountryCode
 from ziplime.utils.formatting import bulleted_list
 from ziplime.utils.memoize import lazyval
-from ziplime.utils.pandas_utils import days_at_time
+from ziplime.utils.calendar_utils import days_at_time
 
 
 class Domain:

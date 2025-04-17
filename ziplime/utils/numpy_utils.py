@@ -388,48 +388,6 @@ def busday_count_mask_NaT(begindates, enddates, out=None):
     return out
 
 
-class WarningContext:
-    """
-    Re-usable contextmanager for contextually managing warnings.
-    """
-
-    def __init__(self, *warning_specs):
-        self._warning_specs = warning_specs
-        self._catchers = []
-
-    def __enter__(self):
-        catcher = catch_warnings()
-        catcher.__enter__()
-        self._catchers.append(catcher)
-        for args, kwargs in self._warning_specs:
-            filterwarnings(*args, **kwargs)
-        return self
-
-    def __exit__(self, *exc_info):
-        catcher = self._catchers.pop()
-        return catcher.__exit__(*exc_info)
-
-
-def ignore_nanwarnings():
-    """
-    Helper for building a WarningContext that ignores warnings from numpy's
-    nanfunctions.
-    """
-    from packaging.version import Version
-
-    NUMPY2 = Version(np.__version__) >= Version("2.0.0")
-    if NUMPY2:
-        module = "numpy.lib._nanfunctions_impl"
-    else:
-        module = "numpy.lib.nanfunctions"
-    return WarningContext(
-        (
-            ("ignore",),
-            {"category": RuntimeWarning, "module": module},
-        )
-    )
-
-
 def vectorized_is_element(array, choices):
     """
     Check if each element of ``array`` is in choices.
@@ -509,14 +467,6 @@ def changed_locations(a, include_first):
         return indices
 
     return np.hstack([[0], indices])
-
-
-def compare_datetime_arrays(x, y):
-    """
-    Compare datetime64 ndarrays, treating NaT values as equal.
-    """
-
-    return np.array_equal(x.view("int64"), y.view("int64"))
 
 
 def bytes_array_to_native_str_object_array(a):

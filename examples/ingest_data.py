@@ -59,7 +59,7 @@ if __name__ == "__main__":
     end = datetime.datetime(year=2024, month=10, day=12, tzinfo=calendar.tz)
     data_frequency=datetime.timedelta(minutes=1)
     bundle_name = "limex_us_polars_minute"
-    symbols = ["AAPL", "AMZN"]
+    symbols = ["AAPL", "AMZN", "NVDA"]
     uvloop.run(run_ingest(start_date=start, end_date=end,bundle_name=bundle_name, frequency=data_frequency,
                           trading_calendar=calendar, symbols=symbols))
 

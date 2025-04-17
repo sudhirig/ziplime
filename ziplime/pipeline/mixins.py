@@ -658,8 +658,7 @@ class IfElseMixin(UniversalMixin):
 
     window_length = 0
 
-    @expect_dtypes(condition=bool_dtype)
-    def __new__(cls, condition, if_true, if_false):
+    def __new__(cls, condition: bool_dtype, if_true, if_false):
         return super(IfElseMixin, cls).__new__(
             cls,
             inputs=[condition, if_true, if_false],

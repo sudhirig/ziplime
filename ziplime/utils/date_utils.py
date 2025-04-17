@@ -54,5 +54,5 @@ def make_utc_aware(dti):
         return dti.tz_localize(tz="UTC")
 
 
-def stripe_time_and_timezone_info(dt: datetime.datetime) -> datetime.datetime:
+def strip_time_and_timezone_info(dt: datetime.datetime) -> datetime.datetime:
     return dt.replace(hour=0, minute=0, second=0, microsecond=0)

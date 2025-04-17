@@ -2,7 +2,6 @@ from ziplime.domain.bar_data import BarData
 from ziplime.errors import LiquidityExceeded
 from ziplime.finance.domain.order import Order
 from ziplime.finance.slippage.slippage_model import SlippageModel
-from ziplime.utils.input_validation import expect_strictly_bounded, expect_bounded
 
 
 class FixedBasisPointsSlippage(SlippageModel):
@@ -39,16 +38,13 @@ class FixedBasisPointsSlippage(SlippageModel):
       equities.
     """
 
-    @expect_bounded(
-        basis_points=(0, None),
-        __funcname="FixedBasisPointsSlippage",
-    )
-    @expect_strictly_bounded(
-        volume_limit=(0, None),
-        __funcname="FixedBasisPointsSlippage",
-    )
     def __init__(self, basis_points=5.0, volume_limit=0.1):
         super(FixedBasisPointsSlippage, self).__init__()
+        if volume_limit <= 0:
+            raise ValueError("volume_limit must be positive.")
+        if basis_points <= 0:
+            raise ValueError("volume_limit must be positive.")
+
         self.basis_points = basis_points
         self.percentage = self.basis_points / 10000.0
         self.volume_limit = volume_limit

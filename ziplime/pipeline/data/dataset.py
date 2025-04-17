@@ -19,11 +19,7 @@ from ziplime.pipeline.term import (
     validate_dtype,
 )
 from ziplime.utils.formatting import s, plural
-from ziplime.utils.input_validation import (
-    ensure_dtype,
-)
 from ziplime.utils.numpy_utils import float64_dtype, NoDefaultMissingValue
-from ziplime.utils.preprocess import preprocess
 from ziplime.utils.string_formatting import bulleted_list
 
 IsSpecialization = sentinel("IsSpecialization")
@@ -34,7 +30,6 @@ class Column:
     An abstract column of data, not yet associated with a dataset.
     """
 
-    @preprocess(dtype=ensure_dtype)
     def __init__(
             self,
             dtype,

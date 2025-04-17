@@ -24,33 +24,6 @@ from ziplime.utils.preprocess import call, preprocess
 _qualified_name = attrgetter("__qualname__")
 
 
-def ensure_dtype(func, argname, arg):
-    """
-    Argument preprocessor that converts the input into a numpy dtype.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from ziplime.utils.preprocess import preprocess
-    >>> @preprocess(dtype=ensure_dtype)
-    ... def foo(dtype):
-    ...     return dtype
-    ...
-    >>> foo(float)
-    dtype('float64')
-    """
-    try:
-        return dtype(arg)
-    except TypeError as exc:
-        raise TypeError(
-            "{func}() couldn't convert argument "
-            "{argname}={arg!r} to a numpy dtype.".format(
-                func=_qualified_name(func),
-                argname=argname,
-                arg=arg,
-            ),
-        ) from exc
-
 
 def expect_dtypes(__funcname=_qualified_name, **named):
     """
@@ -297,92 +270,6 @@ def expect_bounded(__funcname=_qualified_name, **named):
                 return not (lower <= value <= upper)
 
             predicate_descr = "inclusively between %s and %s" % bounds
-
-        template = (
-            "%(funcname)s() expected a value {predicate}"
-            " for argument '%(argname)s', but got %(actual)s instead."
-        ).format(predicate=predicate_descr)
-
-        return make_check(
-            exc_type=ValueError,
-            template=template,
-            pred=should_fail,
-            actual=repr,
-            funcname=__funcname,
-        )
-
-    return _expect_bounded(_make_bounded_check, __funcname=__funcname, **named)
-
-
-def expect_strictly_bounded(__funcname=_qualified_name, **named):
-    """
-    Preprocessing decorator verifying that inputs fall EXCLUSIVELY between
-    bounds.
-
-    Bounds should be passed as a pair of ``(min_value, max_value)``.
-
-    ``None`` may be passed as ``min_value`` or ``max_value`` to signify that
-    the input is only bounded above or below.
-
-    Examples
-    --------
-    >>> @expect_strictly_bounded(x=(1, 5))
-    ... def foo(x):
-    ...    return x + 1
-    ...
-    >>> foo(2)
-    3
-    >>> foo(4)
-    5
-    >>> foo(5)  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    Traceback (most recent call last):
-       ...
-    ValueError: ...foo() expected a value exclusively between 1 and 5 for
-    argument 'x', but got 5 instead.
-
-    >>> @expect_strictly_bounded(x=(2, None))
-    ... def foo(x):
-    ...    return x
-    ...
-    >>> foo(100000)
-    100000
-    >>> foo(2)  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    Traceback (most recent call last):
-       ...
-    ValueError: ...foo() expected a value strictly greater than 2 for
-    argument 'x', but got 2 instead.
-
-    >>> @expect_strictly_bounded(x=(None, 5))
-    ... def foo(x):
-    ...    return x
-    ...
-    >>> foo(5)  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    Traceback (most recent call last):
-       ...
-    ValueError: ...foo() expected a value strictly less than 5 for
-    argument 'x', but got 5 instead.
-    """
-
-    def _make_bounded_check(bounds):
-        (lower, upper) = bounds
-        if lower is None:
-
-            def should_fail(value):
-                return value >= upper
-
-            predicate_descr = "strictly less than " + str(upper)
-        elif upper is None:
-
-            def should_fail(value):
-                return value <= lower
-
-            predicate_descr = "strictly greater than " + str(lower)
-        else:
-
-            def should_fail(value):
-                return not (lower < value < upper)
-
-            predicate_descr = "exclusively between %s and %s" % bounds
 
         template = (
             "%(funcname)s() expected a value {predicate}"

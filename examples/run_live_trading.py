@@ -17,6 +17,7 @@ from ziplime.utils.run_algo import run_algorithm
 async def run_live_trading(
         simulation_parameters: SimulationParameters,
         algorithm_file: Path,
+        lime_sdk_credentials_file: str = None,
         bundle_storage_path: str = Path(Path.home(), ".ziplime", "data"),
 
 ):
@@ -48,7 +49,7 @@ async def run_live_trading(
 
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
 
-    missing_data_source = LimeTraderSdkDataSource(lime_sdk_credentials_file=None)
+    missing_data_source = LimeTraderSdkDataSource(lime_sdk_credentials_file=lime_sdk_credentials_file)
 
     return await run_algorithm(
         algorithm_file=str(algorithm_file),
@@ -64,9 +65,11 @@ async def run_live_trading(
 
 
 if __name__ == "__main__":
+    lime_credentials_file = None
+
     exchange_class = LimeTraderSdkExchange(
         name="LIME",
-        lime_sdk_credentials_file=None
+        lime_sdk_credentials_file=lime_credentials_file
     )
 
     calendar = get_calendar("NYSE")
@@ -83,6 +86,7 @@ if __name__ == "__main__":
         exchange=exchange_class,
         bundle_name="limex_us_polars_minute",
     )
-    result = uvloop.run(run_live_trading(simulation_parameters=sim_params, algorithm_file=algorithm_file))
+    result = uvloop.run(run_live_trading(simulation_parameters=sim_params, algorithm_file=algorithm_file,
+                                         lime_sdk_credentials_file=lime_credentials_file))
 
     print(result.head())

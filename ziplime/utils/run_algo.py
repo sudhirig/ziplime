@@ -1,20 +1,14 @@
 import datetime
-
-import click
-import os
 import sys
 
-from exchange_calendars import ExchangeCalendar
-from zipline.utils.paths import data_path
+import structlog
 
-from ziplime.algorithm_live import LiveTradingAlgorithm
-from ziplime.domain.data_frequency import DataFrequency
-from ziplime.finance.blotter.blotter_live import BlotterLive
-from ziplime.finance.blotter.simulation_blotter import SimulationBlotter
-from ziplime.finance.metrics import default_metrics
-from ziplime.gens.brokers.broker import Broker
-from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
-from ziplime.data.data_portal_live import DataPortalLive
+from ziplime.data.services.bundle_data_source import BundleDataSource
+from ziplime.data.services.bundle_registry import BundleRegistry
+from ziplime.data.services.bundle_service import BundleService
+
+from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
+from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.sources.benchmark_source import BenchmarkSource
 
 try:
@@ -25,89 +19,50 @@ try:
     PYGMENTS = True
 except ImportError:
     PYGMENTS = False
-import logging
 
-from ziplime.data import bundles
-from ziplime.data.data_portal import DataPortal
-from zipline.finance import metrics
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
-from zipline.pipeline.data import USEquityPricing
-from zipline.pipeline.loaders import USEquityPricingLoader
+from ziplime.pipeline.data import USEquityPricing
+from ziplime.pipeline.loaders import USEquityPricingLoader
 
 from ziplime.algorithm import TradingAlgorithm, NoBenchmark
 
-log = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
-class _RunAlgoError(click.ClickException, ValueError):
-    """Signal an error that should have a different message if invoked from
-    the cli.
-
-    Parameters
-    ----------
-    pyfunc_msg : str
-        The message that will be shown when called as a python function.
-    cmdline_msg : str, optional
-        The message that will be shown on the command line. If not provided,
-        this will be the same as ``pyfunc_msg`
-    """
-
-    exit_code = 1
-
-    def __init__(self, pyfunc_msg, cmdline_msg=None):
-        if cmdline_msg is None:
-            cmdline_msg = pyfunc_msg
-
-        super(_RunAlgoError, self).__init__(cmdline_msg)
-        self.pyfunc_msg = pyfunc_msg
-
-    def __str__(self):
-        return self.pyfunc_msg
-
-
-# TODO: simplify
-# flake8: noqa: C901
-def run_algorithm(
-        algofile: str,
-        algotext: str,
-        emission_rate: datetime.timedelta,
-        capital_base: float,
-        bundle: str,
-        bundle_timestamp,
-        start_date: datetime.datetime,
-        end_date: datetime.datetime,
-        output,
-        trading_calendar: ExchangeCalendar,
+async def run_algorithm(
+        algorithm_file: str,
         print_algo: bool,
         metrics_set: str,
         custom_loader,
         benchmark_spec,
-        broker: Broker,
-        market_data_provider: AbstractLiveMarketDataProvider,
+        clock: TradingClock,
+        missing_bundle_data_source: BundleDataSource,
+        simulation_params: SimulationParameters,
+        bundle_registry: BundleRegistry,
 ):
     """Run a backtest for the given algorithm.
 
-    This is shared between the cli and :func:`zipline.run_algo`.
+    This is shared between the cli and :func:`ziplime.run_algo`.
     """
-    # benchmark_spec = BenchmarkSpec.from_returns(benchmark_returns)
+    bundle_service = BundleService(bundle_registry=bundle_registry)
 
-    bundle_data = bundles.load(
-        name=bundle,
-        timestamp=bundle_timestamp,
-        frequency=emission_rate,
-    )
-
+    bundle_data = await bundle_service.load_bundle(bundle_name=simulation_params.bundle_name, bundle_version=None,
+                                                   missing_bundle_data_source=missing_bundle_data_source)
     # date parameter validation
-    if not broker and trading_calendar.sessions_distance(start_date, end_date) < 1:
-        raise _RunAlgoError(f"There are no trading days between {start_date.date()} and {end_date.date()}")
+    if simulation_params.trading_calendar.sessions_distance(simulation_params.start_session,
+                                                            simulation_params.end_session) < 1:
+        raise Exception(
+            f"There are no trading days between {simulation_params.start_session} and {simulation_params.end_session}")
 
     benchmark_sid, benchmark_returns = benchmark_spec.resolve(
         asset_repository=bundle_data.asset_repository,
-        start_date=start_date.date(),
-        end_date=end_date.date(),
+        start_date=simulation_params.start_session,
+        end_date=simulation_params.end_session,
     )
 
     if print_algo:
+        with open(algorithm_file, "r") as f:
+            algotext = f.read()
         if PYGMENTS:
             highlight(
                 algotext,
@@ -116,46 +71,10 @@ def run_algorithm(
                 outfile=sys.stdout,
             )
         else:
-            click.echo(algotext)
-
-    first_trading_day = bundle_data.historical_data_reader.first_trading_day
-
-    state_filename = None
-    realtime_bar_target = None
-    # emission_rate = data_frequency
-    if broker:
-        data_portal = DataPortalLive(
-            asset_repository=bundle_data.asset_repository,
-            broker=broker,
-            trading_calendar=trading_calendar,
-            first_trading_day=first_trading_day,
-            historical_data_reader=bundle_data.historical_data_reader,
-            adjustment_reader=bundle_data.adjustment_reader,
-            future_minute_reader=bundle_data.historical_data_reader,
-            future_daily_reader=bundle_data.historical_data_reader,
-            market_data_provider=market_data_provider,
-            fundamental_data_reader=bundle_data.fundamental_data_reader,
-            fields=bundle_data.historical_data_reader.get_fields()
-        )
-        state_filename = f"{data_path(['state'])}"
-        realtime_bar_target = f"{data_path(['realtime'])}"
-        # emission_rate = 'minute'
-    else:
-        data_portal = DataPortal(
-            bundle_data.asset_repository,
-            trading_calendar=trading_calendar,
-            first_trading_day=first_trading_day,
-            historical_data_reader=bundle_data.historical_data_reader,
-            fundamental_data_reader=bundle_data.fundamental_data_reader,
-            adjustment_reader=bundle_data.adjustment_reader,
-            future_minute_reader=bundle_data.historical_data_reader,
-            future_daily_reader=bundle_data.historical_data_reader,
-            fields=bundle_data.historical_data_reader.get_fields()
-        )
+            logger.info(f"\n{algotext}")
 
     pipeline_loader = USEquityPricingLoader.without_fx(
-        bundle_data.historical_data_reader,
-        bundle_data.adjustment_reader,
+        bundle_data,
     )
 
     def choose_loader(column):
@@ -166,20 +85,8 @@ def run_algorithm(
         except KeyError:
             raise ValueError("No PipelineLoader registered for column %s." % column)
 
-    # metrics_set = metrics.load(metrics_set)
-    metrics_set = default_metrics()
-
-    sim_params = SimulationParameters(
-        start_session=start_date,
-        end_session=end_date,
-        trading_calendar=trading_calendar,
-        capital_base=capital_base,
-        emission_rate=emission_rate,
-        data_frequency=emission_rate,
-    )
-
     if benchmark_sid is not None:
-        benchmark_asset = data_portal.asset_repository.retrieve_asset(sid=benchmark_sid)
+        benchmark_asset = bundle_data.asset_repository.retrieve_asset(sid=benchmark_sid)
         benchmark_returns = None
     else:
         benchmark_asset = None
@@ -187,62 +94,27 @@ def run_algorithm(
     benchmark_source = BenchmarkSource(
         benchmark_asset=benchmark_asset,
         benchmark_returns=benchmark_returns,
-        trading_calendar=trading_calendar,
-        sessions=sim_params.sessions,
-        data_portal=data_portal,
-        emission_rate=sim_params.emission_rate,
-        timedelta_period=emission_rate,
+        trading_calendar=simulation_params.trading_calendar,
+        sessions=simulation_params.sessions,
+        bundle_data=bundle_data,
+        emission_rate=simulation_params.emission_rate,
+        timedelta_period=simulation_params.emission_rate,
         benchmark_fields=["close"]
     )
 
-    try:
-        if broker is None:
-            tr = TradingAlgorithm(
-                data_portal=data_portal,
-                get_pipeline_loader=choose_loader,
-                sim_params=sim_params,
-                metrics_set=metrics_set,
-                blotter=SimulationBlotter(),
-                benchmark_source=benchmark_source,
-                algo_filename=algofile,
-                script=algotext
-            )
-        else:
-
-            blotter_live = BlotterLive(data_frequency=emission_rate, broker=broker)
-            tr = LiveTradingAlgorithm(
-                broker=broker,
-                state_filename=state_filename,
-                realtime_bar_target=realtime_bar_target,
-                data_portal=data_portal,
-                get_pipeline_loader=choose_loader,
-                sim_params=sim_params,
-                metrics_set=metrics_set,
-                blotter=blotter_live,
-                benchmark_source=benchmark_source,
-                algo_filename=algofile,
-                script=algotext,
-            )
-        tr.bundle_data = bundle_data
-        tr.fundamental_data_bundle = bundle_data.fundamental_data_reader
-        perf = tr.run()
-    except NoBenchmark:
-        raise _RunAlgoError(
-            (
-                "No ``benchmark_spec`` was provided, and"
-                " ``zipline.api.set_benchmark`` was not called in"
-                " ``initialize``."
-            ),
-            (
-                "Neither '--benchmark-symbol' nor '--benchmark-sid' was"
-                " provided, and ``zipline.api.set_benchmark`` was not called"
-                " in ``initialize``. Did you mean to pass '--no-benchmark'?"
-            ),
-        )
-
-    if output == "-":
-        click.echo(str(perf))
-    elif output != os.devnull:  # make the zipline magic not write any data
-        perf.to_pickle(output)
-
+    tr = TradingAlgorithm(
+        exchange=simulation_params.exchange,
+        bundle_data=bundle_data,
+        get_pipeline_loader=choose_loader,
+        sim_params=simulation_params,
+        metrics_set=metrics_set,
+        blotter=InMemoryBlotter(exchange=simulation_params.exchange, cancel_policy=None),
+        benchmark_source=benchmark_source,
+        algorithm_file=algorithm_file,
+        clock=clock
+    )
+    start_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz)
+    perf = await tr.run()
+    end_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz)
+    logger.info(f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds.")
     return perf

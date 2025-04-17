@@ -1,54 +1,20 @@
-#
-# Copyright 2017 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-from collections import namedtuple, OrderedDict
+import datetime
+from collections import OrderedDict
 
-import logging
 import numpy as np
 import pandas as pd
+import structlog
 
-from zipline.assets import Future
-from zipline.finance.transaction import Transaction
-import zipline.protocol as zp
-from zipline.utils.sentinel import sentinel
+from ziplime.assets.domain.db.futures_contract import FuturesContract
+from ziplime.domain.account import Account
+from ziplime.domain.portfolio import Portfolio
+from ziplime.finance.commission import CommissionModel
 
-from ziplime.domain.order import Order
-from ziplime.finance.domain.position import Position
-from ziplime.finance.finance_ext import (
-    PositionStats,
-    calculate_position_tracker_stats,
-    update_position_last_sale_prices,
-)
-
-from ziplime.assets.domain.asset import Asset
-from ziplime.data.data_portal import DataPortal
-from ziplime.domain.data_frequency import DataFrequency
+from ziplime.assets.domain.db.asset import Asset
+from ziplime.data.domain.bundle_data import BundleData
+from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.position_tracker import PositionTracker
-
-log = logging.getLogger("Performance")
-
-move_to_end = OrderedDict.move_to_end
-
-PeriodStats = namedtuple(
-    "PeriodStats",
-    "net_liquidation gross_leverage net_leverage",
-)
-
-not_overridden = sentinel(
-    "not_overridden",
-    "Mark that an account field has not been overridden",
-)
+from ziplime.finance.domain.transaction import Transaction
 
 
 class Ledger:
@@ -57,9 +23,9 @@ class Ledger:
 
     Attributes
     ----------
-    portfolio : zipline.protocol.Portfolio
+    portfolio : ziplime.protocol.Portfolio
         The updated portfolio being managed.
-    account : zipline.protocol.Account
+    account : ziplime.protocol.Account
         The updated account being managed.
     position_tracker : PositionTracker
         The current set of positions.
@@ -75,19 +41,28 @@ class Ledger:
         hold a value of ``np.nan``.
     """
 
-    def __init__(self, trading_sessions: pd.DatetimeIndex, capital_base: float, data_portal: DataPortal,
-                 data_frequency: DataFrequency):
+    def __init__(self, trading_sessions: pd.DatetimeIndex, capital_base: float, bundle_data: BundleData,
+                 data_frequency: datetime.timedelta):
         if len(trading_sessions):
             start = trading_sessions[0]
         else:
             start = None
-        self._data_portal = data_portal
+        self.bundle_data = bundle_data
 
         # Have some fields of the portfolio changed? This should be accessed
         # through ``self._dirty_portfolio``
         self.__dirty_portfolio = False
-        self._immutable_portfolio = zp.Portfolio(start_date=start, capital_base=capital_base)
-        self._portfolio = zp.MutableView(ob=self._immutable_portfolio)
+        self._portfolio = Portfolio(start_date=start, starting_cash=capital_base,
+                                    portfolio_value=capital_base,
+                                    cash=capital_base,
+                                    cash_flow=0.0,
+                                    pnl=0.0,
+                                    returns=0.0,
+                                    positions_value=0.0,
+                                    positions_exposure=0.0,
+                                    )
+
+        self.logger = structlog.get_logger(__name__)
 
         self.daily_returns_series = pd.Series(
             np.nan,
@@ -104,15 +79,33 @@ class Ledger:
 
         # Have some fields of the account changed?
         self._dirty_account = True
-        self._immutable_account = zp.Account()
-        self._account = zp.MutableView(ob=self._immutable_account)
+        # self._immutable_account =
+        self._account = Account(
+            settled_cash=0.0,
+            accrued_interest=0.0,
+            buying_power=float('inf'),
+            equity_with_loan=0.0,
+            total_positions_value=0.0,
+            total_positions_exposure=0.0,
+            regt_equity=0.0,
+            regt_margin=float('inf'),
+            initial_margin_requirement=0.0,
+            maintenance_margin_requirement=0.0,
+            available_funds=0.0,
+            excess_liquidity=0.0,
+            cushion=0.0,
+            day_trades_remaining=float('inf'),
+            leverage=0.0,
+            net_leverage=0.0,
+            net_liquidation=0.0
+        )
 
-        # The broker blotter can override some fields on the account. This is
+        # The exchange blotter can override some fields on the account. This is
         # way to tangled up at the moment but we aren't fixing it today.
         self._account_overrides = {}
         self._data_frequency = data_frequency
 
-        self.position_tracker = PositionTracker(data_portal=data_portal,
+        self.position_tracker = PositionTracker(bundle_data=bundle_data,
                                                 data_frequency=data_frequency)
 
         self._processed_transactions = {}
@@ -172,7 +165,7 @@ class Ledger:
         # save the daily returns time-series
         self.daily_returns_series.iloc[session_ix] = self.todays_returns
 
-    def sync_last_sale_prices(self, dt: pd.Timestamp, handle_non_market_minutes: bool = False):
+    def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False):
         self.position_tracker.sync_last_sale_prices(
             dt=dt,
             handle_non_market_minutes=handle_non_market_minutes,
@@ -189,16 +182,16 @@ class Ledger:
         p.cash_flow += amount
         p.cash += amount
 
-    def process_transaction(self, transaction):
+    def process_transaction(self, transaction: Transaction):
         """Add a transaction to ledger, updating the current state as needed.
 
         Parameters
         ----------
-        transaction : zp.Transaction
+        transaction : Transaction
             The transaction to execute.
         """
         asset = transaction.asset
-        if isinstance(asset, Future):
+        if isinstance(asset, FuturesContract):
             try:
                 old_price = self._payout_last_sale_prices[asset]
             except KeyError:
@@ -252,7 +245,7 @@ class Ledger:
 
         Parameters
         ----------
-        order : zp.Order
+        order : Order
             The order to record.
         """
         try:
@@ -267,16 +260,16 @@ class Ledger:
         else:
             self._orders_by_id[order.id] = dt_orders[order.id] = order
             # to preserve the order of the orders by modified date
-            move_to_end(dt_orders, order.id, last=True)
+            dt_orders.move_to_end(order.id, last=True)
 
-        move_to_end(self._orders_by_id, order.id, last=True)
+        self._orders_by_id.move_to_end(order.id, last=True)
 
-    def process_commission(self, commission):
+    def process_commission(self, commission: CommissionModel):
         """Process the commission.
 
         Parameters
         ----------
-        commission : zp.Event
+        commission : CommissionModel
             The commission being paid.
         """
         asset = commission["asset"]
@@ -285,7 +278,7 @@ class Ledger:
         self.position_tracker.handle_commission(asset, cost)
         self._cash_flow(-cost)
 
-    def close_position(self, asset: Asset, dt: pd.Timestamp):
+    def close_position(self, asset: Asset, dt: datetime.datetime):
         txn = self.position_tracker.maybe_create_close_position_transaction(
             asset=asset,
             dt=dt,
@@ -307,10 +300,10 @@ class Ledger:
         held_sids = set(position_tracker.positions)
         if held_sids:
             cash_dividends = adjustment_reader.get_dividends_with_ex_date(
-                held_sids, next_session, self._data_portal.asset_repository
+                held_sids, next_session, self.bundle_data.asset_repository
             )
             stock_dividends = adjustment_reader.get_stock_dividends_with_ex_date(
-                held_sids, next_session, self._data_portal.asset_repository
+                held_sids, next_session, self.bundle_data.asset_repository
             )
 
             # Earning a dividend just marks that we need to get paid out on
@@ -342,7 +335,7 @@ class Ledger:
 
         Parameters
         ----------
-        dt : pd.Timestamp or None, optional
+        dt : datetime.datetime or None, optional
             The particular datetime to look up transactions for. If not passed,
             or None is explicitly passed, all of the transactions will be
             returned.
@@ -368,7 +361,7 @@ class Ledger:
 
         Parameters
         ----------
-        dt : pd.Timestamp or None, optional
+        dt : datetime.datetime or None, optional
             The particular datetime to look up order for. If not passed, or
             None is explicitly passed, all of the orders will be returned.
 
@@ -447,7 +440,7 @@ class Ledger:
         the portfolio may have changed.
         """
         self.update_portfolio()
-        return self._immutable_portfolio
+        return self._portfolio
 
     def calculate_period_stats(self):
         position_stats = self.position_tracker.stats
@@ -470,9 +463,9 @@ class Ledger:
 
             # If no attribute is found in the ``_account_overrides`` resort to
             # the following default values. If an attribute is found use the
-            # existing value. For instance, a broker may provide updates to
+            # existing value. For instance, a exchange may provide updates to
             # these attributes. In this case we do not want to over write the
-            # broker values with the default values.
+            # exchange values with the default values.
             account.settled_cash = portfolio.cash
             account.accrued_interest = 0.0
             account.buying_power = np.inf
@@ -506,4 +499,4 @@ class Ledger:
             # the account has been fully synced
             self._dirty_account = False
 
-        return self._immutable_account
+        return self._account

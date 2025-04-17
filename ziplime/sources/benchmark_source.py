@@ -1,25 +1,10 @@
-#
-# Copyright 2018 Quantopian, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import datetime
 
 import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.domain.asset import Asset
-from ziplime.data.data_portal import DataPortal
-from ziplime.domain.data_frequency import DataFrequency
+from ziplime.assets.domain.db.asset import Asset
+from ziplime.data.domain.bundle_data import BundleData
 from ziplime.errors import (
     InvalidBenchmarkAsset,
     BenchmarkAssetNotAvailableTooEarly,
@@ -34,7 +19,7 @@ class BenchmarkSource:
             benchmark_asset: Asset,
             trading_calendar: ExchangeCalendar,
             sessions: pd.DatetimeIndex,
-            data_portal: DataPortal,
+            bundle_data: BundleData,
             emission_rate: datetime.timedelta,
             timedelta_period: datetime.timedelta,
             benchmark_fields: list[str],
@@ -43,7 +28,7 @@ class BenchmarkSource:
         self.benchmark_asset = benchmark_asset
         self.sessions = sessions
         self.emission_rate = emission_rate
-        self.data_portal = data_portal
+        self.bundle_data = bundle_data
         self.timedelta_period = timedelta_period
         self.benchmark_fields = benchmark_fields
         if len(sessions) == 0:
@@ -53,21 +38,21 @@ class BenchmarkSource:
             self._validate_benchmark(benchmark_asset=benchmark_asset)
             self._precalculated_series = self._initialize_precalculated_series(
                 asset=benchmark_asset, trading_calendar=trading_calendar, trading_days=sessions,
-                data_portal=data_portal
+                bundle_data=bundle_data
             )
         elif benchmark_returns is not None:
             all_bars = pl.from_pandas(
                 trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(trading_calendar.tz)
             )
-            self._precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
+            self._precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
                 index_column="date", every=self.timedelta_period
-            ).agg(pl.col("value").sum())
+            ).agg(pl.col("close").sum())
         else:
             raise Exception(
                 "Must provide either benchmark_asset or " "benchmark_returns."
             )
 
-    def get_value(self, dt: pd.Timestamp) -> pd.Series:
+    def get_value(self, dt: datetime.datetime) -> pd.Series:
         """Look up the returns for a given dt.
 
         Parameters
@@ -82,7 +67,7 @@ class BenchmarkSource:
 
         See Also
         --------
-        :class:`zipline.sources.benchmark_source.BenchmarkSource.daily_returns`
+        :class:`ziplime.sources.benchmark_source.BenchmarkSource.daily_returns`
 
         .. warning::
 
@@ -108,14 +93,14 @@ class BenchmarkSource:
 
         See Also
         --------
-        :class:`zipline.sources.benchmark_source.BenchmarkSource.daily_returns`
+        :class:`ziplime.sources.benchmark_source.BenchmarkSource.daily_returns`
 
         .. warning::
 
            This method expects minute inputs if ``emission_rate == 'minute'``
            and session labels when ``emission_rate == 'daily``.
         """
-        return self._precalculated_series.filter(pl.col("date").is_between(start_dt,end_dt))
+        return self._precalculated_series.filter(pl.col("date").is_between(start_dt, end_dt))
 
     def daily_returns(self, start: datetime.datetime, end: datetime.datetime | None = None) -> pd.Series:
         """Returns the daily returns for the given period.
@@ -193,7 +178,7 @@ class BenchmarkSource:
 
     def _initialize_precalculated_series(
             self, asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pd.DatetimeIndex,
-            data_portal: DataPortal
+            bundle_data: BundleData
     ):
         """
         Internal method that pre-calculates the benchmark return series for
@@ -207,7 +192,7 @@ class BenchmarkSource:
 
         trading_days: pd.DateTimeIndex
 
-        data_portal: DataPortal
+        bundle_data: BundleData
 
         Notes
         -----
@@ -234,18 +219,17 @@ class BenchmarkSource:
             trading_calendar.sessions_minutes(start=self.sessions[0], end=self.sessions[-1]).tz_convert(
                 trading_calendar.tz)
         )
-        precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
-            index_column="date", every=self.timedelta_period
-        ).agg(pl.col("value").sum())
+        # precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
+        #     index_column="date", every=self.timedelta_period
+        # ).agg(pl.col("value").sum())
 
-        benchmark_series = data_portal.get_history_window(
-            assets=[asset],
-            end_dt=all_bars[-1],
-            bar_count=len(all_bars) + 1,
-            # frequency=DataFrequency.MINUTE,
-            frequency=self.timedelta_period,
+        benchmark_series = self.bundle_data.get_data_by_limit(
             fields=self.benchmark_fields,
-            ffill=True,
+            limit=len(all_bars) + 1,
+            frequency=self.timedelta_period,
+            end_date=all_bars[-1],
+            assets=[asset],
+            include_end_date=False
         )
         return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))[1:]
         return (
@@ -262,30 +246,28 @@ class BenchmarkSource:
             # last trading day of the simulation, going up to one day
             # before the simulation start day (so that we can get the %
             # change on day 1)
-            benchmark_series = data_portal.get_history_window(
-                assets=[asset],
-                end_dt=trading_days[-1],
-                bar_count=len(trading_days) + 1,
-                # frequency=DataFrequency.DAY,
-                frequency=self.emission_rate.to_timedelta(),
+            benchmark_series = self.bundle_data.get_data_by_limit(
                 fields=["price"],
-                ffill=True,
-            )[asset]
+                limit=len(trading_days) + 1,
+                frequency=self.emission_rate,
+                end_date=trading_days[-1],
+                assets=[asset],
+                include_end_date=False
+            )
 
             returns = benchmark_series.pct_change()[1:]
             return returns, returns
         elif start_date == trading_days[0]:
             # Attempt to handle case where stock data starts on first
             # day, in this case use the open to close return.
-            benchmark_series = data_portal.get_history_window(
-                assets=[asset],
-                end_dt=trading_days[-1],
-                bar_count=len(trading_days),
-                # frequency=DataFrequency.DAY,
-                frequency=self.emission_rate.to_timedelta(),
+            benchmark_series = self.bundle_data.get_data_by_limit(
                 fields=["price"],
-                ffill=True,
-            )[asset]
+                limit=len(trading_days),
+                frequency=self.emission_rate,
+                end_date=trading_days[-1],
+                assets=[asset],
+                include_end_date=False,
+            )
 
             # get a minute history window of the first day
             first_open = data_portal.get_spot_value(

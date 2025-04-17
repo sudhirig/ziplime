@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ziplime"
-version = "0.1.24"
+version = "1.0.0"
 description = ""
 authors = ["Ziplime"]
 readme = "README.md"
@@ -8,7 +8,6 @@ packages = [{include = "ziplime"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
-zipline-reloaded = "3.1"
 dask = "^2024.9.1"
 setuptools = "^72.1.0"
 lime-trader-sdk = "^0.3.9"
@@ -19,6 +18,23 @@ polars = "^1.24.0"
 pyarrow = "^19.0.1"
 orjson = "^3.10.15"
 structlog = "^25.1.0"
+aiofiles = "^24.1.0"
+asyncclick = "^8.1.8"
+sqlalchemy = "^2.0.40"
+aiosqlite = "^0.21.0"
+pydantic = "^2.11.2"
+uvloop = "^0.21.0"
+aiocache = "^0.12.3"
+exchange-calendars = "^4.10"
+alembic = "^1.15.2"
+iso3166 = "^2.1.1"
+scipy = "^1.15.2"
+numexpr = "^2.10.2"
+iso4217 = "^1.12.20240625"
+h5py = "^3.13.0"
+networkx = "^3.4.2"
+empyrical-reloaded = "^0.5.11"
+greenlet = "^3.1.1"
 
 [tool.poetry.scripts]
 ziplime = "ziplime.__main__:main"

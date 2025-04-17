@@ -3,7 +3,7 @@ from math import sqrt
 import numpy as np
 import pandas as pd
 
-from ziplime.assets.domain.future import Future
+from ziplime.assets.domain.db.futures_contract import FuturesContract
 
 
 def update_position_last_sale_prices(positions, get_price, dt):
@@ -15,7 +15,7 @@ def update_position_last_sale_prices(positions, get_price, dt):
         The positions to update.
     get_price : callable[Asset, float]
         The function to retrieve the price for the asset.
-    dt : pd.Timestamp
+    dt : datetime.datetime
         The dt to set as the last sale date if the price is not nan.
     """
 
@@ -204,7 +204,7 @@ def calculate_position_tracker_stats(positions, stats):
         # through every single position multiple times.
         exposure = position.amount * position.last_sale_price
 
-        if type(position.asset) is Future:
+        if type(position.asset) is FuturesContract:
             # Futures don't have an inherent position value.
             value = 0
 
@@ -283,7 +283,11 @@ def minute_annual_volatility(date_labels,
 
             # variance /= day_ix  # day_count - 1 for ddof=1
             variance = variance/day_ix
-
-        out[ix] = sqrt(variance) * annualization_factor
+        print(ix, sqrt(variance) * annualization_factor)
+        res = sqrt(variance) * annualization_factor
+        if np.isnan(res):
+            out[ix] = 0
+        else:
+            out[ix] = res
 
     return out

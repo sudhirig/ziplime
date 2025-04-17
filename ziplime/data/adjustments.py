@@ -1,717 +1,308 @@
-import logging
-import sqlite3
-from collections import namedtuple
-from errno import ENOENT
-from os import remove
+#
+# Copyright 2015 Quantopian, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import numpy as np
+from itertools import chain
+
 import pandas as pd
-from numpy import integer as any_integer
-
-from zipline.utils.functional import keysorted
-from zipline.utils.input_validation import preprocess
-from zipline.utils.numpy_utils import (
-    datetime64ns_dtype,
-    float64_dtype,
-    int64_dtype,
-    uint32_dtype,
-    uint64_dtype,
+from numpy import (
+    int64,
+    uint32,
+    zeros,
 )
-from zipline.utils.pandas_utils import empty_dataframe
-from zipline.utils.sqlite_utils import coerce_string_to_conn, group_into_chunks
+from pandas import Timestamp
 
-from zipline.data._adjustments import load_adjustments_from_sqlite
+from ziplime.lib.adjustment import Float64Multiply
 
-log = logging.getLogger(__name__)
+from ziplime.utils.pandas_utils import timedelta_to_integral_seconds
+from ziplime.utils.sqlite_utils import SQLITE_MAX_VARIABLE_NUMBER
 
-SQLITE_ADJUSTMENT_TABLENAMES = frozenset(["splits", "dividends", "mergers"])
+_SID_QUERY_TEMPLATE = """
+SELECT DISTINCT sid FROM {0}
+WHERE effective_date >= ? AND effective_date <= ?
+"""
+SID_QUERIES = {
+    tablename: _SID_QUERY_TEMPLATE.format(tablename)
+    for tablename in ('splits', 'dividends', 'mergers')
+}
 
-UNPAID_QUERY_TEMPLATE = """
-SELECT sid, amount, pay_date from dividend_payouts
-WHERE ex_date=? AND sid IN ({0})
+ADJ_QUERY_TEMPLATE = """
+SELECT sid, ratio, effective_date
+FROM {0}
+WHERE sid IN ({1}) AND effective_date >= {2} AND effective_date <= {3}
 """
 
-Dividend = namedtuple("Dividend", ["asset", "amount", "pay_date"])
-
-UNPAID_STOCK_DIVIDEND_QUERY_TEMPLATE = """
-SELECT sid, payment_sid, ratio, pay_date from stock_dividend_payouts
-WHERE ex_date=? AND sid IN ({0})
-"""
-
-StockDividend = namedtuple(
-    "StockDividend",
-    ["asset", "payment_asset", "ratio", "pay_date"],
-)
-
-SQLITE_ADJUSTMENT_COLUMN_DTYPES = {
-    "effective_date": any_integer,
-    "ratio": float64_dtype,
-    "sid": any_integer,
-}
-
-SQLITE_DIVIDEND_PAYOUT_COLUMN_DTYPES = {
-    "sid": any_integer,
-    "ex_date": any_integer,
-    "declared_date": any_integer,
-    "record_date": any_integer,
-    "pay_date": any_integer,
-    "amount": float,
-}
-
-SQLITE_STOCK_DIVIDEND_PAYOUT_COLUMN_DTYPES = {
-    "sid": any_integer,
-    "ex_date": any_integer,
-    "declared_date": any_integer,
-    "record_date": any_integer,
-    "pay_date": any_integer,
-    "payment_sid": any_integer,
-    "ratio": float,
-}
+EPOCH = Timestamp(0, tz='UTC')
 
 
-def specialize_any_integer(d):
-    out = {}
-    for k, v in d.items():
-        if v is any_integer:
-            out[k] = int64_dtype
-        else:
-            out[k] = v
+def _get_sids_from_table(db,
+                         tablename: str,
+                         start_date: int,
+                         end_date: int) -> set:
+    """Get the unique sids for all adjustments between start_date and end_date
+    from table `tablename`.
+
+    Parameters
+    ----------
+    db : sqlite3.connection
+    tablename : str
+    start_date : int (seconds since epoch)
+    end_date : int (seconds since epoch)
+
+    Returns
+    -------
+    sids : set
+        Set of sets
+    """
+
+    cursor = db.execute(
+        SID_QUERIES[tablename],
+        (start_date, end_date),
+    )
+    out = set()
+    for result in cursor.fetchall():
+        out.add(result[0])
     return out
 
 
-class SQLiteAdjustmentReader:
-    """Loads adjustments based on corporate actions from a SQLite database.
+def _get_split_sids(db, start_date: int, end_date: int) -> set:
+    return _get_sids_from_table(db, 'splits', start_date, end_date)
 
-    Expects data written in the format output by `SQLiteAdjustmentWriter`.
+
+def _get_merger_sids(db, start_date: int, end_date: int) -> set:
+    return _get_sids_from_table(db, 'mergers', start_date, end_date)
+
+
+def _get_dividend_sids(db, start_date: int, end_date: int) -> set:
+    return _get_sids_from_table(db, 'dividends', start_date, end_date)
+
+
+def _adjustments(adjustments_db,
+                 split_sids: set,
+                 merger_sids: set,
+                 dividends_sids: set,
+                 start_date: int,
+                 end_date: int,
+                 assets: pd.Index):
+    c = adjustments_db.cursor()
+
+    splits_to_query = [str(a) for a in assets if a in split_sids]
+    splits_results = []
+    while splits_to_query:
+        query_len = min(len(splits_to_query), SQLITE_MAX_VARIABLE_NUMBER)
+        query_assets = splits_to_query[:query_len]
+        t = [str(a) for a in query_assets]
+        statement = ADJ_QUERY_TEMPLATE.format(
+            'splits',
+            ",".join(['?' for _ in query_assets]),
+            start_date,
+            end_date,
+        )
+        c.execute(statement, t)
+        splits_to_query = splits_to_query[query_len:]
+        splits_results.extend(c.fetchall())
+
+    mergers_to_query = [str(a) for a in assets if a in merger_sids]
+    mergers_results = []
+    while mergers_to_query:
+        query_len = min(len(mergers_to_query), SQLITE_MAX_VARIABLE_NUMBER)
+        query_assets = mergers_to_query[:query_len]
+        t = [str(a) for a in query_assets]
+        statement = ADJ_QUERY_TEMPLATE.format(
+            'mergers',
+            ",".join(['?' for _ in query_assets]),
+            start_date,
+            end_date,
+        )
+        c.execute(statement, t)
+        mergers_to_query = mergers_to_query[query_len:]
+        mergers_results.extend(c.fetchall())
+
+    dividends_to_query = [str(a) for a in assets if a in dividends_sids]
+    dividends_results = []
+    while dividends_to_query:
+        query_len = min(len(dividends_to_query), SQLITE_MAX_VARIABLE_NUMBER)
+        query_assets = dividends_to_query[:query_len]
+        t = [str(a) for a in query_assets]
+        statement = ADJ_QUERY_TEMPLATE.format(
+            'dividends',
+            ",".join(['?' for _ in query_assets]),
+            start_date,
+            end_date,
+        )
+        c.execute(statement, t)
+        dividends_to_query = dividends_to_query[query_len:]
+        dividends_results.extend(c.fetchall())
+
+    return splits_results, mergers_results, dividends_results
+
+
+def load_adjustments_from_sqlite(adjustments_db,
+                                 dates: pd.DatetimeIndex,
+                                 assets: pd.Index,
+                                 should_include_splits: bool,
+                                 should_include_mergers: bool,
+                                 should_include_dividends: bool,
+                                 adjustment_type: str):
+    """Load a dictionary of Adjustment objects from adjustments_db.
 
     Parameters
     ----------
-    conn : str or sqlite3.Connection
-        Connection from which to load data.
+    adjustments_db : sqlite3.Connection
+        Connection to a sqlite3 table in the format written by
+        SQLiteAdjustmentWriter.
+    dates : pd.DatetimeIndex
+        Dates for which adjustments are needed.
+    assets : pd.Int64Index
+        Assets for which adjustments are needed.
+    should_include_splits : bool
+        Whether split adjustments should be included.
+    should_include_mergers : bool
+        Whether merger adjustments should be included.
+    should_include_dividends : bool
+        Whether dividend adjustments should be included.
+    adjustment_type : str
+        Whether price adjustments, volume adjustments, or both, should be
+        included in the output.
 
-    See Also
-    --------
-    :class:`zipline.data.adjustments.SQLiteAdjustmentWriter`
+    Returns
+    -------
+    adjustments : dict[str -> dict[int -> Adjustment]]
+        A dictionary containing price and/or volume adjustment mappings from
+        index to adjustment objects to apply at that index.
     """
 
-    _datetime_int_cols = {
-        "splits": ("effective_date",),
-        "mergers": ("effective_date",),
-        "dividends": ("effective_date",),
-        "dividend_payouts": (
-            "declared_date",
-            "ex_date",
-            "pay_date",
-            "record_date",
-        ),
-        "stock_dividend_payouts": (
-            "declared_date",
-            "ex_date",
-            "pay_date",
-            "record_date",
-        ),
-    }
-    _raw_table_dtypes = {
-        # We use any_integer above to be lenient in accepting different dtypes
-        # from users. For our outputs, however, we always want to return the
-        # same types, and any_integer turns into int32 on some numpy windows
-        # builds, so specify int64 explicitly here.
-        "splits": specialize_any_integer(SQLITE_ADJUSTMENT_COLUMN_DTYPES),
-        "mergers": specialize_any_integer(SQLITE_ADJUSTMENT_COLUMN_DTYPES),
-        "dividends": specialize_any_integer(SQLITE_ADJUSTMENT_COLUMN_DTYPES),
-        "dividend_payouts": specialize_any_integer(
-            SQLITE_DIVIDEND_PAYOUT_COLUMN_DTYPES,
-        ),
-        "stock_dividend_payouts": specialize_any_integer(
-            SQLITE_STOCK_DIVIDEND_PAYOUT_COLUMN_DTYPES,
-        ),
-    }
+    if not (adjustment_type == 'price' or
+            adjustment_type == 'volume' or
+            adjustment_type == 'all'):
+        raise ValueError(
+            "%s is not a valid adjustment type.\n"
+            "Valid adjustment types are 'price', 'volume', and 'all'.\n" % (
+                adjustment_type,
+            )
+        )
 
-    @preprocess(conn=coerce_string_to_conn(require_exists=True))
-    def __init__(self, conn):
-        self.conn = conn
+    should_include_price_adjustments = bool(
+        adjustment_type == 'all' or adjustment_type == 'price'
+    )
+    should_include_volume_adjustments = bool(
+        adjustment_type == 'all' or adjustment_type == 'volume'
+    )
 
-    def __enter__(self):
-        return self
+    if not should_include_price_adjustments:
+        should_include_mergers = False
+        should_include_dividends = False
 
-    def __exit__(self, *exc_info):
-        self.close()
+    start_date = timedelta_to_integral_seconds(dates[0] - EPOCH)
+    end_date = timedelta_to_integral_seconds(dates[-1] - EPOCH)
 
-    def close(self):
-        return self.conn.close()
+    if should_include_splits:
+        split_sids = _get_split_sids(
+            adjustments_db,
+            start_date,
+            end_date,
+        )
+    else:
+        split_sids = set()
 
-    def load_adjustments(
-        self,
-        dates,
+    if should_include_mergers:
+        merger_sids = _get_merger_sids(
+            adjustments_db,
+            start_date,
+            end_date,
+        )
+    else:
+        merger_sids = set()
+
+    if should_include_dividends:
+        dividend_sids = _get_dividend_sids(
+            adjustments_db,
+            start_date,
+            end_date,
+        )
+    else:
+        dividend_sids = set()
+
+    splits, mergers, dividends = _adjustments(
+        adjustments_db,
+        split_sids,
+        merger_sids,
+        dividend_sids,
+        start_date,
+        end_date,
         assets,
-        should_include_splits,
-        should_include_mergers,
-        should_include_dividends,
-        adjustment_type,
-    ):
-        """Load collection of Adjustment objects from underlying adjustments db.
+    )
 
-        Parameters
-        ----------
-        dates : pd.DatetimeIndex
-            Dates for which adjustments are needed.
-        assets : pd.Int64Index
-            Assets for which adjustments are needed.
-        should_include_splits : bool
-            Whether split adjustments should be included.
-        should_include_mergers : bool
-            Whether merger adjustments should be included.
-        should_include_dividends : bool
-            Whether dividend adjustments should be included.
-        adjustment_type : str
-            Whether price adjustments, volume adjustments, or both, should be
-            included in the output.
+    price_adjustments = {}
+    volume_adjustments = {}
+    result = {}
+    asset_ixs = {}  # Cache sid lookups here.
+    date_ixs = {}
 
-        Returns
-        -------
-        adjustments : dict[str -> dict[int -> Adjustment]]
-            A dictionary containing price and/or volume adjustment mappings
-            from index to adjustment objects to apply at that index.
-        """
-        dates = dates.tz_localize("UTC")
-        return load_adjustments_from_sqlite(
-            self.conn,
-            dates,
-            assets,
-            should_include_splits,
-            should_include_mergers,
-            should_include_dividends,
-            adjustment_type,
-        )
+    _dates_seconds = \
+        dates.values.astype('datetime64[s]').view(int64)
 
-    def load_pricing_adjustments(self, columns, dates, assets):
-        if "volume" not in set(columns):
-            adjustment_type = "price"
-        elif len(set(columns)) == 1:
-            adjustment_type = "volume"
-        else:
-            adjustment_type = "all"
+    # Pre-populate date index cache.
+    for i, dt in enumerate(_dates_seconds):
+        date_ixs[dt] = i
 
-        adjustments = self.load_adjustments(
-            dates,
-            assets,
-            should_include_splits=True,
-            should_include_mergers=True,
-            should_include_dividends=True,
-            adjustment_type=adjustment_type,
-        )
-        price_adjustments = adjustments.get("price")
-        volume_adjustments = adjustments.get("volume")
+    # splits affect prices and volumes, volumes is the inverse
+    for sid, ratio, eff_date in splits:
+        if eff_date < start_date:
+            continue
 
-        return [
-            volume_adjustments if column == "volume" else price_adjustments
-            for column in columns
-        ]
+        date_loc = _lookup_dt(date_ixs, eff_date, _dates_seconds)
 
-    def get_adjustments_for_sid(self, table_name, sid):
-        t = (sid,)
-        c = self.conn.cursor()
-        adjustments_for_sid = c.execute(
-            "SELECT effective_date, ratio FROM %s WHERE sid = ?" % table_name, t
-        ).fetchall()
-        c.close()
+        if sid not in asset_ixs:
+            asset_ixs[sid] = assets.get_loc(sid)
+        asset_ix = asset_ixs[sid]
 
-        return [
-            [pd.Timestamp(adjustment[0], unit="s"), adjustment[1]]
-            for adjustment in adjustments_for_sid
-        ]
+        if should_include_price_adjustments:
+            price_adj = Float64Multiply(0, date_loc, asset_ix, asset_ix, ratio)
+            price_adjustments.setdefault(date_loc, []).append(price_adj)
 
-    def get_dividends_with_ex_date(self, assets, date, asset_finder):
-        # seconds = date.value / int(1e9)
-        c = self.conn.cursor()
-
-        divs = []
-        for chunk in group_into_chunks(assets):
-            query = UNPAID_QUERY_TEMPLATE.format(",".join(["?" for _ in chunk]))
-            t = (date,) + tuple(map(lambda x: int(x), chunk))
-
-            c.execute(query, t)
-
-            rows = c.fetchall()
-            for row in rows:
-                div = Dividend(
-                    asset_finder.retrieve_asset(row[0]),
-                    row[1],
-                    pd.Timestamp(row[2], unit="s", tz="UTC"),
-                )
-                divs.append(div)
-        c.close()
-
-        return divs
-
-    def get_stock_dividends_with_ex_date(self, assets, date, asset_finder):
-        # seconds = date.value / int(1e9)
-        c = self.conn.cursor()
-
-        stock_divs = []
-        for chunk in group_into_chunks(assets):
-            query = UNPAID_STOCK_DIVIDEND_QUERY_TEMPLATE.format(
-                ",".join(["?" for _ in chunk])
+        if should_include_volume_adjustments:
+            volume_adj = Float64Multiply(
+                0, date_loc, asset_ix, asset_ix, 1.0 / ratio
             )
-            t = (date,) + tuple(map(lambda x: int(x), chunk))
+            volume_adjustments.setdefault(date_loc, []).append(volume_adj)
 
-            c.execute(query, t)
+    # mergers and dividends affect prices only
+    for sid, ratio, eff_date in chain(mergers, dividends):
+        if eff_date < start_date:
+            continue
 
-            rows = c.fetchall()
+        date_loc = _lookup_dt(date_ixs, eff_date, _dates_seconds)
 
-            for row in rows:
-                stock_div = StockDividend(
-                    asset_finder.retrieve_asset(row[0]),  # asset
-                    asset_finder.retrieve_asset(row[1]),  # payment_asset
-                    row[2],
-                    pd.Timestamp(row[3], unit="s", tz="UTC"),
-                )
-                stock_divs.append(stock_div)
-        c.close()
+        if sid not in asset_ixs:
+            asset_ixs[sid] = assets.get_loc(sid)
+        asset_ix = asset_ixs[sid]
 
-        return stock_divs
+        price_adj = Float64Multiply(0, date_loc, asset_ix, asset_ix, ratio)
+        price_adjustments.setdefault(date_loc, []).append(price_adj)
 
-    def unpack_db_to_component_dfs(self, convert_dates=False):
-        """Returns the set of known tables in the adjustments file in DataFrame
-        form.
+    if should_include_price_adjustments:
+        result['price'] = price_adjustments
+    if should_include_volume_adjustments:
+        result['volume'] = volume_adjustments
 
-        Parameters
-        ----------
-        convert_dates : bool, optional
-            By default, dates are returned in seconds since EPOCH. If
-            convert_dates is True, all ints in date columns will be converted
-            to datetimes.
-
-        Returns
-        -------
-        dfs : dict{str->DataFrame}
-            Dictionary which maps table name to the corresponding DataFrame
-            version of the table, where all date columns have been coerced back
-            from int to datetime.
-        """
-        return {
-            t_name: self.get_df_from_table(t_name, convert_dates)
-            for t_name in self._datetime_int_cols
-        }
-
-    def get_df_from_table(self, table_name, convert_dates=False):
-        try:
-            date_cols = self._datetime_int_cols[table_name]
-        except KeyError as exc:
-            raise ValueError(
-                f"Requested table {table_name} not found.\n"
-                f"Available tables: {self._datetime_int_cols.keys()}\n"
-            ) from exc
-
-        # Dates are stored in second resolution as ints in adj.db tables.
-        kwargs = (
-            # {"parse_dates": {col: {"unit": "s", "utc": True} for col in date_cols}}
-            {"parse_dates": {col: {"unit": "s"} for col in date_cols}}
-            if convert_dates
-            else {}
-        )
-
-        result = pd.read_sql(
-            f"select * from {table_name}",
-            self.conn,
-            index_col="index",
-            **kwargs,
-        )
-        dtypes = self._df_dtypes(table_name, convert_dates)
-
-        if not len(result):
-            return empty_dataframe(*keysorted(dtypes))
-
-        result.rename_axis(None, inplace=True)
-        result = result[sorted(dtypes)]  # ensure expected order of columns
-        return result
-
-    def _df_dtypes(self, table_name, convert_dates):
-        """Get dtypes to use when unpacking sqlite tables as dataframes."""
-        out = self._raw_table_dtypes[table_name]
-        if convert_dates:
-            out = out.copy()
-            for date_column in self._datetime_int_cols[table_name]:
-                out[date_column] = datetime64ns_dtype
-
-        return out
+    return result
 
 
-class SQLiteAdjustmentWriter:
-    """Writer for data to be read by SQLiteAdjustmentReader
-
-    Parameters
-    ----------
-    conn_or_path : str or sqlite3.Connection
-        A handle to the target sqlite database.
-    equity_daily_bar_reader : SessionBarReader
-        Daily bar reader to use for dividend writes.
-    overwrite : bool, optional, default=False
-        If True and conn_or_path is a string, remove any existing files at the
-        given path before connecting.
-
-    See Also
-    --------
-    zipline.data.adjustments.SQLiteAdjustmentReader
-    """
-
-    def __init__(self, conn_or_path, equity_daily_bar_reader, overwrite=False):
-        if isinstance(conn_or_path, sqlite3.Connection):
-            self.conn = conn_or_path
-        elif isinstance(conn_or_path, str):
-            if overwrite:
-                try:
-                    remove(conn_or_path)
-                except OSError as e:
-                    if e.errno != ENOENT:
-                        raise
-            self.conn = sqlite3.connect(conn_or_path)
-            self.uri = conn_or_path
-        else:
-            raise TypeError("Unknown connection type %s" % type(conn_or_path))
-
-        self._equity_daily_bar_reader = equity_daily_bar_reader
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc_info):
-        self.close()
-
-    def close(self):
-        self.conn.close()
-
-    def _write(self, tablename, expected_dtypes, frame):
-        if frame is None or frame.empty:
-            # keeping the dtypes correct for empty frames is not easy
-            # frame = pd.DataFrame(
-            #     np.array([], dtype=list(expected_dtypes.items())),
-            # )
-            frame = pd.DataFrame(expected_dtypes, index=[])
-        else:
-            if frozenset(frame.columns) != frozenset(expected_dtypes):
-                raise ValueError(
-                    "Unexpected frame columns:\n"
-                    "Expected Columns: %s\n"
-                    "Received Columns: %s"
-                    % (
-                        set(expected_dtypes),
-                        frame.columns.tolist(),
-                    )
-                )
-
-            actual_dtypes = frame.dtypes
-            for colname, expected in expected_dtypes.items():
-                actual = actual_dtypes[colname]
-                if not np.issubdtype(actual, expected):
-                    raise TypeError(
-                        "Expected data of type {expected} for column"
-                        " '{colname}', but got '{actual}'.".format(
-                            expected=expected,
-                            colname=colname,
-                            actual=actual,
-                        ),
-                    )
-
-        frame.to_sql(
-            tablename,
-            self.conn,
-            if_exists="append",
-            chunksize=50000,
-        )
-
-    def write_frame(self, tablename, frame):
-        if tablename not in SQLITE_ADJUSTMENT_TABLENAMES:
-            raise ValueError(
-                f"Adjustment table {tablename} not in {SQLITE_ADJUSTMENT_TABLENAMES}"
-            )
-        if not (frame is None or frame.empty):
-            frame = frame.copy()
-            frame["effective_date"] = (
-                frame["effective_date"]
-                .values.astype(
-                    "datetime64[s]",
-                )
-                .astype("int64")
-            )
-        return self._write(
-            tablename,
-            SQLITE_ADJUSTMENT_COLUMN_DTYPES,
-            frame,
-        )
-
-    def write_dividend_payouts(self, frame):
-        """Write dividend payout data to SQLite table `dividend_payouts`."""
-        return self._write(
-            "dividend_payouts",
-            SQLITE_DIVIDEND_PAYOUT_COLUMN_DTYPES,
-            frame,
-        )
-
-    def write_stock_dividend_payouts(self, frame):
-        return self._write(
-            "stock_dividend_payouts",
-            SQLITE_STOCK_DIVIDEND_PAYOUT_COLUMN_DTYPES,
-            frame,
-        )
-
-    def calc_dividend_ratios(self, dividends):
-        """Calculate the ratios to apply to equities when looking back at pricing
-        history so that the price is smoothed over the ex_date, when the market
-        adjusts to the change in equity value due to upcoming dividend.
-
-        Returns
-        -------
-        DataFrame
-            A frame in the same format as splits and mergers, with keys
-            - sid, the id of the equity
-            - effective_date, the date in seconds on which to apply the ratio.
-            - ratio, the ratio to apply to backwards looking pricing data.
-        """
-        if dividends is None or dividends.empty:
-            return pd.DataFrame(
-                np.array(
-                    [],
-                    dtype=[
-                        ("sid", uint64_dtype),
-                        ("effective_date", uint32_dtype),
-                        ("ratio", float64_dtype),
-                    ],
-                )
-            )
-
-        pricing_reader = self._equity_daily_bar_reader
-        input_sids = dividends.sid.values
-        unique_sids, sids_ix = np.unique(input_sids, return_inverse=True)
-        dates = pricing_reader.sessions.values
-
-        (close,) = pricing_reader.load_raw_arrays(
-            ["close"],
-            pd.Timestamp(dates[0]),
-            pd.Timestamp(dates[-1]),
-            unique_sids,
-        )
-        date_ix = np.searchsorted(dates, dividends.ex_date.values)
-        mask = date_ix > 0
-
-        date_ix = date_ix[mask]
-        sids_ix = sids_ix[mask]
-        input_dates = dividends.ex_date.values[mask]
-
-        # subtract one day to get the close on the day prior to the merger
-        previous_close = close[date_ix - 1, sids_ix]
-        input_sids = input_sids[mask]
-
-        amount = dividends.amount.values[mask]
-        ratio = 1.0 - amount / previous_close
-
-        non_nan_ratio_mask = ~np.isnan(ratio)
-        for ix in np.flatnonzero(~non_nan_ratio_mask):
-            log.warning(
-                "Couldn't compute ratio for dividend"
-                " sid=%(sid)s, ex_date=%(ex_date)s, amount=%(amount).3f",
-                {
-                    "sid": input_sids[ix],
-                    "ex_date": pd.Timestamp(input_dates[ix]).strftime("%Y-%m-%d"),
-                    "amount": amount[ix],
-                },
-            )
-
-        positive_ratio_mask = ratio > 0
-        for ix in np.flatnonzero(~positive_ratio_mask & non_nan_ratio_mask):
-            log.warning(
-                "Dividend ratio <= 0 for dividend"
-                " sid=%(sid)s, ex_date=%(ex_date)s, amount=%(amount).3f",
-                {
-                    "sid": input_sids[ix],
-                    "ex_date": pd.Timestamp(input_dates[ix]).strftime("%Y-%m-%d"),
-                    "amount": amount[ix],
-                },
-            )
-
-        valid_ratio_mask = non_nan_ratio_mask & positive_ratio_mask
-        return pd.DataFrame(
-            {
-                "sid": input_sids[valid_ratio_mask],
-                "effective_date": input_dates[valid_ratio_mask],
-                "ratio": ratio[valid_ratio_mask],
-            }
-        )
-
-    def _write_dividends(self, dividends):
-        if dividends is None:
-            dividend_payouts = None
-        else:
-            dividend_payouts = dividends.copy()
-            # TODO: Check if that's the right place for this fix for pandas > 1.2.5
-            dividend_payouts.fillna(np.datetime64("NaT"), inplace=True)
-            dividend_payouts["ex_date"] = (
-                dividend_payouts["ex_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-            dividend_payouts["record_date"] = (
-                dividend_payouts["record_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-            dividend_payouts["declared_date"] = (
-                dividend_payouts["declared_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-            dividend_payouts["pay_date"] = (
-                dividend_payouts["pay_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-
-        self.write_dividend_payouts(dividend_payouts)
-
-    def _write_stock_dividends(self, stock_dividends):
-        if stock_dividends is None:
-            stock_dividend_payouts = None
-        else:
-            stock_dividend_payouts = stock_dividends.copy()
-            stock_dividend_payouts["ex_date"] = (
-                stock_dividend_payouts["ex_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-            stock_dividend_payouts["record_date"] = (
-                stock_dividend_payouts["record_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-            stock_dividend_payouts["declared_date"] = (
-                stock_dividend_payouts["declared_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-            stock_dividend_payouts["pay_date"] = (
-                stock_dividend_payouts["pay_date"]
-                .values.astype("datetime64[s]")
-                .astype(int64_dtype)
-            )
-        self.write_stock_dividend_payouts(stock_dividend_payouts)
-
-    def write_dividend_data(self, dividends, stock_dividends=None):
-        """Write both dividend payouts and the derived price adjustment ratios."""
-
-        # First write the dividend payouts.
-        self._write_dividends(dividends)
-        self._write_stock_dividends(stock_dividends)
-
-        # Second from the dividend payouts, calculate ratios.
-        dividend_ratios = self.calc_dividend_ratios(dividends)
-        self.write_frame("dividends", dividend_ratios)
-
-    def write(self, splits=None, mergers=None, dividends=None, stock_dividends=None):
-        """Writes data to a SQLite file to be read by SQLiteAdjustmentReader.
-
-        Parameters
-        ----------
-        splits : pandas.DataFrame, optional
-            Dataframe containing split data. The format of this dataframe is:
-              effective_date : int
-                  The date, represented as seconds since Unix epoch, on which
-                  the adjustment should be applied.
-              ratio : float
-                  A value to apply to all data earlier than the effective date.
-                  For open, high, low, and close those values are multiplied by
-                  the ratio. Volume is divided by this value.
-              sid : int
-                  The asset id associated with this adjustment.
-        mergers : pandas.DataFrame, optional
-            DataFrame containing merger data. The format of this dataframe is:
-              effective_date : int
-                  The date, represented as seconds since Unix epoch, on which
-                  the adjustment should be applied.
-              ratio : float
-                  A value to apply to all data earlier than the effective date.
-                  For open, high, low, and close those values are multiplied by
-                  the ratio. Volume is unaffected.
-              sid : int
-                  The asset id associated with this adjustment.
-        dividends : pandas.DataFrame, optional
-            DataFrame containing dividend data. The format of the dataframe is:
-              sid : int
-                  The asset id associated with this adjustment.
-              ex_date : datetime64
-                  The date on which an equity must be held to be eligible to
-                  receive payment.
-              declared_date : datetime64
-                  The date on which the dividend is announced to the public.
-              pay_date : datetime64
-                  The date on which the dividend is distributed.
-              record_date : datetime64
-                  The date on which the stock ownership is checked to determine
-                  distribution of dividends.
-              amount : float
-                  The cash amount paid for each share.
-
-            Dividend ratios are calculated as:
-            ``1.0 - (dividend_value / "close on day prior to ex_date")``
-        stock_dividends : pandas.DataFrame, optional
-            DataFrame containing stock dividend data. The format of the
-            dataframe is:
-              sid : int
-                  The asset id associated with this adjustment.
-              ex_date : datetime64
-                  The date on which an equity must be held to be eligible to
-                  receive payment.
-              declared_date : datetime64
-                  The date on which the dividend is announced to the public.
-              pay_date : datetime64
-                  The date on which the dividend is distributed.
-              record_date : datetime64
-                  The date on which the stock ownership is checked to determine
-                  distribution of dividends.
-              payment_sid : int
-                  The asset id of the shares that should be paid instead of
-                  cash.
-              ratio : float
-                  The ratio of currently held shares in the held sid that
-                  should be paid with new shares of the payment_sid.
-
-        See Also
-        --------
-        zipline.data.adjustments.SQLiteAdjustmentReader
-        """
-        self.write_frame("splits", splits)
-        self.write_frame("mergers", mergers)
-        self.write_dividend_data(dividends, stock_dividends)
-        # Use IF NOT EXISTS here to allow multiple writes if desired.
-        self.conn.execute("CREATE INDEX IF NOT EXISTS splits_sids " "ON splits(sid)")
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS splits_effective_date "
-            "ON splits(effective_date)"
-        )
-        self.conn.execute("CREATE INDEX IF NOT EXISTS mergers_sids " "ON mergers(sid)")
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS mergers_effective_date "
-            "ON mergers(effective_date)"
-        )
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS dividends_sid " "ON dividends(sid)"
-        )
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS dividends_effective_date "
-            "ON dividends(effective_date)"
-        )
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS dividend_payouts_sid "
-            "ON dividend_payouts(sid)"
-        )
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS dividends_payouts_ex_date "
-            "ON dividend_payouts(ex_date)"
-        )
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS stock_dividend_payouts_sid "
-            "ON stock_dividend_payouts(sid)"
-        )
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS stock_dividends_payouts_ex_date "
-            "ON stock_dividend_payouts(ex_date)"
-        )
+def _lookup_dt(dt_cache: dict,
+               dt: int,
+               fallback):
+    if dt not in dt_cache:
+        dt_cache[dt] = fallback.searchsorted(dt, side='right')
+    return dt_cache[dt]

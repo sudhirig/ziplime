@@ -10,7 +10,6 @@ from ziplime.errors import IncompatibleTerms
 from ziplime.pipeline.factors import CustomFactor
 from ziplime.pipeline.filters import SingleAsset
 from ziplime.pipeline.mixins import StandardOutputs
-from ziplime.pipeline.sentinels import NotSpecified
 from ziplime.pipeline.term import AssetExists
 from ziplime.utils.input_validation import (
     expect_bounded,
@@ -32,7 +31,7 @@ ALLOWED_DTYPES = (float64_dtype, int64_dtype)
 class _RollingCorrelation(CustomFactor):
     @expect_dtypes(base_factor=ALLOWED_DTYPES, target=ALLOWED_DTYPES)
     @expect_bounded(correlation_length=(2, None))
-    def __new__(cls, base_factor, target, correlation_length, mask=NotSpecified):
+    def __new__(cls, base_factor, target, correlation_length, mask=None):
         if target.ndim == 2 and base_factor.mask is not target.mask:
             raise IncompatibleTerms(term_1=base_factor, term_2=target)
 
@@ -174,7 +173,7 @@ class RollingLinearRegression(CustomFactor):
 
     @expect_dtypes(dependent=ALLOWED_DTYPES, independent=ALLOWED_DTYPES)
     @expect_bounded(regression_length=(2, None))
-    def __new__(cls, dependent, independent, regression_length, mask=NotSpecified):
+    def __new__(cls, dependent, independent, regression_length, mask=None):
         if independent.ndim == 2 and dependent.mask is not independent.mask:
             raise IncompatibleTerms(term_1=dependent, term_2=independent)
 
@@ -285,7 +284,7 @@ class RollingPearsonOfReturns(RollingPearson):
     :class:`ziplime.pipeline.factors.RollingLinearRegressionOfReturns`
     """
 
-    def __new__(cls, target, returns_length, correlation_length, mask=NotSpecified):
+    def __new__(cls, target, returns_length, correlation_length, mask=None):
         # Use the `SingleAsset` filter here because it protects against
         # inputting a non-existent target asset.
         returns = Returns(
@@ -332,7 +331,7 @@ class RollingSpearmanOfReturns(RollingSpearman):
     :class:`ziplime.pipeline.factors.RollingLinearRegressionOfReturns`
     """
 
-    def __new__(cls, target, returns_length, correlation_length, mask=NotSpecified):
+    def __new__(cls, target, returns_length, correlation_length, mask=None):
         # Use the `SingleAsset` filter here because it protects against
         # inputting a non-existent target asset.
         returns = Returns(
@@ -447,7 +446,7 @@ class RollingLinearRegressionOfReturns(RollingLinearRegression):
 
     window_safe = True
 
-    def __new__(cls, target, returns_length, regression_length, mask=NotSpecified):
+    def __new__(cls, target, returns_length, regression_length, mask=None):
         # Use the `SingleAsset` filter here because it protects against
         # inputting a non-existent target asset.
         returns = Returns(

@@ -19,7 +19,6 @@ from ziplime.pipeline.dtypes import (
     FACTOR_DTYPES,
     FILTER_DTYPES,
 )
-from ziplime.pipeline.sentinels import NotSpecified
 from ziplime.pipeline.term import ComputableTerm
 from ziplime.utils.compat import unicode
 from ziplime.utils.input_validation import expect_dtypes
@@ -61,7 +60,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
 
     # Used by RestrictedDTypeMixin
     ALLOWED_DTYPES = CLASSIFIER_DTYPES
-    categories = NotSpecified
+    categories = None
 
     # We explicitly don't support classifier to classifier comparisons, since
     # the stored values likely don't mean the same thing. This may be relaxed
@@ -374,7 +373,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
             raise AssertionError("Unexpected Classifier dtype: %s." % self.dtype)
         return group_labels, null_label
 
-    def peer_count(self, mask=NotSpecified):
+    def peer_count(self, mask=None):
         """
         Construct a factor that gives the number of occurrences of
         each distinct category in a classifier.

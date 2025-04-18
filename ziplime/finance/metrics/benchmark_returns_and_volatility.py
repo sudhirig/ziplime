@@ -69,7 +69,7 @@ class BenchmarkReturnsAndVolatility:
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
                    bundle_data: BundleData):
-        if not self._minute_cumulative_returns:
+        if self._minute_cumulative_returns is None:
             # TODO: fix this so that we don't have minute/daily returns but dynamic frequency returns
             return
         r = self._minute_cumulative_returns["date" == session]["literal"][0]

@@ -307,7 +307,7 @@ def infer_domain(terms):
 
     Returns
     -------
-    inferred : Domain or NotSpecified
+    inferred : Domain or None
 
     Raises
     ------

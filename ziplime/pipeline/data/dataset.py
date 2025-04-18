@@ -12,7 +12,6 @@ from ziplime.pipeline.classifiers import Classifier, Latest as LatestClassifier
 from ziplime.pipeline.domain import Domain, GENERIC
 from ziplime.pipeline.factors import Factor, Latest as LatestFactor
 from ziplime.pipeline.filters import Filter, Latest as LatestFilter
-from ziplime.pipeline.sentinels import NotSpecified, sentinel
 from ziplime.pipeline.term import (
     AssetExists,
     LoadableTerm,
@@ -33,7 +32,7 @@ class Column:
     def __init__(
             self,
             dtype,
-            missing_value=NotSpecified,
+            missing_value=None,
             doc=None,
             metadata=None,
             currency_aware=False,

@@ -26,7 +26,6 @@ from ziplime.utils.calendar_utils import get_calendar
 
 from ziplime.country import CountryCode
 from ziplime.utils.formatting import bulleted_list
-from ziplime.utils.memoize import lazyval
 from ziplime.utils.calendar_utils import days_at_time
 
 
@@ -170,7 +169,8 @@ class EquityCalendarDomain(Domain):
     def country_code(self):
         return self._country_code
 
-    @lazyval
+    #@lazyval
+    @property
     def calendar(self):
         return get_calendar(self.calendar_name)
 

@@ -25,8 +25,6 @@ from toolz import curry
 from ziplime.utils.context_tricks import nop_context
 
 from ziplime.utils.input_validation import preprocess
-from ziplime.utils.memoize import lazyval
-from ziplime.utils.sentinel import sentinel
 
 
 __all__ = [
@@ -474,7 +472,8 @@ class TradingDayOfWeekRule(StatelessRule, metaclass=ABCMeta):
         val = self.cal.minute_to_session(dt, direction="none").value
         return val in self.execution_period_values
 
-    @lazyval
+    #@lazyval
+    @property
     def execution_period_values(self):
         # calculate the list of periods that match the given criteria
         sessions = self.cal.sessions
@@ -521,7 +520,8 @@ class TradingDayOfMonthRule(StatelessRule, metaclass=ABCMeta):
         value = self.cal.minute_to_session(dt, direction="none").value
         return value in self.execution_period_values
 
-    @lazyval
+    #@lazyval
+    @property
     def execution_period_values(self):
         # calculate the list of periods that match the given criteria
         sessions = self.cal.sessions
@@ -765,8 +765,8 @@ class time_rules:
 
 
 class calendars:
-    US_EQUITIES = sentinel("US_EQUITIES")
-    US_FUTURES = sentinel("US_FUTURES")
+    US_EQUITIES = "US_EQUITIES"
+    US_FUTURES = "US_FUTURES"
 
 
 def _invert(d):

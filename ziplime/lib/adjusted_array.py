@@ -15,8 +15,6 @@ from ziplime.utils.numpy_utils import (
     int64_dtype,
     uint8_dtype,
 )
-from ziplime.utils.memoize import lazyval
-
 # These class names are all the same because of our bootleg templating system.
 
 
@@ -237,14 +235,16 @@ class AdjustedArray:
         """
         return self._data.view(**self._view_kwargs)
 
-    @lazyval
+    #@lazyval
+    @property
     def dtype(self):
         """
         The dtype of the data stored in this array.
         """
         return self._view_kwargs.get("dtype") or self._data.dtype
 
-    @lazyval
+    #@lazyval
+    @property
     def _iterator_type(self):
         """
         The iterator produced when `traverse` is called on this Array.

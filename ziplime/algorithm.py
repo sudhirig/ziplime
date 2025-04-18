@@ -99,8 +99,6 @@ from ziplime.utils.math_utils import (
 )
 from ziplime.sources.benchmark_source import BenchmarkSource
 
-from ziplime.utils.calendar_utils import add_tz_info
-
 # For creating and storing pipeline instances
 AttachedPipeline = namedtuple("AttachedPipeline", "pipe chunks eager")
 

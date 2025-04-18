@@ -2,10 +2,9 @@ import numpy as np
 import pandas as pd
 
 from ziplime.utils.date_utils import make_utc_aware
-from ziplime.utils.sentinel import sentinel
 from ziplime.lib.factorize import factorize_strings
 
-DEFAULT_FX_RATE = sentinel("DEFAULT_FX_RATE")
+DEFAULT_FX_RATE = "DEFAULT_FX_RATE"
 
 
 class FXRateReader:

@@ -16,7 +16,6 @@ from alembic import config, command
 from sqlalchemy import Table, select
 from sqlalchemy.orm import selectinload
 from toolz import (
-    compose,
     concat,
     merge,
     partition_all,
@@ -32,16 +31,12 @@ from ziplime.errors import (
     EquitiesNotFound,
     FutureContractsNotFound,
     MultipleSymbolsFound,
-    MultipleValuesFoundForField,
-    MultipleValuesFoundForSid,
-    NoValueForSid,
     SameSymbolUsedAcrossCountries,
     SidsNotFound,
     SymbolNotFound,
-    ValueNotFoundForField, NotAssetConvertible,
+    NotAssetConvertible,
 )
 from ziplime.utils.functional import invert
-from ziplime.utils.memoize import lazyval
 from ziplime.utils.numpy_utils import as_column
 from ziplime.utils.sqlite_utils import group_into_chunks, SQLITE_MAX_VARIABLE_NUMBER
 
@@ -245,7 +240,7 @@ class SqliteAssetRepository(AssetRepository):
         # Run the migration
         command.upgrade(alembic_cfg, "head")
 
-    @lazyval
+    @property
     def exchange_info(self):
         with self.engine.connect() as conn:
             es = conn.execute(sa.select(self.exchanges.c)).fetchall()
@@ -254,7 +249,7 @@ class SqliteAssetRepository(AssetRepository):
             for name, canonical_name, country_code in es
         }
 
-    @lazyval
+    @property
     def symbol_ownership_map(self):
         out = {}
         for mappings in self.symbol_ownership_maps_by_country_code.values():
@@ -263,7 +258,7 @@ class SqliteAssetRepository(AssetRepository):
 
         return out
 
-    @lazyval
+    @property
     def symbol_ownership_maps_by_country_code(self):
         with self.engine.connect() as conn:
             query = sa.select(
@@ -280,30 +275,6 @@ class SqliteAssetRepository(AssetRepository):
                 group_key=lambda row: sid_to_country_code[row.sid],
             )
 
-    #
-    # @lazyval
-    # def country_codes(self):
-    #     return tuple(self.symbol_ownership_maps_by_country_code)
-
-    # @lazyval
-    # def equity_supplementary_map(self):
-    #     with self.engine.connect() as conn:
-    #         return build_ownership_map(
-    #             conn,
-    #             table=self.equity_supplementary_mappings,
-    #             key_from_row=lambda row: (row.field, row.value),
-    #             value_from_row=lambda row: row.value,
-    #         )
-
-    # @lazyval
-    # def equity_supplementary_map_by_sid(self):
-    #     with self.engine.connect() as conn:
-    #         return build_ownership_map(
-    #             conn,
-    #             table=self.equity_supplementary_mappings,
-    #             key_from_row=lambda row: (row.field, row.sid),
-    #             value_from_row=lambda row: row.value,
-    #         )
 
     def lookup_asset_types(self, sids: list[int]):
         """Retrieve asset types for a list of sids.

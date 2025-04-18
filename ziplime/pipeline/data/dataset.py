@@ -22,7 +22,7 @@ from ziplime.utils.formatting import s, plural
 from ziplime.utils.numpy_utils import float64_dtype, NoDefaultMissingValue
 from ziplime.utils.string_formatting import bulleted_list
 
-IsSpecialization = sentinel("IsSpecialization")
+IsSpecialization = "IsSpecialization"
 
 
 class Column:

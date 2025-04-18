@@ -27,7 +27,6 @@ from ziplime.errors import (
 )
 from ziplime.lib.adjusted_array import can_represent_dtype
 from ziplime.lib.labelarray import LabelArray
-from ziplime.utils.memoize import classlazyval, lazyval
 from ziplime.utils.numpy_utils import (
     bool_dtype,
     categorical_dtype,
@@ -473,7 +472,7 @@ class LoadableTerm(Term):
     windowed = False
     inputs = ()
 
-    @lazyval
+    @property
     def dependencies(self):
         return {self.mask: 0}
 
@@ -644,7 +643,7 @@ class ComputableTerm(Term):
         """
         raise NotImplementedError("_principal_computable_term_type")
 
-    @lazyval
+    @property
     def windowed(self):
         """
         Whether or not this term represents a trailing window computation.
@@ -657,7 +656,7 @@ class ComputableTerm(Term):
         """
         return self.window_length is not NotSpecified and self.window_length > 0
 
-    @lazyval
+    @property
     def dependencies(self):
         """
         The number of extra rows needed for each of our inputs to compute this
@@ -880,13 +879,15 @@ class ComputableTerm(Term):
 
         return self.notnull().if_else(if_true=self, if_false=if_false)
 
-    @classlazyval
+    # @classlazyval
+    @property
     def _constant_type(cls):
         from .mixins import ConstantMixin
 
         return cls._with_mixin(ConstantMixin)
 
-    @classlazyval
+    #@classlazyval
+    @property
     def _if_else_type(cls):
         from .mixins import IfElseMixin
 

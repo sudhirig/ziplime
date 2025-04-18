@@ -1,9 +1,5 @@
-from functools import reduce
 from operator import itemgetter
-from pprint import pformat
-from toolz import curry, flip
-
-from .sentinel import sentinel
+from toolz import curry
 
 
 @curry
@@ -102,7 +98,7 @@ def keysorted(d):
 
     Example
     -------
-    >>> keysorted({'c': 1, 'b': 2, 'a': 3})
+    # >>> keysorted({'c': 1, 'b': 2, 'a': 3})
     [('a', 3), ('b', 2), ('c', 1)]
     """
     return sorted(d.items(), key=itemgetter(0))

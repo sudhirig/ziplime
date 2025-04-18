@@ -6,13 +6,10 @@ import pandas as pd
 import polars as pl
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.utils.exploding_object import NamedExplodingObject
-
 from ziplime.data.domain.bundle_data import BundleData
 from ziplime.finance.domain.ledger import Ledger
 from ziplime.finance.finance_ext import minute_annual_volatility
 
-from ziplime.domain.data_frequency import DataFrequency
 from ziplime.sources.benchmark_source import BenchmarkSource
 
 
@@ -39,15 +36,10 @@ class BenchmarkReturnsAndVolatility:
                 min_samples=2) * np.sqrt(252)
         ))["expanding_sum"]
 
-        if emission_rate == DataFrequency.DAY:
-            self._minute_cumulative_returns = NamedExplodingObject(
-                "self._minute_cumulative_returns",
-                "does not exist in daily emission rate",
-            )
-            self._minute_annual_volatility = NamedExplodingObject(
-                "self._minute_annual_volatility",
-                "does not exist in daily emission rate",
-            )
+        if emission_rate == datetime.timedelta(days=1):
+            # none existing in minute mode
+            self._minute_cumulative_returns = None
+            self._minute_annual_volatility = None
         else:
             open_ = trading_calendar.session_open(sessions[0]).tz_convert(trading_calendar.tz).to_pydatetime()
             close = trading_calendar.session_close(sessions[-1]).tz_convert(trading_calendar.tz).to_pydatetime()
@@ -77,6 +69,9 @@ class BenchmarkReturnsAndVolatility:
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
                    bundle_data: BundleData):
+        if not self._minute_cumulative_returns:
+            # TODO: fix this so that we don't have minute/daily returns but dynamic frequency returns
+            return
         r = self._minute_cumulative_returns["date" == session]["literal"][0]
         if np.isnan(r):
             r = None

@@ -25,13 +25,11 @@ from ziplime.errors import (
 )
 from ziplime.lib.labelarray import LabelArray, labelarray_where
 from ziplime.utils.context_tricks import nop_context
-from ziplime.utils.input_validation import expect_dtypes
 from ziplime.utils.numpy_utils import bool_dtype
 from ziplime.utils.pandas_utils import nearest_unequal_elements
 
 from .downsample_helpers import (
-    select_sampling_indices,
-    expect_downsample_frequency,
+    select_sampling_indices, SUPPORTED_DOWNSAMPLE_FREQUENCIES,
 )
 from .term import Term
 
@@ -396,8 +394,12 @@ class DownsampledMixin(StandardOutputs, UniversalMixin):
     # point is that you're re-using the same result multiple times.
     window_safe = False
 
-    @expect_downsample_frequency
     def __new__(cls, term: Term, frequency):
+        if frequency not in SUPPORTED_DOWNSAMPLE_FREQUENCIES:
+            raise ValueError(
+                "Downsampled terms only support frequencies in %s, but got %s."
+                % (SUPPORTED_DOWNSAMPLE_FREQUENCIES, frequency)
+            )
         return super(DownsampledMixin, cls).__new__(
             cls,
             inputs=term.inputs,

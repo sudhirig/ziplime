@@ -24,8 +24,6 @@ import pytz
 from toolz import curry
 from ziplime.utils.context_tricks import nop_context
 
-from ziplime.utils.input_validation import preprocess
-
 
 __all__ = [
     "EventManager",
@@ -460,8 +458,8 @@ class NotHalfDay(StatelessRule):
 
 
 class TradingDayOfWeekRule(StatelessRule, metaclass=ABCMeta):
-    @preprocess(n=lossless_float_to_int("TradingDayOfWeekRule"))
-    def __init__(self, n, invert):
+    # @preprocess(n=lossless_float_to_int("TradingDayOfWeekRule"))
+    def __init__(self, n: int, invert):
         if not 0 <= n < MAX_WEEK_RANGE:
             raise _out_of_range_error(MAX_WEEK_RANGE)
 
@@ -472,7 +470,7 @@ class TradingDayOfWeekRule(StatelessRule, metaclass=ABCMeta):
         val = self.cal.minute_to_session(dt, direction="none").value
         return val in self.execution_period_values
 
-    #@lazyval
+    # @lazyval
     @property
     def execution_period_values(self):
         # calculate the list of periods that match the given criteria
@@ -506,8 +504,8 @@ class NDaysBeforeLastTradingDayOfWeek(TradingDayOfWeekRule):
 
 
 class TradingDayOfMonthRule(StatelessRule, metaclass=ABCMeta):
-    @preprocess(n=lossless_float_to_int("TradingDayOfMonthRule"))
     def __init__(self, n, invert):
+        n = lossless_float_to_int(n)
         if not 0 <= n < MAX_MONTH_RANGE:
             raise _out_of_range_error(MAX_MONTH_RANGE)
         if invert:
@@ -520,7 +518,7 @@ class TradingDayOfMonthRule(StatelessRule, metaclass=ABCMeta):
         value = self.cal.minute_to_session(dt, direction="none").value
         return value in self.execution_period_values
 
-    #@lazyval
+    # @lazyval
     @property
     def execution_period_values(self):
         # calculate the list of periods that match the given criteria

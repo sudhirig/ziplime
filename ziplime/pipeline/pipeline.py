@@ -1,7 +1,6 @@
+from typing import Literal
+
 from ziplime.errors import UnsupportedPipelineOutput
-from ziplime.utils.input_validation import (
-    expect_element,
-)
 
 from .domain import Domain, GENERIC, infer_domain
 from .graph import ExecutionPlan, TermGraph, SCREEN_NAME
@@ -226,8 +225,7 @@ class Pipeline:
         columns[SCREEN_NAME] = screen
         return columns
 
-    @expect_element(format=("svg", "png", "jpeg"))
-    def show_graph(self, format="svg"):
+    def show_graph(self, format: Literal["svg", "png", "jpeg"]="svg"):
         """
         Render this Pipeline as a DAG.
 

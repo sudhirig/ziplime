@@ -41,7 +41,7 @@ from ziplime.utils.sharedoc import (
 )
 
 from .domain import Domain, GENERIC, infer_domain
-from .downsample_helpers import expect_downsample_frequency
+from .downsample_helpers import SUPPORTED_DOWNSAMPLE_FREQUENCIES
 from ..assets.domain.db.asset import Asset
 
 
@@ -710,7 +710,6 @@ class ComputableTerm(Term):
             .values
         )
 
-    @expect_downsample_frequency
     @templated_docstring(frequency=PIPELINE_DOWNSAMPLING_FREQUENCY_DOC)
     def downsample(self, frequency):
         """
@@ -721,7 +720,16 @@ class ComputableTerm(Term):
         {frequency}
         """
         from .mixins import DownsampledMixin
-
+        if frequency not in SUPPORTED_DOWNSAMPLE_FREQUENCIES:
+            raise ValueError(
+                "Invalid downsampling frequency: {frequency}.\n\n"
+                "Valid downsampling frequencies are: {valid_frequencies}".format(
+                    frequency=frequency,
+                    valid_frequencies=", ".join(
+                        sorted(SUPPORTED_DOWNSAMPLE_FREQUENCIES)
+                    ),
+                )
+            )
         downsampled_type = type(self)._with_mixin(DownsampledMixin)
         return downsampled_type(term=self, frequency=frequency)
 

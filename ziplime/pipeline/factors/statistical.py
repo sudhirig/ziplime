@@ -11,30 +11,24 @@ from ziplime.pipeline.factors import CustomFactor
 from ziplime.pipeline.filters import SingleAsset
 from ziplime.pipeline.mixins import StandardOutputs
 from ziplime.pipeline.term import AssetExists
-from ziplime.utils.input_validation import (
-    expect_bounded,
-    expect_dtypes,
-)
 from ziplime.utils.math_utils import nanmean
 from ziplime.utils.numpy_utils import (
     float64_dtype,
     int64_dtype,
 )
 
-
 from .basic import Returns
 from ...assets.domain.db.asset import Asset
 
-ALLOWED_DTYPES = (float64_dtype, int64_dtype)
-
 
 class _RollingCorrelation(CustomFactor):
-    @expect_dtypes(base_factor=ALLOWED_DTYPES, target=ALLOWED_DTYPES)
-    @expect_bounded(correlation_length=(2, None))
-    def __new__(cls, base_factor, target, correlation_length, mask=None):
+
+    def __new__(cls, base_factor: np.float64 | np.float32, target: np.float64 | np.float32, correlation_length,
+                mask=None):
         if target.ndim == 2 and base_factor.mask is not target.mask:
             raise IncompatibleTerms(term_1=base_factor, term_2=target)
-
+        if correlation_length < 2:
+            raise ValueError("correlation_length must be greater than or equal to 2")
         return super(_RollingCorrelation, cls).__new__(
             cls,
             inputs=[base_factor, target],
@@ -171,12 +165,12 @@ class RollingLinearRegression(CustomFactor):
 
     outputs = ["alpha", "beta", "r_value", "p_value", "stderr"]
 
-    @expect_dtypes(dependent=ALLOWED_DTYPES, independent=ALLOWED_DTYPES)
-    @expect_bounded(regression_length=(2, None))
-    def __new__(cls, dependent, independent, regression_length, mask=None):
+    def __new__(cls, dependent: np.float64 | np.int64, independent: np.float64 | np.int64,
+                regression_length, mask=None):
         if independent.ndim == 2 and dependent.mask is not independent.mask:
             raise IncompatibleTerms(term_1=dependent, term_2=independent)
-
+        if regression_length < 2:
+            raise ValueError("regression_length must be greater than or equal to 2")
         return super(RollingLinearRegression, cls).__new__(
             cls,
             inputs=[dependent, independent],
@@ -483,12 +477,11 @@ class SimpleBeta(CustomFactor, StandardOutputs):
     dtype = float64_dtype
     params = ("allowed_missing_count",)
 
-    @expect_bounded(
-        regression_length=(3, None),
-        allowed_missing_percentage=(0.0, 1.0),
-        __funcname="SimpleBeta",
-    )
-    def __new__(cls, target: Asset, regression_length: int, allowed_missing_percentage: int| float=0.25):
+    def __new__(cls, target: Asset, regression_length: int, allowed_missing_percentage: int | float = 0.25):
+        if regression_length < 3:
+            raise ValueError("regression_length must be greater than or equal to 3")
+        if allowed_missing_percentage <= 0.0 or allowed_missing_percentage > 1.0:
+            raise ValueError("allowed_missing_percentage must be between 0.0 and 1.0")
         daily_returns = Returns(
             window_length=2,
             mask=(AssetExists() | SingleAsset(asset=target)),
@@ -502,7 +495,7 @@ class SimpleBeta(CustomFactor, StandardOutputs):
         )
 
     def compute(
-        self, today, assets, out, all_returns, target_returns, allowed_missing_count
+            self, today, assets, out, all_returns, target_returns, allowed_missing_count
     ):
         vectorized_beta(
             dependents=all_returns,
@@ -618,7 +611,7 @@ def vectorized_beta(dependents, independent, allowed_missing, out=None):
     # column may have a different subset of the data dropped due to missing
     # data in the corresponding dependent column.
     # shape: (M,)
-    independent_variances = nanmean(ind_residual**2, axis=0)
+    independent_variances = nanmean(ind_residual ** 2, axis=0)
 
     # shape: (M,)
     np.divide(covariances, independent_variances, out=out)
@@ -683,8 +676,8 @@ def vectorized_pearson_r(dependents, independents, allowed_missing, out=None):
     ind_residual = independents - mean(independents, axis=0)
     dep_residual = dependents - mean(dependents, axis=0)
 
-    ind_variance = mean(ind_residual**2, axis=0)
-    dep_variance = mean(dep_residual**2, axis=0)
+    ind_variance = mean(ind_residual ** 2, axis=0)
+    dep_variance = mean(dep_residual ** 2, axis=0)
 
     covariances = mean(ind_residual * dep_residual, axis=0)
 

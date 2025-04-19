@@ -13,7 +13,6 @@ import pandas as pd
 from ziplime.errors import UnsupportedDataType
 from ziplime.lib.labelarray import LabelArray
 from ziplime.lib.quantiles import quantiles
-from ziplime.pipeline.api_utils import restrict_to_dtype
 from ziplime.pipeline.dtypes import (
     CLASSIFIER_DTYPES,
     FACTOR_DTYPES,
@@ -21,7 +20,6 @@ from ziplime.pipeline.dtypes import (
 )
 from ziplime.pipeline.term import ComputableTerm
 from ziplime.utils.compat import unicode
-from ziplime.utils.input_validation import expect_dtypes
 from ziplime.utils.numpy_utils import (
     categorical_dtype,
     int64_dtype,
@@ -38,13 +36,13 @@ from ..mixins import (
     StandardOutputs,
 )
 
-string_classifiers_only = restrict_to_dtype(
-    dtype=categorical_dtype,
-    message_template=(
-        "{method_name}() is only defined on Classifiers producing strings"
-        " but it was called on a Classifier of dtype {received_dtype}."
-    ),
-)
+# string_classifiers_only = restrict_to_dtype(
+#     dtype=categorical_dtype,
+#     message_template=(
+#         "{method_name}() is only defined on Classifiers producing strings"
+#         " but it was called on a Classifier of dtype {received_dtype}."
+#     ),
+# )
 
 
 class Classifier(RestrictedDTypeMixin, ComputableTerm):
@@ -130,7 +128,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
 
     del bad_compare
 
-    @string_classifiers_only
+    #@string_classifiers_only
     def startswith(self, prefix: bytes | unicode):
         """
         Construct a Filter matching values starting with ``prefix``.
@@ -152,7 +150,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
             opargs=(prefix,),
         )
 
-    @string_classifiers_only
+    #@string_classifiers_only
     def endswith(self, suffix: bytes | unicode):
         """
         Construct a Filter matching values ending with ``suffix``.
@@ -174,7 +172,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
             opargs=(suffix,),
         )
 
-    @string_classifiers_only
+    #@string_classifiers_only
     def has_substring(self, substring: bytes | unicode):
         """
         Construct a Filter matching values containing ``substring``.
@@ -196,7 +194,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
             opargs=(substring,),
         )
 
-    @string_classifiers_only
+    #@string_classifiers_only
     def matches(self, pattern: bytes | unicode | type(re.compile(""))):
         """
         Construct a Filter that checks regex matches against ``pattern``.
@@ -223,7 +221,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
         )
 
     # TODO: Support relabeling for integer dtypes.
-    @string_classifiers_only
+    #@string_classifiers_only
     def relabel(self, relabeler):
         """
         Convert ``self`` into a new classifier by mapping a function over each
@@ -478,8 +476,7 @@ class Relabel(SingleInputMixin, Classifier):
     params = ("relabeler",)
 
     # TODO: Support relabeling for integer dtypes.
-    @expect_dtypes(term=categorical_dtype)
-    def __new__(cls, term: Classifier, relabeler):
+    def __new__(cls, term: categorical_dtype, relabeler):
         return super(Relabel, cls).__new__(
             cls,
             inputs=(term,),

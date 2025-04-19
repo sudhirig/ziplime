@@ -16,7 +16,6 @@ from numexpr import evaluate
 from ziplime.pipeline.data import EquityPricing
 from ziplime.pipeline.factors import CustomFactor
 from ziplime.pipeline.mixins import SingleInputMixin
-from ziplime.utils.input_validation import expect_bounded
 from ziplime.utils.math_utils import (
     nanargmax,
     nanargmin,
@@ -343,13 +342,13 @@ class MovingAverageConvergenceDivergenceSignal(CustomFactor):
     # __new__.
     params = ("fast_period", "slow_period", "signal_period")
 
-    @expect_bounded(
-        __funcname="MACDSignal",
-        fast_period=(1, None),  # These must all be >= 1.
-        slow_period=(1, None),
-        signal_period=(1, None),
-    )
     def __new__(cls, fast_period=12, slow_period=26, signal_period=9, *args, **kwargs):
+        if fast_period < 1:
+            raise ValueError("`fast_period` must be >= 1")
+        if slow_period < 1:
+            raise ValueError("`slow_period` must be >= 1")
+        if signal_period < 1:
+            raise ValueError("`signal_period` must be >= 1")
 
         if slow_period <= fast_period:
             raise ValueError(

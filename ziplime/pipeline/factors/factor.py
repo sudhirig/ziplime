@@ -19,7 +19,6 @@ from ziplime.errors import (
 )
 from ziplime.lib.normalize import naive_grouped_rowwise_apply
 from ziplime.lib.rank import masked_rankdata_2d, rankdata_1d_descending
-from ziplime.pipeline.api_utils import restrict_to_dtype
 from ziplime.pipeline.classifiers import Classifier, Everything, Quantiles
 from ziplime.pipeline.dtypes import (
     CLASSIFIER_DTYPES,
@@ -365,22 +364,22 @@ def function_application(func):
 
 
 # Decorators for Factor methods.
-if_not_float64_tell_caller_to_use_isnull = restrict_to_dtype(
-    dtype=float64_dtype,
-    message_template=(
-        "{method_name}() was called on a factor of dtype {received_dtype}.\n"
-        "{method_name}() is only defined for dtype {expected_dtype}."
-        "To filter missing data, use isnull() or notnull()."
-    ),
-)
+# if_not_float64_tell_caller_to_use_isnull = restrict_to_dtype(
+#     dtype=float64_dtype,
+#     message_template=(
+#         "{method_name}() was called on a factor of dtype {received_dtype}.\n"
+#         "{method_name}() is only defined for dtype {expected_dtype}."
+#         "To filter missing data, use isnull() or notnull()."
+#     ),
+# )
 
-float64_only = restrict_to_dtype(
-    dtype=float64_dtype,
-    message_template=(
-        "{method_name}() is only defined on Factors of dtype {expected_dtype},"
-        " but it was called on a Factor of dtype {received_dtype}."
-    ),
-)
+# float64_only = restrict_to_dtype(
+#     dtype=float64_dtype,
+#     message_template=(
+#         "{method_name}() is only defined on Factors of dtype {expected_dtype},"
+#         " but it was called on a Factor of dtype {received_dtype}."
+#     ),
+# )
 
 CORRELATION_METHOD_NOTE = dedent(
     """\
@@ -432,7 +431,7 @@ class summary_funcs:
 def summary_method(name):
     func = getattr(summary_funcs, name)
 
-    @float64_only
+    #@float64_only
     def f(self, mask: Filter | None = None):
         """Create a 1-dimensional factor computing the {} of self, each day.
 
@@ -527,7 +526,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
 
     eq = binary_operator("==")
 
-    @float64_only
+    #@float64_only
     def demean(self, mask: Filter | None = None,
                groupby: Classifier | None = None):
         """
@@ -653,7 +652,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @float64_only
+    #@float64_only
     def zscore(self, mask: Filter | None = None,
                groupby: Classifier | None = None):
         """
@@ -961,7 +960,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @float64_only
+    #@float64_only
     def winsorize(
             self, min_percentile: int | float, max_percentile: int | float,
             mask: Filter | None = None, groupby: Classifier | None = None
@@ -1238,7 +1237,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @if_not_float64_tell_caller_to_use_isnull
+    #@if_not_float64_tell_caller_to_use_isnull
     def isnan(self):
         """
         A Filter producing True for all values where this Factor is NaN.
@@ -1249,7 +1248,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self != self
 
-    @if_not_float64_tell_caller_to_use_isnull
+    #@if_not_float64_tell_caller_to_use_isnull
     def notnan(self):
         """
         A Filter producing True for values where this Factor is not NaN.
@@ -1260,7 +1259,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return ~self.isnan()
 
-    @if_not_float64_tell_caller_to_use_isnull
+    #@if_not_float64_tell_caller_to_use_isnull
     def isfinite(self):
         """
         A Filter producing True for values where this Factor is anything but

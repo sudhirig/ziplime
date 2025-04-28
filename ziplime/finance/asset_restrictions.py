@@ -8,7 +8,7 @@ from toolz import groupby
 
 from enum import IntEnum
 
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 from ziplime.utils.numpy_utils import vectorized_is_element
 
 Restriction = namedtuple("Restriction", ["asset", "effective_date", "state"])
@@ -101,7 +101,7 @@ class _UnionRestrictions(Restrictions):
         return _UnionRestrictions(new_sub_restrictions)
 
     def is_restricted(self, assets, dt):
-        if isinstance(assets, Asset):
+        if isinstance(assets, AssetModel):
             return any(r.is_restricted(assets, dt) for r in self.sub_restrictions)
 
         return reduce(
@@ -114,7 +114,7 @@ class NoRestrictions(Restrictions):
     """A no-op restrictions that contains no restrictions."""
 
     def is_restricted(self, assets, dt):
-        if isinstance(assets, Asset):
+        if isinstance(assets, AssetModel):
             return False
         return pd.Series(index=pd.Index(assets), data=False)
 
@@ -134,7 +134,7 @@ class StaticRestrictions(Restrictions):
 
     def is_restricted(self, assets, dt):
         """An asset is restricted for all dts if it is in the static list."""
-        if isinstance(assets, Asset):
+        if isinstance(assets, AssetModel):
             return assets in self._restricted_set
         return pd.Series(
             index=pd.Index(assets),
@@ -166,7 +166,7 @@ class HistoricalRestrictions(Restrictions):
         """Returns whether or not an asset or iterable of assets is restricted
         on a dt.
         """
-        if isinstance(assets, Asset):
+        if isinstance(assets, AssetModel):
             return self._is_restricted_for_asset(assets, dt)
 
         is_restricted = partial(self._is_restricted_for_asset, dt=dt)

@@ -1,7 +1,7 @@
 import math
+from decimal import Decimal
 
-
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.execution import ExecutionStyle
 from ziplime.protocol import DataSourceType
@@ -20,10 +20,10 @@ class Order:
             self,
             id,
             dt,
-            asset: Asset,
+            asset: AssetModel,
             amount: int,
             filled: int,
-            commission: float,
+            commission: Decimal,
             execution_style: ExecutionStyle,
             status: OrderStatus,
             exchange_order_id: str = None

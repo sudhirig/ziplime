@@ -17,16 +17,17 @@ Position Tracking
 """
 import dataclasses
 import datetime
+from decimal import Decimal
 
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 
 
 @dataclasses.dataclass
 class Position:
-    asset: Asset
+    asset: AssetModel
     amount: int
-    cost_basis: float
-    last_sale_price: float
+    cost_basis: Decimal
+    last_sale_price: Decimal
     last_sale_date: datetime.datetime | None
 
     def __repr__(self):

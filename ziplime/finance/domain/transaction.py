@@ -1,14 +1,14 @@
 import datetime
+from decimal import Decimal
 
-
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 from ziplime.protocol import DataSourceType
 
 
 class Transaction:
 
-    def __init__(self, asset: Asset, amount: int, dt: datetime.datetime, price: float, order_id: str,
-                 commission: float | None = None):
+    def __init__(self, asset: AssetModel, amount: int, dt: datetime.datetime, price: Decimal, order_id: str,
+                 commission: Decimal | None = None):
         self.asset = asset
         self.amount = amount
         # if amount < 1:

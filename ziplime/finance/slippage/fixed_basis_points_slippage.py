@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from ziplime.domain.bar_data import BarData
 from ziplime.errors import LiquidityExceeded
 from ziplime.finance.domain.order import Order
@@ -24,10 +26,10 @@ class FixedBasisPointsSlippage(SlippageModel):
 
     Parameters
     ----------
-    basis_points : float, optional
+    basis_points : Decimal, optional
         Number of basis points of slippage to apply for each fill. Default
         is 5 basis points.
-    volume_limit : float, optional
+    volume_limit : Decimal, optional
         Fraction of trading volume that can be filled each minute. Default is
         10% of trading volume.
 
@@ -61,7 +63,7 @@ class FixedBasisPointsSlippage(SlippageModel):
             volume_limit=self.volume_limit,
         )
 
-    def process_order(self, data: BarData, order: Order) -> tuple[float, float]:
+    def process_order(self, data: BarData, order: Order) -> tuple[Decimal, Decimal]:
         volume = data.current(assets=[order.asset], fields=["volume"])["volume"][0]
         max_volume = int(self.volume_limit * volume)
 

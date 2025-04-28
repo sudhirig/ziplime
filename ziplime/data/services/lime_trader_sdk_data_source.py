@@ -4,13 +4,12 @@ import logging
 from lime_trader import AsyncLimeClient, LimeClient
 from lime_trader.models.market import Period
 
-from ziplime.data.abstract_live_market_data_provider import AbstractLiveMarketDataProvider
 import polars as pl
 
-from ziplime.data.services.bundle_data_source import BundleDataSource
+from ziplime.data.services.data_bundle_source import DataBundleSource
 
 
-class LimeTraderSdkDataSource(BundleDataSource):
+class LimeTraderSdkDataSource(DataBundleSource):
     def __init__(self, lime_sdk_credentials_file: str | None):
         super().__init__()
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
@@ -21,6 +20,35 @@ class LimeTraderSdkDataSource(BundleDataSource):
         else:
             self._lime_sdk_client = AsyncLimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
             self._lime_sdk_client_sync = LimeClient.from_file(lime_sdk_credentials_file, logger=self._logger)
+
+    def get_spot_price_sync(self, symbols: list[str],
+                      ) -> pl.DataFrame:
+
+        results = self._lime_sdk_client_sync.market.get_current_quotes(
+            symbols=symbols,
+        )
+        cols = {"open": [], "close": [], "price": [], "high": [], "low": [], "volume": [], "date": [], "exchange": [],
+                "symbol": [], "exchange_country": []}
+        for results, symbol in zip(results, symbols):
+            for result in results:
+                cols["open"].append(result.open)
+                cols["close"].append(result.close)
+                cols["price"].append(result.close)
+                cols["high"].append(result.high)
+                cols["low"].append(result.low)
+                cols["volume"].append(result.volume)
+                cols["date"].append(result.timestamp.astimezone(date_to.tzinfo))
+                cols["exchange"].append("LIME")
+                cols["exchange_country"].append("US")
+                cols["symbol"].append(symbol)
+        df = pl.DataFrame(cols, schema=[("open", pl.Float64), ("close", pl.Float64),
+                                        ("price", pl.Float64),
+                                        ("high", pl.Float64), ("low", pl.Float64),
+                                        ("volume", pl.Int64),
+                                        ("date", pl.Datetime), ("exchange", pl.String),
+                                        ("exchange_country", pl.String), ("symbol", pl.String)
+                                        ])
+        return df.filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
 
 
     def get_data_sync(self, symbols: list[str],

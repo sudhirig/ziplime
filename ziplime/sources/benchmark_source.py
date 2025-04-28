@@ -3,8 +3,8 @@ import datetime
 import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.domain.db.asset import Asset
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.assets.models.asset_model import AssetModel
+from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.errors import (
     InvalidBenchmarkAsset,
     BenchmarkAssetNotAvailableTooEarly,
@@ -16,10 +16,10 @@ import polars as pl
 class BenchmarkSource:
     def __init__(
             self,
-            benchmark_asset: Asset,
+            benchmark_asset: AssetModel,
             trading_calendar: ExchangeCalendar,
             sessions: pd.DatetimeIndex,
-            bundle_data: BundleData,
+            data_bundle: DataBundle,
             emission_rate: datetime.timedelta,
             timedelta_period: datetime.timedelta,
             benchmark_fields: list[str],
@@ -28,7 +28,7 @@ class BenchmarkSource:
         self.benchmark_asset = benchmark_asset
         self.sessions = sessions
         self.emission_rate = emission_rate
-        self.bundle_data = bundle_data
+        self.data_bundle = data_bundle
         self.timedelta_period = timedelta_period
         self.benchmark_fields = benchmark_fields
         if len(sessions) == 0:
@@ -38,7 +38,7 @@ class BenchmarkSource:
             self._validate_benchmark(benchmark_asset=benchmark_asset)
             self._precalculated_series = self._initialize_precalculated_series(
                 asset=benchmark_asset, trading_calendar=trading_calendar, trading_days=sessions,
-                bundle_data=bundle_data
+                data_bundle=data_bundle
             )
         elif benchmark_returns is not None:
             all_bars = pl.from_pandas(
@@ -132,7 +132,7 @@ class BenchmarkSource:
 
         return daily_returns.filter(pl.col("date").is_between(start, end))
 
-    def _validate_benchmark(self, benchmark_asset: Asset):
+    def _validate_benchmark(self, benchmark_asset: AssetModel):
         # check if this security has a stock dividend.  if so, raise an
         # error suggesting that the user pick a different asset to use
         # as benchmark.
@@ -177,8 +177,8 @@ class BenchmarkSource:
         return daily_returns.iloc[1:]
 
     def _initialize_precalculated_series(
-            self, asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pd.DatetimeIndex,
-            bundle_data: BundleData
+            self, asset: AssetModel, trading_calendar: ExchangeCalendar, trading_days: pd.DatetimeIndex,
+            data_bundle: DataBundle
     ):
         """
         Internal method that pre-calculates the benchmark return series for
@@ -192,7 +192,7 @@ class BenchmarkSource:
 
         trading_days: pd.DateTimeIndex
 
-        bundle_data: BundleData
+        data_bundle: DataBundle
 
         Notes
         -----
@@ -223,7 +223,7 @@ class BenchmarkSource:
         #     index_column="date", every=self.timedelta_period
         # ).agg(pl.col("value").sum())
 
-        benchmark_series = self.bundle_data.get_data_by_limit(
+        benchmark_series = self.data_bundle.get_data_by_limit(
             fields=self.benchmark_fields,
             limit=len(all_bars) + 1,
             frequency=self.timedelta_period,
@@ -246,7 +246,7 @@ class BenchmarkSource:
             # last trading day of the simulation, going up to one day
             # before the simulation start day (so that we can get the %
             # change on day 1)
-            benchmark_series = self.bundle_data.get_data_by_limit(
+            benchmark_series = self.data_bundle.get_data_by_limit(
                 fields=["price"],
                 limit=len(trading_days) + 1,
                 frequency=self.emission_rate,
@@ -260,7 +260,7 @@ class BenchmarkSource:
         elif start_date == trading_days[0]:
             # Attempt to handle case where stock data starts on first
             # day, in this case use the open to close return.
-            benchmark_series = self.bundle_data.get_data_by_limit(
+            benchmark_series = self.data_bundle.get_data_by_limit(
                 fields=["price"],
                 limit=len(trading_days),
                 frequency=self.emission_rate,

@@ -5,12 +5,13 @@ import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 
 from contextlib import contextmanager
 import numpy as np
 
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.data.domain.data_bundle import DataBundle
+from ziplime.exchanges.exchange import Exchange
 
 
 @contextmanager
@@ -35,7 +36,7 @@ class BarData:
 
     Parameters
     ----------
-    bundle_data : BundleData
+    data_bundle : DataBundle
         Provider for bar pricing data.
     simulation_dt_func : callable
         Function which returns the current simulation time.
@@ -49,19 +50,20 @@ class BarData:
     """
 
     def __init__(self,
-                 bundle_data: BundleData,
+                 exchanges: dict[str, Exchange],
                  simulation_dt_func: Callable,
                  trading_calendar: ExchangeCalendar,
                  restrictions):
-        self.bundle_data = bundle_data
+        # self.data_bundle = data_bundle
         self.simulation_dt_func = simulation_dt_func
 
-        # self._daily_mode = (self.bundle_data == "daily")
+        # self._daily_mode = (self.data_bundle == "daily")
 
         self._adjust_minutes = False
 
         self._trading_calendar = trading_calendar
         self._is_restricted = restrictions.is_restricted
+        self.exchanges = exchanges
 
     def _get_current_minute(self):
         """Internal utility method to get the current simulation time.
@@ -77,7 +79,7 @@ class BarData:
         dt = self.simulation_dt_func()
 
         if self._adjust_minutes:
-            dt = self.data_portal.trading_calendar.previous_minute(dt)
+            dt = self._trading_calendar.previous_minute(dt)
 
         # TODO: check this, is it different for daily?
         #
@@ -89,7 +91,8 @@ class BarData:
         # return dt
         return dt
 
-    def current(self, assets: list[Asset], fields: list[str]):
+    def current(self, assets: list[AssetModel], fields: list[str],
+                exchange_name: str):
         """Returns the "current" value of the given fields for the given assets
         at the current simulation time.
 
@@ -152,21 +155,21 @@ class BarData:
         data = {}
 
         if not self._adjust_minutes:
-            return self.bundle_data.get_spot_value(
-                    assets=assets,
-                    fields=fields,
-                    dt=self._get_current_minute(),
-                    frequency=self.bundle_data.frequency
-                )
+            return self.exchanges[exchange_name].get_spot_value(
+                assets=assets,
+                fields=fields,
+                dt=self._get_current_minute(),
+                frequency=self.data_bundle.frequency
+            )
         else:
             for field in fields:
                 series = pd.Series(data={
-                    asset: self.bundle_data.get_adjusted_value(
+                    asset: self.exchanges[exchange_name].get_adjusted_value(
                         asset,
                         field,
                         self._get_current_minute(),
                         self.simulation_dt_func(),
-                        self.bundle_data.frequency
+                        self.data_bundle.frequency
                     )
                     for asset in assets
                 }, index=assets, name=field)
@@ -175,12 +178,12 @@ class BarData:
         return pd.DataFrame(data=data)
 
     def current_chain(self, continuous_future: ContinuousFuture):
-        return self.bundle_data.get_current_future_chain(
+        return self.data_bundle.get_current_future_chain(
             continuous_future=continuous_future,
             dt=self.simulation_dt_func()
         )
 
-    def can_trade(self, assets: list[Asset]):
+    def can_trade(self, assets: list[AssetModel]):
         """For the given asset or iterable of assets, returns True if all of the
         following are true:
 
@@ -235,7 +238,7 @@ class BarData:
         ]
         return pd.Series(data=tradeable, index=assets, dtype=bool)
 
-    def _can_trade_for_asset(self, asset: Asset, dt: datetime.datetime, adjusted_dt: datetime.datetime) -> bool:
+    def _can_trade_for_asset(self, asset: AssetModel, dt: datetime.datetime, adjusted_dt: datetime.datetime) -> bool:
         session_label = None
         dt_to_use_for_exchange_check = None
 
@@ -271,8 +274,9 @@ class BarData:
             )
         )
 
-
-    def history(self, assets: list[Asset], fields: list[str], bar_count: int, frequency: datetime.timedelta):
+    def history(self, assets: list[AssetModel], fields: list[str], bar_count: int, frequency: datetime.timedelta,
+                exchange_name: str
+                ):
         """Returns a trailing window of length ``bar_count`` with data for
         the given assets, fields, and frequency, adjusted for splits, dividends,
         and mergers as of the current simulation time.
@@ -329,16 +333,16 @@ class BarData:
         If the current simulation time is not a valid market time, we use the last market close instead.
         """
 
-        df = self.bundle_data.get_data_by_limit(assets=assets,
-                                                end_date=self._get_current_minute(),
-                                                limit=bar_count,
-                                                frequency=frequency,
-                                                fields=fields,
-                                                include_end_date=False
-                                                )
+        df = self.exchanges[exchange_name].get_data_by_limit(assets=assets,
+                                                             end_date=self._get_current_minute(),
+                                                             limit=bar_count,
+                                                             frequency=frequency,
+                                                             fields=fields,
+                                                             include_end_date=False
+                                                             )
         if self._adjust_minutes:
             adjs = {
-                field: self.data_portal.get_adjustments(
+                field: self.exchanges[exchange_name].get_adjustments(
                     assets,
                     field,
                     self._get_current_minute(),
@@ -354,6 +358,7 @@ class BarData:
 
     @property
     def current_dt(self):
+
         return self.simulation_dt_func()
 
     @property
@@ -370,4 +375,3 @@ class BarData:
             self.simulation_dt_func(),
             direction="next"
         )
-

@@ -1,8 +1,7 @@
 import datetime
-from functools import partial
 from typing import Any
 
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.ledger import Ledger
 
 
@@ -10,7 +9,7 @@ class Returns:
     """Tracks the daily and cumulative returns of the algorithm."""
 
     # def _end_of_period(field, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-    #                    bundle_data: BundleData):
+    #                    data_bundle: BundleData):
     #     packet[field]["returns"] = ledger.todays_returns
     #     packet["cumulative_perf"]["returns"] = ledger.portfolio.returns
     #     packet["cumulative_risk_metrics"][
@@ -18,7 +17,7 @@ class Returns:
     #     ] = ledger.portfolio.returns
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                   bundle_data: BundleData):
+                   exchanges: dict[str, Exchange]):
         packet["minute_perf"]["returns"] = ledger.todays_returns
         packet["cumulative_perf"]["returns"] = ledger.portfolio.returns
         packet["cumulative_risk_metrics"][
@@ -26,7 +25,7 @@ class Returns:
         ] = ledger.portfolio.returns
 
     def end_of_session(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                       bundle_data: BundleData):
+                       exchanges: dict[str, Exchange]):
         packet["daily_perf"]["returns"] = ledger.todays_returns
         packet["cumulative_perf"]["returns"] = ledger.portfolio.returns
         packet["cumulative_risk_metrics"][

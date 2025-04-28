@@ -123,22 +123,6 @@ def _build_date(date, kwargs):
         return date
 
 
-# TODO: only used in tests
-# TODO FIX TZ
-def _build_time(time, kwargs):
-    """Builds the time argument for event rules."""
-    tz = kwargs.pop("tz", "UTC")
-    if time:
-        if kwargs:
-            raise ValueError("Cannot pass kwargs and a time")
-        else:
-            return ensure_utc(time, tz)
-    elif not kwargs:
-        raise ValueError("Must pass a time or kwargs")
-    else:
-        return datetime.time(**kwargs)
-
-
 @curry
 def lossless_float_to_int(funcname, func, argname, arg):
     """

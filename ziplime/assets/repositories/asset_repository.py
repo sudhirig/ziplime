@@ -1,22 +1,25 @@
 from typing import Any, Self
 
+import aiocache
+from aiocache import Cache
+
 from ziplime.assets.domain.asset_type import AssetType
-from ziplime.assets.domain.db.asset import Asset
-from ziplime.assets.domain.db.asset_router import AssetRouter
-from ziplime.assets.domain.db.commodity import Commodity
-from ziplime.assets.domain.db.currency import Currency
-from ziplime.assets.domain.db.equity import Equity
-from ziplime.assets.domain.db.equity_symbol_mapping import EquitySymbolMapping
-from ziplime.assets.domain.db.exchange_info import ExchangeInfo
-from ziplime.assets.domain.db.futures_contract import FuturesContract
-from ziplime.assets.domain.db.trading_pair import TradingPair
+from ziplime.assets.entities.asset import Asset
+from ziplime.assets.models.asset_router import AssetRouter
+from ziplime.assets.entities.commodity import Commodity
+from ziplime.assets.entities.currency import Currency
+from ziplime.assets.entities.equity import Equity
+from ziplime.assets.models.equity_symbol_mapping_model import EquitySymbolMappingModel
+from ziplime.assets.models.exchange_info import ExchangeInfo
+from ziplime.assets.models.futures_contract_model import FuturesContractModel
+from ziplime.trading.models.trading_pair import TradingPair
 
 
 class AssetRepository:
 
     async def save_equities(self, equities: list[Equity]) -> None: ...
 
-    async def save_commodities(self, assets: list[Commodity]) -> None: ...
+    async def save_commodities(self, commodities: list[Commodity]) -> None: ...
 
     async def save_asset_routers(self, asset_routers: list[AssetRouter]) -> None: ...
 
@@ -26,19 +29,34 @@ class AssetRepository:
 
     async def save_trading_pairs(self, trading_pairs: list[TradingPair]) -> None: ...
 
-    async def save_equity_symbol_mappings(self, equity_symbol_mappings: list[EquitySymbolMapping]) -> None: ...
+    async def save_equity_symbol_mappings(self, equity_symbol_mappings: list[EquitySymbolMappingModel]) -> None: ...
 
     async def get_asset_by_sid(self, sid: int) -> Asset: ...
 
     async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None: ...
 
-    async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType, exchange_name: str) -> Asset | None: ...
+    @aiocache.cached(cache=Cache.MEMORY)
+    async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType, exchange_name: str) -> Asset | None:
+        match asset_type:
+            case AssetType.EQUITY:
+                return await self.get_equity_by_symbol(symbol=symbol, exchange_name=exchange_name)
+            case AssetType.FUTURES_CONTRACT:
+                return await self.get_futures_contract_by_symbol(symbol=symbol, exchange_name=exchange_name)
+            case AssetType.CURRENCY:
+                return await self.get_currency_by_symbol(symbol=symbol, exchange_name=exchange_name)
+            case AssetType.COMMODITY:
+                return await self.get_commodity_by_symbol(symbol=symbol, exchange_name=exchange_name)
+            # case AssetType.OPTIONS_CONTRACT:
+            #     return await self.get_options_contract_by_symbol(symbol=symbol, exchange_name=exchange_name)
+            case _:
+                raise ValueError(f"Unsupported asset type: {asset_type}")
 
-    async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContract | None: ...
+    async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContractModel | None: ...
 
-    async def get_currency_by_symbol(self, symbol: str) -> Currency | None: ...
+    async def get_currency_by_symbol(self, symbol: str, exchange_name:str) -> Currency | None: ...
 
-    async def get_commodity_by_symbol(self, symbol: str) -> Commodity | None: ...
+    async def get_commodity_by_symbol(self, symbol: str, exchange_name:str) -> Commodity | None: ...
+    # async def get_options_contract_by_symbol(self, symbol: str, exchange_name:str) -> Commodity | None: ...
 
     def to_json(self): ...
 

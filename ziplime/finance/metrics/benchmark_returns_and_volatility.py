@@ -6,7 +6,8 @@ import pandas as pd
 import polars as pl
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.data.domain.data_bundle import DataBundle
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.ledger import Ledger
 from ziplime.finance.finance_ext import minute_annual_volatility
 
@@ -68,7 +69,7 @@ class BenchmarkReturnsAndVolatility:
             )  # pl.DataFrame([pd.Series(returns.select("date"))])
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                   bundle_data: BundleData):
+                   exchanges: dict[str, Exchange]):
         if self._minute_cumulative_returns is None:
             # TODO: fix this so that we don't have minute/daily returns but dynamic frequency returns
             return
@@ -83,7 +84,7 @@ class BenchmarkReturnsAndVolatility:
         packet["cumulative_risk_metrics"]["benchmark_volatility"] = v
 
     def end_of_session(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                       bundle_data: BundleData):
+                       exchanges: dict[str, Exchange]):
         r = self._daily_cumulative_returns[session_ix]
         if np.isnan(r):
             r = None

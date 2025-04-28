@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import polars as pl
 
-from ziplime.gens.domain.simulation_event import SimulationEvent
+from ziplime.trading.enums.simulation_event import SimulationEvent
 from ziplime.gens.domain.trading_clock import TradingClock
 
 

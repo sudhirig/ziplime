@@ -42,7 +42,7 @@ from ziplime.utils.sharedoc import (
 
 from .domain import Domain, GENERIC, infer_domain
 from .downsample_helpers import SUPPORTED_DOWNSAMPLE_FREQUENCIES
-from ..assets.domain.db.asset import Asset
+from ziplime.assets.entities.asset import Asset
 
 
 class Term(ABC):

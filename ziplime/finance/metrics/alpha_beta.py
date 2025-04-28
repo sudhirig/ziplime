@@ -7,7 +7,7 @@ import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.ledger import Ledger
 from ziplime.sources.benchmark_source import BenchmarkSource
 
@@ -26,7 +26,7 @@ class AlphaBeta:
         ).select("pct_change")
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                   bundle_data: BundleData):
+                   exchanges: dict[str, Exchange]):
         risk = packet["cumulative_risk_metrics"]
 
         alpha, beta = ep.alpha_beta_aligned(

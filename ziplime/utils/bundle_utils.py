@@ -1,7 +1,7 @@
 import os
 
 from ziplime.data.services.lime_trader_sdk_data_source import LimeTraderSdkDataSource
-from ziplime.gens.exchanges.lime_trader_sdk_exchange import LimeTraderSdkExchange
+from ziplime.exchanges.lime_trader_sdk.lime_trader_sdk_exchange import LimeTraderSdkExchange
 from ziplime.data.providers.fundamental_data.limex_hub_fundamental_data_provider import LimexHubFundamentalDataProvider
 
 

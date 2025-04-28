@@ -3,24 +3,25 @@ from copy import copy
 
 import structlog
 
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 
 from .blotter import Blotter
 
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.domain.order import Order
-from ...gens.exchanges.exchange import Exchange
+from ziplime.exchanges.exchange import Exchange
+from ...assets.entities.asset import Asset
 
 
 class InMemoryBlotter(Blotter):
     def __init__(
             self,
-            exchange: Exchange,
+            exchanges: dict[str, Exchange],
             cancel_policy,
     ):
         super().__init__(cancel_policy=cancel_policy)
         self._logger = structlog.get_logger(__name__)
-        self.exchange = exchange
+        self.exchanges = exchanges
         # these orders are aggregated by asset
         self.open_orders = defaultdict(dict)
         # keep a dict of orders by their own id
@@ -70,11 +71,11 @@ class InMemoryBlotter(Blotter):
         return order.id
 
     def order_cancelled(self, order: Order) -> None:
-        asset_orders = self.open_orders[order.asset]
+        asset_orders = self.open_orders[order.asset.sid]
         asset_orders.pop(order.id, None)
 
     def order_rejected(self, order: Order) -> None:
-        asset_orders = self.open_orders[order.asset]
+        asset_orders = self.open_orders[order.asset.sid]
         asset_orders.pop(order.id, None)
 
     def get_order_by_id(self, order_id: str) -> Order | None:
@@ -83,10 +84,10 @@ class InMemoryBlotter(Blotter):
     def get_open_orders_by_asset(self, asset: Asset) -> dict[str, Order] | None:
         return self.open_orders.get(asset, None)
 
-    def get_open_orders(self) -> dict[Asset, dict[str, Order]]:
+    def get_open_orders(self) -> dict[AssetModel, dict[str, Order]]:
         return self.open_orders
 
-    def cancel_all_orders_for_asset(self, asset: Asset, relay_status: bool = True):
+    def cancel_all_orders_for_asset(self, asset: AssetModel, relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
         """

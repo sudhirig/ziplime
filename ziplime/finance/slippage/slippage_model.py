@@ -1,11 +1,12 @@
 import math
 from abc import abstractmethod
+from decimal import Decimal
+
 from pandas import isnull
 
-from ziplime.assets.domain.db.asset import Asset
-from ziplime.assets.domain.db.equity import Equity
-from ziplime.assets.domain.db.futures_contract import FuturesContract
-from ziplime.domain.bar_data import BarData
+from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.equity import Equity
+from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.errors import LiquidityExceeded
 from ziplime.finance.shared import FinancialModelMeta
 from ziplime.finance.domain.transaction import Transaction
@@ -17,8 +18,8 @@ LIMIT = 1 << 3
 
 SQRT_252 = math.sqrt(252)
 
-DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT = 0.025
-DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT = 0.05
+DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT = Decimal(0.025)
+DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT = Decimal(0.05)
 
 
 class SlippageModel(metaclass=FinancialModelMeta):
@@ -100,7 +101,8 @@ class SlippageModel(metaclass=FinancialModelMeta):
         """
         raise NotImplementedError("process_order")
 
-    def simulate(self, data: BarData, assets: list[Asset], orders_for_asset):
+    def simulate(self, exchange, data, assets: list[AssetModel], orders_for_asset):
+        raise Exception("fix this, data should not be forwarderd")
         self._volume_for_bar = 0
         volume = data.current(assets=assets, fields=["volume"])["volume"][0]
 

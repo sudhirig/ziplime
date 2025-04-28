@@ -6,11 +6,11 @@ from typing import Self
 
 import limexhub
 import structlog
-from click import progressbar
+from asyncclick import progressbar
 from joblib import Parallel, delayed
 
 import polars as pl
-from ziplime.data.services.bundle_data_source import BundleDataSource
+from ziplime.data.services.data_bundle_source import DataBundleSource
 
 
 def fetch_historical_limex_data_task(date_from: datetime.datetime,
@@ -59,7 +59,7 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
     return df
 
 
-class LimexHubDataSource(BundleDataSource):
+class LimexHubDataSource(DataBundleSource):
     def __init__(self, limex_api_key: str, maximum_threads: int | None = None):
         super().__init__()
         self._limex_api_key = limex_api_key

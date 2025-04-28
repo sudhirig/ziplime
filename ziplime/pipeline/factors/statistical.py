@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from numexpr import evaluate
 import numpy as np
 from numpy import broadcast_arrays
@@ -14,11 +16,10 @@ from ziplime.pipeline.term import AssetExists
 from ziplime.utils.math_utils import nanmean
 from ziplime.utils.numpy_utils import (
     float64_dtype,
-    int64_dtype,
 )
 
 from .basic import Returns
-from ...assets.domain.db.asset import Asset
+from ziplime.assets.entities.asset import Asset
 
 
 class _RollingCorrelation(CustomFactor):
@@ -477,10 +478,10 @@ class SimpleBeta(CustomFactor, StandardOutputs):
     dtype = float64_dtype
     params = ("allowed_missing_count",)
 
-    def __new__(cls, target: Asset, regression_length: int, allowed_missing_percentage: int | float = 0.25):
+    def __new__(cls, target: Asset, regression_length: int, allowed_missing_percentage: int | float = Decimal(0.25)):
         if regression_length < 3:
             raise ValueError("regression_length must be greater than or equal to 3")
-        if allowed_missing_percentage <= 0.0 or allowed_missing_percentage > 1.0:
+        if allowed_missing_percentage <= Decimal(0.0) or allowed_missing_percentage > Decimal(1.0):
             raise ValueError("allowed_missing_percentage must be between 0.0 and 1.0")
         daily_returns = Returns(
             window_length=2,

@@ -1,6 +1,6 @@
 from ziplime.finance.shared import AllowedAssetMarker
 
-from ziplime.assets.domain.db.futures_contract import FuturesContract
+from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.finance.slippage.slippage_model import SlippageModel
 
 

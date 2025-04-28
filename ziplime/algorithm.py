@@ -5,6 +5,7 @@ from collections import namedtuple, OrderedDict
 from contextlib import AsyncExitStack
 from copy import copy
 import warnings
+from decimal import Decimal
 from typing import Callable
 import pandas as pd
 import numpy as np
@@ -16,7 +17,9 @@ from itertools import chain, repeat
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.asset_type import AssetType
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.assets.entities.asset import Asset
+from ziplime.assets.services.asset_service import AssetService
+from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.blotter.blotter import Blotter
 from ziplime.finance.controls.long_only import LongOnly
@@ -30,8 +33,8 @@ from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.metrics import MaxLeverage
 from ziplime.gens.domain.trading_clock import TradingClock
-from ziplime.gens.exchanges.exchange import Exchange
-from ziplime.gens.domain.simulation_event import SimulationEvent
+from ziplime.exchanges.exchange import Exchange
+from ziplime.trading.enums.simulation_event import SimulationEvent
 from ziplime.utils.calendar_utils import get_calendar
 
 from ziplime.protocol import handle_non_market_minutes
@@ -53,7 +56,7 @@ from ziplime.errors import (
     SetSlippagePostInit,
     UnsupportedCancelPolicy,
     UnsupportedDatetimeFormat,
-    ZeroCapitalError,
+    ZeroCapitalError, SymbolNotFound,
 )
 
 from ziplime.finance.execution import ExecutionStyle
@@ -62,9 +65,9 @@ from ziplime.finance.cancel_policy import CancelPolicy
 from ziplime.finance.asset_restrictions import (
     NoRestrictions,
 )
-from ziplime.assets.domain.db.asset import Asset
-from ziplime.assets.domain.db.futures_contract import FuturesContract
-from ziplime.assets.domain.db.equity import Equity
+from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.futures_contract import FuturesContract
+from ziplime.assets.entities.equity import Equity
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.finance.metrics_tracker import MetricsTracker
 from ziplime.pipeline import Pipeline
@@ -175,20 +178,21 @@ class TradingAlgorithm:
 
     def __init__(
             self,
-            sim_params: SimulationParameters,
-            bundle_data: BundleData,
-            exchange: Exchange,
+            algorithm: AlgorithmFile,
+            asset_service: AssetService,
+            exchanges: dict[str, Exchange],
             # Algorithm API
             metrics_set,
             blotter: Blotter,
-            algorithm_file: str,
             benchmark_source: BenchmarkSource,
             clock: TradingClock,
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
     ):
-        self.exchange = exchange
+        self.algorithm = algorithm
+        self.exchanges = exchanges
+        self.default_exchange = list(self.exchanges.values())[0]
         # List of trading controls to be used to validate orders.
         self.trading_controls = []
 
@@ -203,13 +207,15 @@ class TradingAlgorithm:
         # finder earlier than that to look up assets for things like
         # set_benchmark.
         # self.data_portal = data_portal
-        self.bundle_data = bundle_data
+        # self.market_data_provider = market_data_provider
         self.benchmark_source = benchmark_source
 
         # XXX: This is also a mess. We should remove all of this and only allow
         #      one way to pass a calendar.
         #
-        self.sim_params = sim_params
+        # self.sim_params = sim_params
+        self.asset_service = asset_service
+        self.clock = clock
 
         self.metrics_tracker = None
         self._last_sync_time = pd.NaT
@@ -238,32 +244,14 @@ class TradingAlgorithm:
         self.event_manager = EventManager(create_event_context)
 
         self._handle_data = None
+        self._ledger = Ledger(trading_sessions=clock.sessions, exchanges=exchanges,
+                              data_frequency=clock.emission_rate)
 
-        self._ledger = Ledger(trading_sessions=self.sim_params.sessions, capital_base=self.sim_params.capital_base,
-                              bundle_data=self.bundle_data, data_frequency=self.sim_params.emission_rate)
-
-        def noop(*args, **kwargs):
-            pass
-
-        module_name = "ziplime.ziplime_algorithm"  # TODO: check if we need to modify this
-        spec = importlib.util.spec_from_file_location(module_name, algorithm_file)
-        if spec and spec.loader:
-            # Create a module based on the spec
-            module = importlib.util.module_from_spec(spec)
-
-            # Register the module in sys.modules so it can be found by other modules
-            sys.modules[module_name] = module
-
-            # Execute the module in its own namespace
-            spec.loader.exec_module(module)
-        else:
-            raise Exception(f"No module found: {algorithm_file}")
-
-        self._initialize = module.__dict__.get("initialize", noop)
-        self._handle_data = module.__dict__.get("handle_data", noop)
-        self._before_trading_start = module.__dict__.get("before_trading_start", noop)
+        self._initialize = algorithm.initialize
+        self._handle_data = algorithm.handle_data
+        self._before_trading_start = algorithm.before_trading_start
         # Optional analyze function, gets called after run
-        self._analyze = module.__dict__.get("analyze", noop)
+        self._analyze = algorithm.analyze
 
         self.event_manager.add_event(
             ziplime.utils.events.Event(
@@ -275,8 +263,10 @@ class TradingAlgorithm:
             prepend=True,
         )
 
-        if self.sim_params.capital_base <= 0:
-            raise ZeroCapitalError()
+        # TODO: what if we add funds?
+        for exchange in exchanges.values():
+            if exchange.get_start_cash_balance() <= 0:
+                raise ZeroCapitalError()
 
         # Prepare the algo for initialization
         self.initialized = False
@@ -291,9 +281,9 @@ class TradingAlgorithm:
         self.restrictions = NoRestrictions()
 
         self.current_data = BarData(
-            bundle_data=self.bundle_data,
+            exchanges=exchanges,
             simulation_dt_func=self.get_simulation_dt,
-            trading_calendar=self.sim_params.trading_calendar,
+            trading_calendar=self.clock.trading_calendar,
             restrictions=self.restrictions,
         )
 
@@ -313,8 +303,8 @@ class TradingAlgorithm:
         if get_loader is not None:
             self.engine = SimplePipelineEngine(
                 get_loader,
-                self.bundle_data.asset_repository,
-                self.default_pipeline_domain(self.sim_params.trading_calendar),
+                self.asset_service,
+                self.default_pipeline_domain(self.clock.trading_calendar),
             )
         else:
             self.engine = ExplodingPipelineEngine()
@@ -336,7 +326,7 @@ class TradingAlgorithm:
 
         with handle_non_market_minutes(
                 data
-        ) if self.sim_params.emission_rate == datetime.timedelta(minutes=1) else ExitStack():
+        ) if self.clock.emission_rate == datetime.timedelta(minutes=1) else ExitStack():
             self._before_trading_start(self, data)
 
         self._in_before_trading_start = False
@@ -352,7 +342,6 @@ class TradingAlgorithm:
         with ZiplineAPI(self):
             self._analyze(self, perf)
 
-
     def compute_eager_pipelines(self):
         """Compute any pipelines attached with eager=True."""
         for name, pipe in self._pipelines.items():
@@ -365,20 +354,20 @@ class TradingAlgorithm:
         method to get a standard construction generator.
         """
         self.metrics_tracker = MetricsTracker(
-            bundle_data=self.bundle_data,
-            trading_calendar=self.sim_params.trading_calendar,
-            sessions=self.sim_params.sessions,
-            first_session=self.sim_params.start_session,
-            last_session=self.sim_params.end_session,
-            capital_base=self.sim_params.capital_base,
-            emission_rate=self.sim_params.emission_rate,
+            asset_service=self.asset_service,
+            exchanges=self.exchanges,
+            trading_calendar=self.clock.trading_calendar,
+            sessions=self.clock.sessions,
+            first_session=self.clock.start_session,
+            last_session=self.clock.end_session,
+            emission_rate=self.clock.emission_rate,
             ledger=self._ledger,
             metrics=self._metrics_set,
             benchmark_source=self.benchmark_source
         )
 
         # Set the dt initially to the period start by forcing it to change.
-        self.on_dt_changed(dt=self.sim_params.start_session)
+        self.on_dt_changed(dt=self.clock.start_session)
 
         if not self.initialized:
             await self.initialize()
@@ -431,7 +420,7 @@ class TradingAlgorithm:
 
     def calculate_capital_changes(
             self, dt: datetime.datetime, emission_rate: datetime.timedelta, is_interday: bool,
-            portfolio_value_adjustment: float = 0.0
+            portfolio_value_adjustment: Decimal = Decimal(0.00)
     ):
         """If there is a capital change for a given dt, this means the the change
         occurs before `handle_data` on the given dt. In the case of the
@@ -550,7 +539,7 @@ class TradingAlgorithm:
         date_rule = date_rule or date_rules.every_day()
         time_rule = (
             (time_rule or time_rules.every_minute())
-            if self.sim_params.emission_rate == datetime.timedelta(minutes=1)
+            if self.clock.emission_rate == datetime.timedelta(minutes=1)
             else
             # If we are in daily mode the time_rule is ignored.
             time_rules.every_minute()
@@ -560,7 +549,7 @@ class TradingAlgorithm:
         # Note that the ExchangeTradingSchedule is currently the only
         # TradingSchedule class, so this is unlikely to be hit
         if calendar is None:
-            cal = self.sim_params.trading_calendar
+            cal = self.clock.trading_calendar
         elif calendar is calendars.US_EQUITIES:
             cal = get_calendar("XNYS")
         elif calendar is calendars.US_FUTURES:
@@ -628,7 +617,7 @@ class TradingAlgorithm:
         continuous_future : ziplime.assets.ContinuousFuture
             The continuous future specifier.
         """
-        return self.data_portal._bundle_data.asset_repository.create_continuous_future(
+        return self.data_portal._data_bundle.asset_repository.create_continuous_future(
             root_symbol_str,
             offset,
             roll,
@@ -673,10 +662,14 @@ class TradingAlgorithm:
         #     else pd.Timestamp(self.sim_params.end_session).to_pydatetime().date()
         # )
         if exchange_name is None:
-            exchange_name = self.sim_params.exchange.name
-        return await self.bundle_data.asset_repository.get_asset_by_symbol(symbol=symbol_str,
-                                                                           asset_type=asset_type,
-                                                                           exchange_name=exchange_name)
+            exchange_name = self.default_exchange.name
+
+        asset = await self.asset_service.get_asset_by_symbol(symbol=symbol_str,
+                                                             asset_type=asset_type,
+                                                             exchange_name=exchange_name)
+        if asset is None:
+            raise SymbolNotFound(symbol=symbol_str)
+        return asset
 
     @api_method
     def symbols(self, *args, **kwargs):
@@ -726,7 +719,7 @@ class TradingAlgorithm:
         SidsNotFound
             When a requested ``sid`` does not map to any asset.
         """
-        return await self.bundle_data.asset_repository.get_asset_by_sid(sid=sid)
+        return await self.asset_service.get_asset_by_sid(sid=sid)
 
     @api_method
     async def future_symbol(self, symbol: str, exchange_name: str = None) -> FuturesContract | None:
@@ -747,19 +740,19 @@ class TradingAlgorithm:
         SymbolNotFound
             Raised when no contract named 'symbol' is found.
         """
-        return await self.bundle_data.asset_repository.get_futures_contract_by_symbol(
+        return await self.asset_service.get_futures_contract_by_symbol(
             symbol=symbol,
-            exchange_name=exchange_name or self.sim_params.exchange.name
+            exchange_name=exchange_name or self.default_exchange.name
         )
 
-    def _calculate_order_value_amount(self, asset: Asset, value: float):
+    def _calculate_order_value_amount(self, asset: Asset, value: Decimal):
         """Calculates how many shares/contracts to order based on the type of
         asset being ordered.
         """
         # Make sure the asset exists, and that there is a last price for it.
         # FIXME: we should use BarData's can_trade logic here, but I haven't
         # yet found a good way to do that.
-        normalized_date = self.sim_params.trading_calendar.minute_to_session(self.datetime).date()
+        normalized_date = self.clock.trading_calendar.minute_to_session(self.datetime).date()
 
         if normalized_date < asset.start_date:
             raise CannotOrderDelistedAsset(
@@ -788,7 +781,7 @@ class TradingAlgorithm:
 
     def _can_order_asset(self, asset: Asset):
         if asset.auto_close_date:
-            day = self.sim_params.trading_calendar.minute_to_session(self.get_datetime()).date()
+            day = self.clock.trading_calendar.minute_to_session(self.get_datetime()).date()
 
             if day > min(asset.end_date, asset.auto_close_date):
                 # If we are after the asset's end date or auto close date, warn
@@ -840,20 +833,20 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    async def order(self, asset: Asset, amount: float, style: ExecutionStyle) -> Order | None:
+    async def order(self, asset: AssetModel, amount: Decimal, style: ExecutionStyle) -> Order | None:
         """Place an order for a fixed number of shares.
 
         Parameters
         ----------
-        asset : Asset
+        asset : AssetModel
             The asset to be ordered.
         amount : int
             The amount of shares to order. If ``amount`` is positive, this is
             the number of shares to buy or cover. If ``amount`` is negative,
             this is the number of shares to sell or short.
-        limit_price : float, optional
+        limit_price : Decimal, optional
             The limit price for the order.
-        stop_price : float, optional
+        stop_price : Decimal, optional
             The stop price for the order.
         style : ExecutionStyle, optional
             The execution style for the order.
@@ -885,10 +878,11 @@ class TradingAlgorithm:
         if amount == 0:
             # Don't bother placing orders for 0 shares.
             return None
-        elif amount > self.sim_params.max_shares:
-            # Arbitrary limit of 100 billion (US) shares will never be
-            # exceeded except by a buggy algorithm.
-            raise OverflowError(f"Can't order more than {self.sim_params.max_shares} shares")
+        # TODO: implement dynamic risk control
+        # elif amount > self.sim_params.max_shares:
+        #     # Arbitrary limit of 100 billion (US) shares will never be
+        #     # exceeded except by a buggy algorithm.
+        #     raise OverflowError(f"Can't order more than {self.sim_params.max_shares} shares")
 
         amount = self.round_order(amount)
         if amount == 0:
@@ -909,14 +903,15 @@ class TradingAlgorithm:
             status=OrderStatus.OPEN
         )
 
-        submitted_order = await self.exchange.submit_order(order=order)
+        submitted_order = await self.default_exchange.submit_order(order=order)
         persisted_order = self.blotter.save_order(order=submitted_order)
         self.new_orders[submitted_order.id] = submitted_order
 
         return submitted_order
 
     def _calculate_order(
-            self, asset: Asset, amount: float,  # limit_price: float | None = None, stop_price: float | None = None,
+            self, asset: AssetModel, amount: Decimal,
+            # limit_price: Decimal | None = None, stop_price: Decimal | None = None,
             style: ExecutionStyle
     ):
         amount = self.round_order(amount)
@@ -932,7 +927,7 @@ class TradingAlgorithm:
         return amount, style
 
     @staticmethod
-    def round_order(amount: float):
+    def round_order(amount: Decimal):
         """Convert number of shares to an integer.
 
         By default, truncates to the integer share count that's either within
@@ -942,7 +937,7 @@ class TradingAlgorithm:
         """
         return int(round_if_near_integer(amount))
 
-    def validate_order_params(self, asset: Asset, amount: int):
+    def validate_order_params(self, asset: AssetModel, amount: int):
         """
         Helper method for validating parameters to the order API function.
 
@@ -965,8 +960,8 @@ class TradingAlgorithm:
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    async def order_value(self, asset: Asset, value: float, limit_price: float | None = None,
-                          stop_price: float | None = None,
+    async def order_value(self, asset: AssetModel, value: Decimal, limit_price: Decimal | None = None,
+                          stop_price: Decimal | None = None,
                           style: ExecutionStyle | None = None):
         """Place an order for a fixed amount of money.
 
@@ -974,14 +969,14 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : Asset
+        asset : AssetModel
             The asset to be ordered.
-        value : float
+        value : Decimal
             Amount of value of ``asset`` to be transacted. The number of shares
             bought or sold will be equal to ``value / current_price``.
-        limit_price : float, optional
+        limit_price : Decimal, optional
             Limit price for the order.
-        stop_price : float, optional
+        stop_price : Decimal, optional
             Stop price for the order.
         style : ExecutionStyle
             The execution style for the order.
@@ -1214,16 +1209,16 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_percent(
-            self, asset: Asset, percent: float, style: ExecutionStyle
+            self, asset: AssetModel, percent: Decimal, style: ExecutionStyle
     ):
         """Place an order in the specified asset corresponding to the given
         percent of the current portfolio value.
 
         Parameters
         ----------
-        asset : Asset
+        asset : AssetModel
             The asset that this order is for.
-        percent : float
+        percent : Decimal
             The percentage of the portfolio value to allocate to ``asset``.
             This is specified as a decimal, for example: 0.50 means 50%.
         style : ExecutionStyle
@@ -1255,14 +1250,14 @@ class TradingAlgorithm:
             style=style,
         )
 
-    def _calculate_order_percent_amount(self, asset: Asset, percent: float):
+    def _calculate_order_percent_amount(self, asset: AssetModel, percent: Decimal):
         value = self.portfolio.portfolio_value * percent
         return self._calculate_order_value_amount(asset=asset, value=value)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target(
-            self, asset: Asset, target: int, style: ExecutionStyle
+            self, asset: AssetModel, target: int, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target number of shares. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1272,13 +1267,13 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : Asset
+        asset : AssetModel
             The asset that this order is for.
         target : int
             The desired number of shares of ``asset``.
-        limit_price : float, optional
+        limit_price : Decimal, optional
             The limit price for the order.
-        stop_price : float, optional
+        stop_price : Decimal, optional
             The stop price for the order.
         style : ExecutionStyle
             The execution style for the order.
@@ -1323,7 +1318,7 @@ class TradingAlgorithm:
             style=style,
         )
 
-    def _calculate_order_target_amount(self, asset: Asset, target: int):
+    def _calculate_order_target_amount(self, asset: AssetModel, target: int):
         if asset in self.portfolio.positions:
             current_position = self.portfolio.positions[asset].amount
             target -= current_position
@@ -1333,7 +1328,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_value(
-            self, asset: Asset, target: float, style: ExecutionStyle
+            self, asset: AssetModel, target: Decimal, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target value. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1345,9 +1340,9 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : Asset
+        asset : AssetModel
             The asset that this order is for.
-        target : float
+        target : Decimal
             The desired total value of ``asset``.
         style : ExecutionStyle
             The execution style for the order.
@@ -1392,7 +1387,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_percent(
-            self, asset: Asset, target: float,
+            self, asset: AssetModel, target: Decimal,
             style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target percent of the
@@ -1403,9 +1398,9 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : Asset
+        asset : AssetModel
             The asset that this order is for.
-        target : float
+        target : Decimal
             The desired percentage of the portfolio value to allocate to
             ``asset``. This is specified as a decimal, for example:
             0.50 means 50%.
@@ -1483,7 +1478,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : Asset
+        asset : AssetModel
             If passed and not None, return only the open orders for the given
             asset instead of all open orders.
 
@@ -1549,7 +1544,7 @@ class TradingAlgorithm:
         else:
             self.new_orders.pop(order.id, None)
 
-    def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
+    def cancel_all_orders_for_asset(self, asset: AssetModel, warn: bool = False, relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
         """
@@ -1619,7 +1614,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        max_leverage : float
+        max_leverage : Decimal
             The maximum leverage for the algorithm. If not provided there will
             be no maximum.
         """
@@ -1632,7 +1627,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        min_leverage : float
+        min_leverage : Decimal
             The minimum leverage for the algorithm.
         grace_period : pd.Timedelta
             The offset from the start date used to enforce a minimum leverage.
@@ -1675,7 +1670,7 @@ class TradingAlgorithm:
             asset.
         max_shares : int, optional
             The maximum number of shares to hold for an asset.
-        max_notional : float, optional
+        max_notional : Decimal, optional
             The maximum value to hold for an asset.
         """
         control = MaxPositionSize(
@@ -1704,7 +1699,7 @@ class TradingAlgorithm:
             asset.
         max_shares : int, optional
             The maximum number of shares that can be ordered at one time.
-        max_notional : float, optional
+        max_notional : Decimal, optional
             The maximum value that can be ordered at one time.
         """
         control = MaxOrderSize(
@@ -1876,7 +1871,7 @@ class TradingAlgorithm:
         --------
         PipelineEngine.run_pipeline
         """
-        sessions = self.sim_params.trading_calendar.sessions
+        sessions = self.clock.trading_calendar.sessions
 
         # Load data starting from the previous trading day...
         start_date_loc = sessions.get_loc(start_session)
@@ -1942,7 +1937,7 @@ class TradingAlgorithm:
             new_transactions,
             new_commissions,
             closed_orders,
-        ) = await self.exchange.get_transactions(orders=self.blotter.get_open_orders(), bar_data=current_data)
+        ) = await self.default_exchange.get_transactions(orders=self.blotter.get_open_orders(), bar_data=current_data)
         # print(f"getting transactions for {current_data.current_dt}, new transactions: {len(new_transactions)}, new commissions: {len(new_commissions)}, closed orders: {len(closed_orders)}" )
         self.blotter.prune_orders(closed_orders=closed_orders)
 
@@ -1976,7 +1971,7 @@ class TradingAlgorithm:
             self,
             midnight_dt,
             current_data,
-            bundle_data: BundleData,
+            asset_service,
     ):
         # process any capital changes that came overnight
         for capital_change in self.calculate_capital_changes(
@@ -1989,10 +1984,7 @@ class TradingAlgorithm:
         self.simulation_dt = midnight_dt
         self.on_dt_changed(midnight_dt)
 
-        self.metrics_tracker.handle_market_open(
-            session_label=midnight_dt,
-            bundle_data=self.bundle_data,
-        )
+        self.metrics_tracker.handle_market_open(session_label=midnight_dt)
 
         # handle any splits that impact any positions or any open orders.
         assets_we_care_about = (
@@ -2000,7 +1992,7 @@ class TradingAlgorithm:
         )
 
         if assets_we_care_about:
-            splits = bundle_data.get_splits(assets_we_care_about, midnight_dt)
+            splits = asset_service.get_splits(assets_we_care_about, midnight_dt)
             if splits:
                 self.blotter.process_splits(splits)
                 self._ledger.process_splits(splits)
@@ -2054,14 +2046,14 @@ class TradingAlgorithm:
                 elif action == SimulationEvent.SESSION_START:
                     for capital_change_packet in self.once_a_day(midnight_dt=dt,
                                                                  current_data=self.current_data,
-                                                                 bundle_data=self.bundle_data):
+                                                                 asset_service=self.asset_service):
                         yield capital_change_packet
                 elif action == SimulationEvent.SESSION_END:
                     # End of the session.
                     positions = self._ledger.position_tracker.positions
                     position_assets = list(positions.keys())
 
-                    # await self.bundle_data.asset_repository.retrieve_all(
+                    # await self.asset_service.retrieve_all(
                     #     sids=[a.sid for a in positions]
                     # )
 
@@ -2099,7 +2091,7 @@ class TradingAlgorithm:
            auto_close_date.
         """
 
-        def past_auto_close_date(asset: Asset):
+        def past_auto_close_date(asset: AssetModel):
             acd = asset.auto_close_date
             if acd is not None:
                 acd = acd
@@ -2143,7 +2135,7 @@ class TradingAlgorithm:
         """
         perf_message = self.metrics_tracker.handle_market_close(
             dt=dt,
-            bundle_data=self.bundle_data,
+            data_bundle=self.data_bundle,
         )
         perf_message["daily_perf"]["recorded_vars"] = self.recorded_vars
         return perf_message

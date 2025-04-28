@@ -1,13 +1,14 @@
 import datetime
 from dataclasses import dataclass
+from decimal import Decimal
 
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 
 
 @dataclass
 class Position:
-    asset: Asset
+    asset: AssetModel
     amount: int
-    cost_basis: float  # per share
-    last_sale_price: float
+    cost_basis: Decimal  # per share
+    last_sale_price: Decimal
     last_sale_date: datetime.datetime | None = None

@@ -17,7 +17,7 @@ from ziplime.utils.numpy_utils import (
     int64_dtype,
     object_dtype,
 )
-from ...assets.repositories.sqlite_adjustments_repository import SQLiteAdjustmentRepository
+from ...assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
 
 US_EQUITY_PRICING_BCOLZ_COLUMNS = (
     "open",
@@ -381,14 +381,14 @@ def expected_bar_values_2d(dates, assets, asset_info, colname, holes=None):
     return data
 
 
-class NullAdjustmentReader(SQLiteAdjustmentRepository):
+class NullAdjustmentReader(SqlAlchemyAdjustmentRepository):
     """A SQLiteAdjustmentReader that stores no adjustments and uses in-memory
     SQLite.
     """
 
     def __init__(self):
         conn = sqlite3_connect(":memory:")
-        writer = SQLiteAdjustmentRepository(conn, None, None)
+        writer = SqlAlchemyAdjustmentRepository(conn, None, None)
         empty = DataFrame(
             {
                 "sid": np.array([], dtype=np.uint32),

@@ -2,7 +2,7 @@ import polars as pl
 from abc import abstractmethod
 from typing import Any, Self
 
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.data.domain.data_bundle import DataBundle
 
 
 class BundleStorage:
@@ -11,14 +11,14 @@ class BundleStorage:
         pass
 
     @abstractmethod
-    async def store_bundle(self, bundle_data: BundleData): ...
+    async def store_bundle(self, data_bundle: DataBundle): ...
 
     @abstractmethod
-    async def load_bundle_data(self, bundle_data: BundleData) -> pl.DataFrame: ...
+    async def load_data_bundle(self, data_bundle: DataBundle) -> pl.DataFrame: ...
 
     @classmethod
     @abstractmethod
     async def from_json(cls, data: dict[str, Any]) -> Self: ...
 
     @abstractmethod
-    async def to_json(self, bundle_data: BundleData) -> dict[str, Any]: ...
+    async def to_json(self, data_bundle: DataBundle) -> dict[str, Any]: ...

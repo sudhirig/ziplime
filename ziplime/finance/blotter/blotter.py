@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+from decimal import Decimal
+
 from ziplime.finance.cancel_policy import NeverCancel
 
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.models.asset_model import AssetModel
 from ziplime.finance.commission import CommissionModel
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.transaction import Transaction
@@ -32,13 +34,13 @@ class Blotter(ABC):
     def get_order_by_id(self, order_id: str) -> Order | None: ...
 
     @abstractmethod
-    def get_open_orders_by_asset(self, asset: Asset) -> dict[str, Order] | None: ...
+    def get_open_orders_by_asset(self, asset: AssetModel) -> dict[str, Order] | None: ...
 
     @abstractmethod
-    def get_open_orders(self) -> dict[Asset, dict[str, Order]]: ...
+    def get_open_orders(self) -> dict[AssetModel, dict[str, Order]]: ...
 
     @abstractmethod
-    def cancel_all_orders_for_asset(self, asset: Asset, relay_status: bool = True) -> None: ...
+    def cancel_all_orders_for_asset(self, asset: AssetModel, relay_status: bool = True) -> None: ...
 
     def batch_order(self, order_arg_lists):
         """Place a batch of orders.
@@ -67,7 +69,7 @@ class Blotter(ABC):
         raise NotImplementedError("execute_cancel_policy")
 
     @abstractmethod
-    def process_splits(self, splits: list[tuple[Asset, float]]) -> None:
+    def process_splits(self, splits: list[tuple[AssetModel, Decimal]]) -> None:
         """
         Processes a list of splits by modifying any open orders as needed.
 

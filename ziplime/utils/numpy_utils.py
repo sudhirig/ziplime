@@ -2,14 +2,10 @@
 
 from collections import OrderedDict
 from datetime import datetime
-from warnings import catch_warnings, filterwarnings
 
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
-from packaging.version import Version
 from toolz import flip
-
-numpy_version = Version(np.__version__)
 
 bool_dtype = np.dtype("bool")
 uint8_dtype = np.dtype("uint8")

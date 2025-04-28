@@ -7,8 +7,8 @@ from pathlib import Path
 import asyncclick as click
 
 from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
-from ziplime.assets.repositories.sqlite_adjustments_repository import SQLiteAdjustmentRepository
-from ziplime.assets.repositories.sqlite_asset_repository import SqliteAssetRepository
+from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
+from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
 from ziplime.constants.fundamental_data import FUNDAMENTAL_DATA_COLUMNS
 from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
@@ -24,10 +24,9 @@ from ziplime.finance.metrics import default_metrics
 from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
 from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
 from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
-from ziplime.gens.domain.realtime_clock import RealtimeClock
 from ziplime.gens.domain.simulation_clock import SimulationClock
-from ziplime.gens.exchanges.lime_trader_sdk_exchange import LimeTraderSdkExchange
-from ziplime.gens.exchanges.simulation_exchange import SimulationExchange
+from ziplime.exchanges.lime_trader_sdk.lime_trader_sdk_exchange import LimeTraderSdkExchange
+from ziplime.exchanges.simulation_exchange import SimulationExchange
 from ziplime.utils.date_utils import strip_time_and_timezone_info
 from ziplime.utils.run_algo import run_algorithm
 from exchange_calendars import get_calendar as ec_get_calendar
@@ -35,8 +34,7 @@ from exchange_calendars import get_calendar as ec_get_calendar
 from asyncclick import DateTime
 from ziplime.utils.cli import Timestamp
 
-from ziplime.utils.bundle_utils import get_fundamental_data_provider,  get_exchange, \
-    get_data_source
+from ziplime.utils.bundle_utils import get_fundamental_data_provider, get_data_source
 
 
 def validate_date_range(date_min: datetime.datetime, date_max: datetime.datetime):
@@ -166,24 +164,24 @@ async def ingest(ctx, bundle, start_date, end_date, frequency, symbols, fundamen
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
     bundle_service = BundleService(bundle_registry=bundle_registry)
     bundle_storage = FileSystemParquetBundleStorage(base_data_path=bundle_storage_path, compression_level=5)
-    bundle_data_source = LimexHubDataSource.from_env()
+    data_bundle_source = LimexHubDataSource.from_env()
 
     calendar = ec_get_calendar(trading_calendar, start=start_date - datetime.timedelta(days=30))
 
     bundle_version = str(int(datetime.datetime.now(tz=calendar.tz).timestamp()))
-    assets_repository = SqliteAssetRepository(base_storage_path=bundle_storage_path,
-                                              bundle_name=bundle,
-                                              bundle_version=bundle_version,
-                                              future_chain_predicates=CHAIN_PREDICATES)
-    adjustments_repository = SQLiteAdjustmentRepository(base_storage_path=bundle_storage_path,
-                                                        bundle_name=bundle,
-                                                        bundle_version=bundle_version)
+    assets_repository = SqlAlchemyAssetRepository(base_storage_path=bundle_storage_path,
+                                                  bundle_name=bundle,
+                                                  bundle_version=bundle_version,
+                                                  future_chain_predicates=CHAIN_PREDICATES)
+    adjustments_repository = SqlAlchemyAdjustmentRepository(base_storage_path=bundle_storage_path,
+                                                            bundle_name=bundle,
+                                                            bundle_version=bundle_version)
 
     await bundle_service.ingest_bundle(
         date_start=start_date.replace(tzinfo=calendar.tz),
         date_end=end_date.replace(tzinfo=calendar.tz),
         bundle_storage=bundle_storage,
-        bundle_data_source=bundle_data_source,
+        data_bundle_source=data_bundle_source,
         frequency=DataFrequency(frequency).to_timedelta(),
         symbols=symbols_parsed,
         name=bundle,
@@ -478,7 +476,7 @@ async def run(
         metrics_set=default_metrics(),
         benchmark_spec=benchmark_spec,
         custom_loader=None,
-        missing_bundle_data_source=get_data_source(
+        missing_data_bundle_source=get_data_source(
             live_market_data_provider) if live_market_data_provider is not None else None,
         bundle_registry=bundle_registry,
         simulation_params=sim_params,

@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import abc
+from decimal import Decimal
 from sys import float_info
 from numpy import isfinite
 import ziplime.utils.math_utils as zp_math
@@ -60,10 +61,10 @@ class MarketOrder(ExecutionStyle):
     def __init__(self, exchange=None):
         self._exchange = exchange
 
-    def get_limit_price(self, is_buy):
+    def get_limit_price(self, is_buy: bool):
         return None
 
-    def get_stop_price(self, is_buy):
+    def get_stop_price(self, is_buy: bool):
         return None
 
 
@@ -74,13 +75,13 @@ class LimitOrder(ExecutionStyle):
 
     Parameters
     ----------
-    limit_price : float
+    limit_price : Decimal
         Maximum price for buys, or minimum price for sells, at which the order
         should be filled.
     """
 
     def __init__(self, limit_price, asset=None, exchange=None):
-        check_stoplimit_prices(limit_price, "limit")
+        check_stoplimit_prices(price=limit_price, label="limit")
 
         self.limit_price = limit_price
         self._exchange = exchange
@@ -104,14 +105,14 @@ class StopOrder(ExecutionStyle):
 
     Parameters
     ----------
-    stop_price : float
+    stop_price : Decimal
         Price threshold at which the order should be placed. For sells, the
         order will be placed if market price falls below this value. For buys,
         the order will be placed if market price rises above this value.
     """
 
     def __init__(self, stop_price, asset=None, exchange=None):
-        check_stoplimit_prices(stop_price, "stop")
+        check_stoplimit_prices(price=stop_price, label="stop")
 
         self.stop_price = stop_price
         self._exchange = exchange
@@ -135,18 +136,18 @@ class StopLimitOrder(ExecutionStyle):
 
     Parameters
     ----------
-    limit_price : float
+    limit_price : Decimal
         Maximum price for buys, or minimum price for sells, at which the order
         should be filled, if placed.
-    stop_price : float
+    stop_price : Decimal
         Price threshold at which the order should be placed. For sells, the
         order will be placed if market price falls below this value. For buys,
         the order will be placed if market price rises above this value.
     """
 
     def __init__(self, limit_price, stop_price, asset=None, exchange=None):
-        check_stoplimit_prices(limit_price, "limit")
-        check_stoplimit_prices(stop_price, "stop")
+        check_stoplimit_prices(price=limit_price, label="limit")
+        check_stoplimit_prices(price=stop_price, label="stop")
 
         self.limit_price = limit_price
         self.stop_price = stop_price
@@ -168,7 +169,7 @@ class StopLimitOrder(ExecutionStyle):
         )
 
 
-def asymmetric_round_price(price, prefer_round_down, tick_size, diff=0.95):
+def asymmetric_round_price(price: Decimal, prefer_round_down: bool, tick_size: Decimal, diff: Decimal = Decimal(0.95)):
     """
     Asymmetric rounding function for adjusting prices to the specified number
     of places in a way that "improves" the price. For limit prices, this means
@@ -186,7 +187,7 @@ def asymmetric_round_price(price, prefer_round_down, tick_size, diff=0.95):
     """
     precision = zp_math.number_of_decimal_places(tick_size)
     multiplier = int(tick_size * (10 ** precision))
-    diff -= 0.5  # shift the difference down
+    diff -= Decimal(0.5)  # shift the difference down
     diff *= 10 ** -precision  # adjust diff to precision of tick size
     diff *= multiplier  # adjust diff to value of tick_size
 
@@ -205,7 +206,7 @@ def asymmetric_round_price(price, prefer_round_down, tick_size, diff=0.95):
     return rounded
 
 
-def check_stoplimit_prices(price, label):
+def check_stoplimit_prices(price: float, label: str):
     """
     Check to make sure the stop/limit prices are reasonable and raise
     a BadOrderParameters exception if not.
@@ -213,17 +214,17 @@ def check_stoplimit_prices(price, label):
     try:
         if not isfinite(price):
             raise BadOrderParameters(
-                msg="Attempted to place an order with a {} price "
-                    "of {}.".format(label, price)
+                msg=f"Attempted to place an order with a {label} price "
+                    f"of {price}."
             )
     # This catches arbitrary objects
     except TypeError as exc:
         raise BadOrderParameters(
-            msg="Attempted to place an order with a {} price "
-                "of {}.".format(label, type(price))
+            msg=f"Attempted to place an order with a {label} price "
+                f"of {type(price)}."
         ) from exc
 
     if price < 0:
         raise BadOrderParameters(
-            msg="Can't place a {} order with a negative price.".format(label)
+            msg=f"Can't place a {label} order with a negative price."
         )

@@ -5,6 +5,7 @@ import polars as pl
 import structlog
 from exchange_calendars import ExchangeCalendar, get_calendar
 
+from ziplime.assets.services.asset_service import AssetService
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.bundle_registry import BundleRegistry
@@ -30,6 +31,7 @@ class BundleService:
                             data_bundle_source: DataBundleSource,
                             frequency: datetime.timedelta,
                             bundle_storage: BundleStorage,
+                            asset_service: AssetService
                             ):
 
         """Ingest data for a given bundle.        """
@@ -54,12 +56,22 @@ class BundleService:
             date_to=date_end
         )
         if data.is_empty():
-            self._logger.warning("No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
+            self._logger.warning(
+                "No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
             return
         data = data.with_columns(
             pl.lit(0).alias("sid")
         )
+        equities_by_exchange = data.select("symbol", "exchange").group_by("exchange").all()
+        for row in equities_by_exchange.iter_rows(named=True):
+            exchange_name = row["exchange"]
+            symbols = row["symbol"]
+            equities = await asset_service.get_equities_by_symbols(symbols=symbols, exchange_name=exchange_name)
+            symbol_to_sid = {e.get_symbol_by_exchange(exchange_name=exchange_name).symbol: e.sid for e in equities}
 
+            data = data.with_columns(
+                pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")
+            )
 
         # equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
         #                                                    pl.min("date").alias("min_date"))

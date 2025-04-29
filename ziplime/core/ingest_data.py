@@ -21,14 +21,7 @@ from ziplime.data.services.file_system_parquet_bundle_storage import FileSystemP
 from ziplime.data.services.limex_hub_data_source import LimexHubDataSource
 
 
-async def add_default_assets(trading_calendar: ExchangeCalendar):
-    db_path = str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())
-    if os.path.exists(db_path):
-        os.remove(db_path)
-    db_url = f"sqlite+aiosqlite:///{db_path}"
-    assets_repository = SqlAlchemyAssetRepository(db_url=db_url, future_chain_predicates=CHAIN_PREDICATES)
-    adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
-    asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
+async def add_default_assets(asset_service: AssetService):
 
     asset_start_date = datetime.datetime(year=1900, month=1, day=1, tzinfo=datetime.timezone.utc)
     asset_end_date = datetime.datetime(year=2099, month=1, day=1, tzinfo=datetime.timezone.utc)
@@ -95,6 +88,20 @@ async def _ingest_data(
 
     bundle_version = str(int(datetime.datetime.now(tz=trading_calendar.tz).timestamp()))
 
+
+
+    db_path = str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())
+    if os.path.exists(db_path):
+        os.remove(db_path)
+    db_url = f"sqlite+aiosqlite:///{db_path}"
+    assets_repository = SqlAlchemyAssetRepository(db_url=db_url, future_chain_predicates=CHAIN_PREDICATES)
+    adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
+    asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
+
+
+    await add_default_assets(asset_service=asset_service)
+
+
     await bundle_service.ingest_bundle(
         date_start=start_date.replace(tzinfo=trading_calendar.tz),
         date_end=end_date.replace(tzinfo=trading_calendar.tz),
@@ -105,8 +112,8 @@ async def _ingest_data(
         name=bundle_name,
         bundle_version=bundle_version,
         trading_calendar=trading_calendar,
+        asset_service=asset_service
     )
-    await add_default_assets(trading_calendar=trading_calendar)
 
 
 def ingest_data(start_date: datetime.datetime, end_date: datetime.datetime,

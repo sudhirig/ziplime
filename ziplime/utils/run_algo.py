@@ -4,11 +4,7 @@ import sys
 import structlog
 
 from ziplime.assets.services.asset_service import AssetService
-from ziplime.config.base_algorithm_config import BaseAlgorithmConfig
 from ziplime.core.algorithm_file import AlgorithmFile
-from ziplime.data.services.data_bundle_source import DataBundleSource
-from ziplime.data.services.bundle_registry import BundleRegistry
-from ziplime.data.services.bundle_service import BundleService
 from ziplime.domain.benchmark_spec import BenchmarkSpec
 from ziplime.exchanges.exchange import Exchange
 

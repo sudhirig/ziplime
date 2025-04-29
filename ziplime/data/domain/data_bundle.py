@@ -9,10 +9,8 @@ import polars as pl
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
-from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
-from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
-from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.data.services.data_bundle_source import DataBundleSource
 
 
@@ -35,11 +33,11 @@ class DataBundle:
         df = self.data
         return df
 
-    async def get_data_by_date(self, fields: list[str],
+    def get_data_by_date(self, fields: list[str],
                                from_date: datetime.datetime,
                                to_date: datetime.datetime,
                                frequency: datetime.timedelta,
-                               assets: list[AssetModel],
+                               assets: list[Asset],
                                include_bounds: bool,
                                ) -> pl.DataFrame:
 
@@ -61,11 +59,11 @@ class DataBundle:
             return df
         return df_raw
 
-    async def get_missing_data_by_limit(self, fields: list[str],
+    def get_missing_data_by_limit(self, fields: list[str],
                                         limit: int,
                                         end_date: datetime.datetime,
                                         frequency: datetime.timedelta,
-                                        assets: list[AssetModel],
+                                        assets: list[Asset],
                                         include_end_date: bool,
                                         ) -> pl.DataFrame:
 
@@ -74,11 +72,11 @@ class DataBundle:
             date_from=end_date - frequency * limit,
             date_to=end_date)
 
-    async def get_data_by_limit(self, fields: list[str],
+    def get_data_by_limit(self, fields: list[str],
                                 limit: int,
                                 end_date: datetime.datetime,
                                 frequency: datetime.timedelta,
-                                assets: list[AssetModel],
+                                assets: list[Asset],
                                 include_end_date: bool,
                                 ) -> pl.DataFrame:
 
@@ -109,14 +107,14 @@ class DataBundle:
             return df
         return df_raw
 
-    async def get_scalar_asset_spot_value(self, asset: AssetModel, field: str, dt: datetime.datetime,
+    def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                           frequency: datetime.timedelta):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
 
         Parameters
         ----------
-        assets : AssetModel
+        assets : Asset
             The asset or assets whose data is desired. This cannot be
             an arbitrary AssetConvertible.
         field : {'open', 'high', 'low', 'close', 'volume',
@@ -151,7 +149,7 @@ class DataBundle:
                 fields=[field],
                 dt=dt, ) # from exchange
 
-    async def get_spot_value(self, assets: list[AssetModel], fields: list[str], dt: datetime.datetime,
+    def get_spot_value(self, assets: list[Asset], fields: list[str], dt: datetime.datetime,
                              frequency: datetime.timedelta):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
@@ -189,7 +187,7 @@ class DataBundle:
         return df_raw
 
     async def get_adjusted_value(
-            self, asset: AssetModel, field: str, dt: datetime.datetime, perspective_dt: datetime.datetime,
+            self, asset: Asset, field: str, dt: datetime.datetime, perspective_dt: datetime.datetime,
             data_frequency: datetime.timedelta,
             spot_value: float = None
     ):
@@ -198,7 +196,7 @@ class DataBundle:
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset whose data is desired.
         field : {'open', 'high', 'low', 'close', 'volume', \
                  'price', 'last_traded'}
@@ -230,12 +228,12 @@ class DataBundle:
 
         return spot_value
 
-    async def _get_adjustment_list(self, asset: AssetModel, adjustments_dict: dict[str, Any], table_name: str):
+    async def _get_adjustment_list(self, asset: Asset, adjustments_dict: dict[str, Any], table_name: str):
         """Internal method that returns a list of adjustments for the given sid.
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset for which to return adjustments.
 
         adjustments_dict: dict
@@ -263,40 +261,6 @@ class DataBundle:
             ] = self.adjustment_repository.get_adjustments_for_sid(table_name, sid)
 
         return adjustments
-
-    async def get_splits(self, assets: list[AssetModel], dt: datetime.date):
-        """Returns any splits for the given sids and the given dt.
-
-        Parameters
-        ----------
-        assets : container
-            Assets for which we want splits.
-        dt : datetime.datetime
-            The date for which we are checking for splits. Note: this is
-            expected to be midnight UTC.
-
-        Returns
-        -------
-        splits : list[(asset, float)]
-            List of splits, where each split is a (asset, ratio) tuple.
-        """
-        if self.adjustment_repository is None or not assets:
-            return []
-
-        # convert dt to # of seconds since epoch, because that's what we use
-        # in the adjustments db
-        # seconds = int(dt.value / 1e9)
-
-        splits = self.adjustment_repository.conn.execute(
-            "SELECT sid, ratio FROM SPLITS WHERE effective_date = ?", (dt,)
-        ).fetchall()
-
-        splits = [split for split in splits if split[0] in assets]
-        splits = [
-            (self.asset_repository.retrieve_asset(split[0]), split[1]) for split in splits
-        ]
-
-        return splits
 
     async def get_stock_dividends(self, sid: int, trading_days: pd.DatetimeIndex):
         """Returns all the stock dividends for a specific sid that occur
@@ -382,7 +346,7 @@ class DataBundle:
             return None
         return self.asset_repository.retrieve_asset(sid=contract_sid)
 
-    async def get_adjustments(self, assets: list[AssetModel], field: str, dt: datetime.datetime,
+    async def get_adjustments(self, assets: list[Asset], field: str, dt: datetime.datetime,
                               perspective_dt: datetime.datetime):
         """Returns a list of adjustments between the dt and perspective_dt for the
         given field and list of assets

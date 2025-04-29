@@ -5,11 +5,10 @@ import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
-from ziplime.assets.models.asset_model import AssetModel
-
 from contextlib import contextmanager
 import numpy as np
 
+from ziplime.assets.entities.asset import Asset
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.exchanges.exchange import Exchange
 
@@ -91,7 +90,7 @@ class BarData:
         # return dt
         return dt
 
-    def current(self, assets: list[AssetModel], fields: list[str],
+    def current(self, assets: list[Asset], fields: list[str],
                 exchange_name: str):
         """Returns the "current" value of the given fields for the given assets
         at the current simulation time.
@@ -183,7 +182,7 @@ class BarData:
             dt=self.simulation_dt_func()
         )
 
-    def can_trade(self, assets: list[AssetModel]):
+    def can_trade(self, assets: list[Asset]):
         """For the given asset or iterable of assets, returns True if all of the
         following are true:
 
@@ -238,7 +237,7 @@ class BarData:
         ]
         return pd.Series(data=tradeable, index=assets, dtype=bool)
 
-    def _can_trade_for_asset(self, asset: AssetModel, dt: datetime.datetime, adjusted_dt: datetime.datetime) -> bool:
+    def _can_trade_for_asset(self, asset: Asset, dt: datetime.datetime, adjusted_dt: datetime.datetime) -> bool:
         session_label = None
         dt_to_use_for_exchange_check = None
 
@@ -274,7 +273,7 @@ class BarData:
             )
         )
 
-    def history(self, assets: list[AssetModel], fields: list[str], bar_count: int, frequency: datetime.timedelta,
+    def history(self, assets: list[Asset], fields: list[str], bar_count: int, frequency: datetime.timedelta,
                 exchange_name: str
                 ):
         """Returns a trailing window of length ``bar_count`` with data for

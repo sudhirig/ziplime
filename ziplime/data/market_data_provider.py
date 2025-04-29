@@ -2,7 +2,7 @@ import datetime
 from abc import abstractmethod
 import polars as pl
 
-from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.asset import Asset
 
 
 class MarketDataProvider:
@@ -12,7 +12,7 @@ class MarketDataProvider:
                                from_date: datetime.datetime,
                                to_date: datetime.datetime,
                                frequency: datetime.timedelta,
-                               assets: list[AssetModel],
+                               assets: list[Asset],
                                include_bounds: bool,
                                ) -> pl.DataFrame:
         pass
@@ -22,23 +22,23 @@ class MarketDataProvider:
                                 limit: int,
                                 end_date: datetime.datetime,
                                 frequency: datetime.timedelta,
-                                assets: list[AssetModel],
+                                assets: list[Asset],
                                 include_end_date: bool,
                                 ) -> pl.DataFrame:
         pass
 
     @abstractmethod
-    async def get_scalar_asset_spot_value(self, asset: AssetModel, field: str, dt: datetime.datetime,
+    async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                           frequency: datetime.timedelta):
         pass
 
     @abstractmethod
-    async def _get_single_asset_value(self, asset: AssetModel, field: str, dt: datetime.datetime,
+    async def _get_single_asset_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                       frequency: datetime.timedelta) -> pl.DataFrame:
         pass
 
     @abstractmethod
-    async def get_spot_value(self, assets: list[AssetModel], fields: list[str], dt: datetime.datetime,
+    async def get_spot_value(self, assets: list[Asset], fields: list[str], dt: datetime.datetime,
                              frequency: datetime.timedelta):
         pass
 

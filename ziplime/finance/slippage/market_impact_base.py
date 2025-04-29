@@ -1,9 +1,11 @@
+import datetime
 import math
 from abc import abstractmethod
 
 import numpy as np
 
 from ziplime.errors import HistoryWindowStartsBeforeData
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.slippage.slippage_model import SlippageModel, SQRT_252
 from ziplime.finance.utils import fill_price_worse_than_limit_price
 from ziplime.utils.cache import ExpiringCache
@@ -62,7 +64,7 @@ class MarketImpactBase(SlippageModel):
         """
         raise NotImplementedError("get_simulated_impact")
 
-    def process_order(self, data, order):
+    def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
         if order.open_amount == 0:
             return None, None
 

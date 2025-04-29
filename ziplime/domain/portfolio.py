@@ -2,7 +2,7 @@ import datetime
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.asset import Asset
 from ziplime.domain.position import Position
 
 
@@ -17,7 +17,7 @@ class Portfolio:
     cash: Decimal
     positions_value: Decimal
     positions_exposure: Decimal
-    positions: dict[AssetModel, Position] = field(default_factory=dict)
+    positions: dict[Asset, Position] = field(default_factory=dict)
     start_date: datetime.datetime | None = None
 
 

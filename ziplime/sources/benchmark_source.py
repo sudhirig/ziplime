@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.asset import Asset
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.errors import (
     InvalidBenchmarkAsset,
@@ -16,7 +16,7 @@ import polars as pl
 class BenchmarkSource:
     def __init__(
             self,
-            benchmark_asset: AssetModel,
+            benchmark_asset: Asset,
             trading_calendar: ExchangeCalendar,
             sessions: pd.DatetimeIndex,
             data_bundle: DataBundle,
@@ -132,7 +132,7 @@ class BenchmarkSource:
 
         return daily_returns.filter(pl.col("date").is_between(start, end))
 
-    def _validate_benchmark(self, benchmark_asset: AssetModel):
+    def _validate_benchmark(self, benchmark_asset: Asset):
         # check if this security has a stock dividend.  if so, raise an
         # error suggesting that the user pick a different asset to use
         # as benchmark.
@@ -177,7 +177,7 @@ class BenchmarkSource:
         return daily_returns.iloc[1:]
 
     def _initialize_precalculated_series(
-            self, asset: AssetModel, trading_calendar: ExchangeCalendar, trading_days: pd.DatetimeIndex,
+            self, asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pd.DatetimeIndex,
             data_bundle: DataBundle
     ):
         """

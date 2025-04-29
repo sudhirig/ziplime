@@ -36,7 +36,10 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
     df = pl.from_pandas(limex_client.candles(symbol=symbol,
                                              from_date=date_from.strftime("%Y-%m-%d"),
                                              to_date=date_to.strftime("%Y-%m-%d"),
-                                             timeframe=timeframe), include_index=True)
+                                             timeframe=timeframe), include_index=True,
+                        schema_overrides={"o": pl.Decimal, "h": pl.Decimal, "l": pl.Decimal, "c": pl.Decimal,
+                                          "v": pl.Decimal}
+                        )
     if len(df) > 0:
         df = df.rename(
             {

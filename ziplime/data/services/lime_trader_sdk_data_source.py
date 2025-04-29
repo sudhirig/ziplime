@@ -41,10 +41,10 @@ class LimeTraderSdkDataSource(DataBundleSource):
                 cols["exchange"].append("LIME")
                 cols["exchange_country"].append("US")
                 cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Float64), ("close", pl.Float64),
-                                        ("price", pl.Float64),
-                                        ("high", pl.Float64), ("low", pl.Float64),
-                                        ("volume", pl.Int64),
+        df = pl.DataFrame(cols, schema=[("open", pl.Decimal), ("close", pl.Decimal),
+                                        ("price", pl.Decimal),
+                                        ("high", pl.Decimal), ("low", pl.Decimal),
+                                        ("volume", pl.Decimal),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])
@@ -76,10 +76,10 @@ class LimeTraderSdkDataSource(DataBundleSource):
                 cols["exchange"].append("LIME")
                 cols["exchange_country"].append("US")
                 cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Float64), ("close", pl.Float64),
-                                        ("price", pl.Float64),
-                                        ("high", pl.Float64), ("low", pl.Float64),
-                                        ("volume", pl.Int64),
+        df = pl.DataFrame(cols, schema=[("open", pl.Decimal), ("close", pl.Decimal),
+                                        ("price", pl.Decimal),
+                                        ("high", pl.Decimal), ("low", pl.Decimal),
+                                        ("volume", pl.Decimal),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])

@@ -22,6 +22,7 @@ from toolz import (
 )
 
 from ziplime.assets.domain.asset_type import AssetType
+from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.models.asset_router import AssetRouter
 from ziplime.assets.entities.commodity import Commodity
@@ -249,7 +250,7 @@ class SqlAlchemyAssetRepository(AssetRepository):
         await self.add_all_and_commit(equity_symbol_mappings)
 
     @cached(cache=Cache.MEMORY)
-    async def get_all_assets(self) -> dict[int, AssetModel]:
+    async def get_all_assets(self) -> dict[int, Asset]:
         async with self.session_maker() as session:
             q_equities = select(Equity).options(selectinload(Equity.asset_router)).options(
                 selectinload(Equity.equity_symbol_mappings)
@@ -275,7 +276,7 @@ class SqlAlchemyAssetRepository(AssetRepository):
 
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType,
-                                  exchange_name: str | None) -> AssetModel | None:
+                                  exchange_name: str | None) -> Asset | None:
         match asset_type:
             case AssetType.EQUITY:
                 return await self.get_equity_by_symbol(symbol=symbol, exchange_name=exchange_name)
@@ -307,21 +308,19 @@ class SqlAlchemyAssetRepository(AssetRepository):
     async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContract | None:
         raise NotImplementedError("Not implemented")
 
-    async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None:
+    async def get_equities_by_symbols(self, symbols: list[str], exchange_name: str) -> list[Equity]:
         async with self.session_maker() as session:
             q_equity_symbol_mapping = select(EquitySymbolMappingModel).where(
                 EquitySymbolMappingModel.exchange == exchange_name,
-                EquitySymbolMappingModel.symbol == symbol)
-            equity_mapping = (await session.execute(q_equity_symbol_mapping)).scalar_one_or_none()
-            if equity_mapping is None:
-                return None
-            q_equity = select(EquityModel).where(EquityModel.sid == equity_mapping.sid).options(
-                selectinload(EquityModel.asset_router)).options(selectinload(EquityModel.equity_symbol_mappings))
-            asset: EquityModel = (await session.execute(q_equity)).scalar_one_or_none()
+                EquitySymbolMappingModel.symbol.in_(symbols))
 
-            if asset is None:
-                return None
-            return Equity(
+            equity_mappings = (await session.execute(q_equity_symbol_mapping)).scalars()
+
+            q_equities = select(EquityModel).where(EquityModel.sid.in_([equity_mapping.sid for equity_mapping in equity_mappings])).options(
+                selectinload(EquityModel.asset_router)).options(selectinload(EquityModel.equity_symbol_mappings))
+            assets: list[EquityModel] = list((await session.execute(q_equities)).scalars())
+
+            return [Equity(
                 sid=asset.sid,
                 asset_name=asset.asset_name,
                 start_date=asset.start_date,
@@ -339,7 +338,45 @@ class SqlAlchemyAssetRepository(AssetRepository):
                     )
                     for equity_mapping in asset.equity_symbol_mappings
                 }
-            )
+            ) for asset in assets]
+
+    async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None:
+        equities = await self.get_equities_by_symbols(symbols=[symbol], exchange_name=exchange_name)
+        if equities:
+            return equities[0]
+        return None
+        # async with self.session_maker() as session:
+        #     q_equity_symbol_mapping = select(EquitySymbolMappingModel).where(
+        #         EquitySymbolMappingModel.exchange == exchange_name,
+        #         EquitySymbolMappingModel.symbol == symbol)
+        #     equity_mapping = (await session.execute(q_equity_symbol_mapping)).scalar_one_or_none()
+        #     if equity_mapping is None:
+        #         return None
+        #     q_equity = select(EquityModel).where(EquityModel.sid == equity_mapping.sid).options(
+        #         selectinload(EquityModel.asset_router)).options(selectinload(EquityModel.equity_symbol_mappings))
+        #     asset: EquityModel = (await session.execute(q_equity)).scalar_one_or_none()
+        #
+        #     if asset is None:
+        #         return None
+        #     return Equity(
+        #         sid=asset.sid,
+        #         asset_name=asset.asset_name,
+        #         start_date=asset.start_date,
+        #         first_traded=asset.first_traded,
+        #         end_date=asset.end_date,
+        #         auto_close_date=asset.auto_close_date,
+        #         symbol_mapping={
+        #             equity_mapping.exchange: EquitySymbolMapping(
+        #                 company_symbol=equity_mapping.company_symbol,
+        #                 symbol=equity_mapping.symbol,
+        #                 exchange_name=equity_mapping.exchange,
+        #                 share_class_symbol=equity_mapping.share_class_symbol,
+        #                 end_date=equity_mapping.end_date,
+        #                 start_date=equity_mapping.start_date
+        #             )
+        #             for equity_mapping in asset.equity_symbol_mappings
+        #         }
+        #     )
 
     def migrate(self) -> None:
         alembic_dir_path = Path(pathlib.Path(__file__).parent.parent.parent, "alembic")
@@ -1333,6 +1370,7 @@ class SqlAlchemyAssetRepository(AssetRepository):
     #     """
     #     sids = self._compute_asset_lifetimes(exchange_names=[exchange_name]).sid
     #     return tuple(sids.tolist())
+
 
     def to_json(self):
         return {

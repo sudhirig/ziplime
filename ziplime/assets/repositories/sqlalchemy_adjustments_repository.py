@@ -1,3 +1,4 @@
+import datetime
 import logging
 import sqlite3
 from collections import namedtuple
@@ -10,6 +11,7 @@ import pandas as pd
 from numpy import integer as any_integer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from ziplime.assets.entities.asset import Asset
 from ziplime.utils.functional import keysorted
 from ziplime.utils.numpy_utils import (
     datetime64ns_dtype,
@@ -665,6 +667,40 @@ class SqlAlchemyAdjustmentRepository(AdjustmentRepository):
         self.write_frame("splits", splits)
         self.write_frame("mergers", mergers)
         self.write_dividend_data(dividends, stock_dividends)
+    def get_splits(self, assets: list[Asset], dt: datetime.date):
+        """Returns any splits for the given sids and the given dt.
+
+        Parameters
+        ----------
+        assets : container
+            Assets for which we want splits.
+        dt : datetime.datetime
+            The date for which we are checking for splits. Note: this is
+            expected to be midnight UTC.
+
+        Returns
+        -------
+        splits : list[(asset, float)]
+            List of splits, where each split is a (asset, ratio) tuple.
+        """
+        return []
+        if not assets:
+            return []
+
+        # convert dt to # of seconds since epoch, because that's what we use
+        # in the adjustments db
+        # seconds = int(dt.value / 1e9)
+
+        splits = self.adjustment_repository.conn.execute(
+            "SELECT sid, ratio FROM SPLITS WHERE effective_date = ?", (dt,)
+        ).fetchall()
+
+        splits = [split for split in splits if split[0] in assets]
+        splits = [
+            (self.asset_repository.retrieve_asset(split[0]), split[1]) for split in splits
+        ]
+
+        return splits
 
     def to_json(self):
         return {

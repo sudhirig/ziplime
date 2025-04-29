@@ -19,12 +19,12 @@ import dataclasses
 import datetime
 from decimal import Decimal
 
-from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.asset import Asset
 
 
 @dataclasses.dataclass
 class Position:
-    asset: AssetModel
+    asset: Asset
     amount: int
     cost_basis: Decimal
     last_sale_price: Decimal

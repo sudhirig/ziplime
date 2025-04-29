@@ -3,7 +3,7 @@ from abc import abstractmethod
 
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.asset import Asset
 from ziplime.data.domain.data_bundle import DataBundle
 
 from ziplime.domain.position import Position
@@ -11,17 +11,20 @@ from ziplime.domain.portfolio import Portfolio
 from ziplime.domain.account import Account
 from ziplime.finance.commission import CommissionModel
 from ziplime.finance.domain.order import Order
-from ziplime.finance.slippage.slippage_model import SlippageModel
+# from ziplime.finance.slippage.slippage_model import SlippageModel
+from ziplime.gens.domain.trading_clock import TradingClock
 
 
 class Exchange:
 
     def __init__(self, name: str, canonical_name: str, country_code: str,
+                 clock: TradingClock,
                  trading_calendar: ExchangeCalendar,
                  data_bundle: DataBundle | None = None):
         self.name = name
         self.canonical_name = canonical_name
         self.country_code = country_code
+        self.clock = clock
         self.trading_calendar = trading_calendar
         self.data_bundle = data_bundle
 
@@ -38,7 +41,7 @@ class Exchange:
         return []
 
     @abstractmethod
-    def get_positions(self) -> dict[AssetModel, Position]:
+    def get_positions(self) -> dict[Asset, Position]:
         ...
 
     @abstractmethod
@@ -65,7 +68,7 @@ class Exchange:
         ...
 
     @abstractmethod
-    async def get_transactions(self, orders: dict[AssetModel, dict[str, Order]]):
+    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], current_dt: datetime.datetime):
         ...
 
     @abstractmethod
@@ -93,15 +96,18 @@ class Exchange:
         ...
 
     @abstractmethod
-    def get_slippage_model(self, asset: AssetModel) -> SlippageModel:
+    def get_slippage_model(self, asset: Asset):
         ...
 
     @abstractmethod
-    def get_commission_model(self, asset: AssetModel) -> CommissionModel:
+    def get_commission_model(self, asset: Asset) -> CommissionModel:
         ...
 
     @abstractmethod
-    async def get_scalar_asset_spot_value(self, asset: AssetModel, field: str, dt: datetime.datetime,
+    async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
+                                          frequency: datetime.timedelta): ...
+    @abstractmethod
+    def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
                                           frequency: datetime.timedelta): ...
 
-    async def get_spot_values(self, assets: list[AssetModel], fields: list[str], exchange_name: str): ...
+    async def get_spot_values(self, assets: list[Asset], fields: list[str], exchange_name: str): ...

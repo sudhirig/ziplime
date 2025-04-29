@@ -1,16 +1,18 @@
 import datetime
 from decimal import Decimal
 
-from ziplime.assets.models.asset_model import AssetModel
+from ziplime.assets.entities.asset import Asset
 from ziplime.protocol import DataSourceType
 
 
 class Transaction:
 
-    def __init__(self, asset: AssetModel, amount: int, dt: datetime.datetime, price: Decimal, order_id: str,
+    def __init__(self, asset: Asset, amount: int, dt: datetime.datetime, price: Decimal, order_id: str,
+                 exchange_name: str,
                  commission: Decimal | None = None):
         self.asset = asset
         self.amount = amount
+        self.exchange_name=exchange_name
         # if amount < 1:
         #     raise Exception("Transaction magnitude must be at least 1.")
 

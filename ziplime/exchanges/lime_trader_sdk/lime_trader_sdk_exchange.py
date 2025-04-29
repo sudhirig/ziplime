@@ -22,7 +22,6 @@ from lime_trader.models.accounts import AccountDetails, TradeSide
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, \
     OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
-from ziplime.assets.models.asset_model import AssetModel
 from ziplime.finance.execution import (MarketOrder,
                                        LimitOrder,
                                        )
@@ -69,7 +68,7 @@ class LimeTraderSdkExchange(Exchange):
         # TODO: fix: get real cash
         return 100000
 
-    def get_positions(self) -> dict[AssetModel, ZpPosition]:
+    def get_positions(self) -> dict[Asset, ZpPosition]:
         z_positions = {}
         positions = self._lime_sdk_client.account.get_positions(account_number=self._account_id,
                                                                 date=None, strategy=None)
@@ -106,10 +105,10 @@ class LimeTraderSdkExchange(Exchange):
                                   positions_value=Decimal(account.position_market_value),
                                   cash=Decimal(account.cash),
                                   start_date=None,
-                                  returns=0.0,
-                                  starting_cash=0.0,
-                                  capital_used=0.0,
-                                  pnl=0.0
+                                  returns=Decimal(0.0),
+                                  starting_cash=Decimal(0.0),
+                                  capital_used=Decimal(0.0),
+                                  pnl=Decimal(0.0)
                                   )
         return z_portfolio
 
@@ -137,7 +136,7 @@ class LimeTraderSdkExchange(Exchange):
         except Exception as _:
             return False
 
-    def _order2zp(self, order: OrderDetails, asset: AssetModel) -> Order | None:
+    def _order2zp(self, order: OrderDetails, asset: Asset) -> Order | None:
 
         match order.order_status:
             case LimeTraderOrderStatus.CANCELED:
@@ -211,7 +210,7 @@ class LimeTraderSdkExchange(Exchange):
             result.append(order)
         return result
 
-    async def get_transactions(self, orders: dict[AssetModel, dict[str, Order]], bar_data: BarData):
+    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData):
         closed_orders = []
         transactions = []
         commissions = []
@@ -376,10 +375,10 @@ class LimeTraderSdkExchange(Exchange):
                 cols["exchange"].append(self.name)
                 cols["exchange_country"].append(self.country_code)
                 cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Float64), ("close", pl.Float64),
-                                        ("price", pl.Float64),
-                                        ("high", pl.Float64), ("low", pl.Float64),
-                                        ("volume", pl.Int64),
+        df = pl.DataFrame(cols, schema=[("open", pl.Decimal), ("close", pl.Decimal),
+                                        ("price", pl.Decimal),
+                                        ("high", pl.Decimal), ("low", pl.Decimal),
+                                        ("volume", pl.Decimal),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])
@@ -454,10 +453,10 @@ class LimeTraderSdkExchange(Exchange):
 
         return order_details
 
-    def get_commission_model(self, asset: AssetModel) -> CommissionModel:
+    def get_commission_model(self, asset: Asset) -> CommissionModel:
         pass
 
-    def get_slippage_model(self, asset: AssetModel) -> SlippageModel:
+    def get_slippage_model(self, asset: Asset) -> SlippageModel:
         pass
 
     async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,

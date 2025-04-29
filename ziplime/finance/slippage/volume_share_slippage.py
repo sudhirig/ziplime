@@ -1,7 +1,9 @@
+import datetime
 import math
 from pandas import isnull
 
 from ziplime.errors import LiquidityExceeded
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.slippage.slippage_model import SlippageModel, DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT
 from ziplime.finance.utils import fill_price_worse_than_limit_price
 
@@ -53,7 +55,7 @@ class VolumeShareSlippage(SlippageModel):
             price_impact=self.price_impact,
         )
 
-    def process_order(self, data, order):
+    def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
         volume = data.current(order.asset, "volume")
 
         max_volume = self.volume_limit * volume

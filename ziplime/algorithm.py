@@ -65,7 +65,6 @@ from ziplime.finance.cancel_policy import CancelPolicy
 from ziplime.finance.asset_restrictions import (
     NoRestrictions,
 )
-from ziplime.assets.models.asset_model import AssetModel
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.assets.entities.equity import Equity
 from ziplime.finance.domain.simulation_paremeters import SimulationParameters
@@ -282,7 +281,7 @@ class TradingAlgorithm:
 
         self.current_data = BarData(
             exchanges=exchanges,
-            simulation_dt_func=self.get_simulation_dt,
+            simulation_dt_func=self.get_datetime,
             trading_calendar=self.clock.trading_calendar,
             restrictions=self.restrictions,
         )
@@ -367,8 +366,9 @@ class TradingAlgorithm:
         )
 
         # Set the dt initially to the period start by forcing it to change.
-        self.on_dt_changed(dt=self.clock.start_session)
-
+        # self.on_dt_changed(dt=self.clock.start_session)
+        # self.datetime =self.clock.start_session
+        self.simulation_dt = self.clock.start_session
         if not self.initialized:
             await self.initialize()
             self.initialized = True
@@ -752,7 +752,7 @@ class TradingAlgorithm:
         # Make sure the asset exists, and that there is a last price for it.
         # FIXME: we should use BarData's can_trade logic here, but I haven't
         # yet found a good way to do that.
-        normalized_date = self.clock.trading_calendar.minute_to_session(self.datetime).date()
+        normalized_date = self.clock.trading_calendar.minute_to_session(self.simulation_dt).date()
 
         if normalized_date < asset.start_date:
             raise CannotOrderDelistedAsset(
@@ -767,7 +767,7 @@ class TradingAlgorithm:
 
             if np.isnan(last_price):
                 raise CannotOrderDelistedAsset(
-                    msg=f"Cannot order sid={asset.sid} on {self.datetime} as there is no last price for the security."
+                    msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."
                 )
 
         if tolerant_equals(last_price, 0):
@@ -781,7 +781,7 @@ class TradingAlgorithm:
 
     def _can_order_asset(self, asset: Asset):
         if asset.auto_close_date:
-            day = self.clock.trading_calendar.minute_to_session(self.get_datetime()).date()
+            day = self.clock.trading_calendar.minute_to_session(self.simulation_dt).date()
 
             if day > min(asset.end_date, asset.auto_close_date):
                 # If we are after the asset's end date or auto close date, warn
@@ -809,7 +809,7 @@ class TradingAlgorithm:
         if order is None:
             return
         order.reject(reason=reason)
-        order.dt = self.datetime
+        order.dt = self.simulation_dt
 
         self.blotter.order_rejected(order=order)
         # we want this order's new status to be relayed out
@@ -826,19 +826,20 @@ class TradingAlgorithm:
         if order is None or not order.open:
             return
         order.hold(reason=reason)
-        order.dt = self.datetime
+        order.dt = self.simulation_dt
         # we want this order's new status to be relayed out
         # along with newly placed orders.
         self.new_orders.move_to_end(order.id)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    async def order(self, asset: AssetModel, amount: Decimal, style: ExecutionStyle) -> Order | None:
+    async def order(self, asset: Asset, amount: int, style: ExecutionStyle,
+                    exchange_name: str | None = None) -> Order | None:
         """Place an order for a fixed number of shares.
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset to be ordered.
         amount : int
             The amount of shares to order. If ``amount`` is positive, this is
@@ -890,17 +891,19 @@ class TradingAlgorithm:
             return None
         # Raises a ZiplineError if invalid parameters are detected.
         self.validate_order_params(asset=asset, amount=amount)
-
+        if exchange_name is None:
+            exchange_name = self.default_exchange.name
         order_id = None
         order = Order(
-            dt=self.datetime,
+            dt=self.simulation_dt,
             asset=asset,
             amount=amount,
             id=order_id,
-            commission=0.00,
+            commission=Decimal(0.00),
             filled=0,
             execution_style=style,
-            status=OrderStatus.OPEN
+            status=OrderStatus.OPEN,
+            exchange_name=exchange_name
         )
 
         submitted_order = await self.default_exchange.submit_order(order=order)
@@ -910,7 +913,7 @@ class TradingAlgorithm:
         return submitted_order
 
     def _calculate_order(
-            self, asset: AssetModel, amount: Decimal,
+            self, asset: Asset, amount: Decimal,
             # limit_price: Decimal | None = None, stop_price: Decimal | None = None,
             style: ExecutionStyle
     ):
@@ -937,7 +940,7 @@ class TradingAlgorithm:
         """
         return int(round_if_near_integer(amount))
 
-    def validate_order_params(self, asset: AssetModel, amount: int):
+    def validate_order_params(self, asset: Asset, amount: int):
         """
         Helper method for validating parameters to the order API function.
 
@@ -954,13 +957,13 @@ class TradingAlgorithm:
                 asset=asset,
                 amount=amount,
                 portfolio=self.portfolio,
-                algo_datetime=self.datetime,
+                algo_datetime=self.simulation_dt,
                 algo_current_data=self.current_data,
             )
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    async def order_value(self, asset: AssetModel, value: Decimal, limit_price: Decimal | None = None,
+    async def order_value(self, asset: Asset, value: Decimal, limit_price: Decimal | None = None,
                           stop_price: Decimal | None = None,
                           style: ExecutionStyle | None = None):
         """Place an order for a fixed amount of money.
@@ -969,7 +972,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset to be ordered.
         value : Decimal
             Amount of value of ``asset`` to be transacted. The number of shares
@@ -1028,7 +1031,7 @@ class TradingAlgorithm:
         are cheap.
         """
         if dt is None:
-            dt = self.datetime
+            dt = self.simulation_dt
 
         if dt != self._last_sync_time:
             self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)
@@ -1044,15 +1047,14 @@ class TradingAlgorithm:
         self._sync_last_sale_prices()
         return self._ledger.account
 
-    def on_dt_changed(self, dt):
-        """Callback triggered by the simulation loop whenever the current dt
-        changes.
-
-        Any logic that should happen exactly once at the start of each datetime
-        group should happen here.
-        """
-        self.datetime = dt
-        self.blotter.set_date(dt)
+    # def on_dt_changed(self, dt):
+    #     """Callback triggered by the simulation loop whenever the current dt
+    #     changes.
+    #
+    #     Any logic that should happen exactly once at the start of each datetime
+    #     group should happen here.
+    #     """
+    #     self.datetime = dt
 
     @api_method
     def get_datetime(self):
@@ -1068,8 +1070,9 @@ class TradingAlgorithm:
         dt : datetime
             The current simulation datetime converted to ``tz``.
         """
-        dt = self.datetime
-        return dt
+        return self.simulation_dt
+        # dt = self.datetime
+        # return dt
 
     @api_method
     def set_slippage(self, us_equities=None, us_futures=None):
@@ -1209,14 +1212,14 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_percent(
-            self, asset: AssetModel, percent: Decimal, style: ExecutionStyle
+            self, asset: Asset, percent: Decimal, style: ExecutionStyle
     ):
         """Place an order in the specified asset corresponding to the given
         percent of the current portfolio value.
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset that this order is for.
         percent : Decimal
             The percentage of the portfolio value to allocate to ``asset``.
@@ -1250,14 +1253,14 @@ class TradingAlgorithm:
             style=style,
         )
 
-    def _calculate_order_percent_amount(self, asset: AssetModel, percent: Decimal):
+    def _calculate_order_percent_amount(self, asset: Asset, percent: Decimal):
         value = self.portfolio.portfolio_value * percent
         return self._calculate_order_value_amount(asset=asset, value=value)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target(
-            self, asset: AssetModel, target: int, style: ExecutionStyle
+            self, asset: Asset, target: int, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target number of shares. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1267,7 +1270,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset that this order is for.
         target : int
             The desired number of shares of ``asset``.
@@ -1318,7 +1321,7 @@ class TradingAlgorithm:
             style=style,
         )
 
-    def _calculate_order_target_amount(self, asset: AssetModel, target: int):
+    def _calculate_order_target_amount(self, asset: Asset, target: int):
         if asset in self.portfolio.positions:
             current_position = self.portfolio.positions[asset].amount
             target -= current_position
@@ -1328,7 +1331,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_value(
-            self, asset: AssetModel, target: Decimal, style: ExecutionStyle
+            self, asset: Asset, target: Decimal, style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target value. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1340,7 +1343,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset that this order is for.
         target : Decimal
             The desired total value of ``asset``.
@@ -1387,7 +1390,7 @@ class TradingAlgorithm:
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_percent(
-            self, asset: AssetModel, target: Decimal,
+            self, asset: Asset, target: Decimal,
             style: ExecutionStyle
     ):
         """Place an order to adjust a position to a target percent of the
@@ -1398,7 +1401,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             The asset that this order is for.
         target : Decimal
             The desired percentage of the portfolio value to allocate to
@@ -1478,7 +1481,7 @@ class TradingAlgorithm:
 
         Parameters
         ----------
-        asset : AssetModel
+        asset : Asset
             If passed and not None, return only the open orders for the given
             asset instead of all open orders.
 
@@ -1533,7 +1536,7 @@ class TradingAlgorithm:
         if order is None or not order.open:
             return
         order.cancel()
-        order.dt = self.datetime
+        order.dt = self.simulation_dt
         # we want this order's new status to be relayed out
         # along with newly placed orders.
 
@@ -1544,7 +1547,7 @@ class TradingAlgorithm:
         else:
             self.new_orders.pop(order.id, None)
 
-    def cancel_all_orders_for_asset(self, asset: AssetModel, warn: bool = False, relay_status: bool = True):
+    def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
         """
@@ -1604,7 +1607,7 @@ class TradingAlgorithm:
             control.validate(
                 self.portfolio,
                 self.account,
-                self.datetime,
+                self.simulation_dt,
                 self.current_data,
             )
 
@@ -1834,7 +1837,7 @@ class TradingAlgorithm:
     def _pipeline_output(self, pipeline, chunks, name):
         """Internal implementation of `pipeline_output`."""
         # TODO FIXME TZ MESS
-        today = self.datetime
+        today = self.simulation_dt
         try:
             data = self._pipeline_cache.get(key=name, dt=today)
         except KeyError:
@@ -1902,8 +1905,8 @@ class TradingAlgorithm:
     # End Pipeline API
     ##################
 
-    def get_simulation_dt(self) -> datetime.datetime:
-        return self.simulation_dt
+    # def get_simulation_dt(self) -> datetime.datetime:
+    #     return self.simulation_dt
 
     def execute_order_cancellation_policy(self):
         self.blotter.execute_cancel_policy(SimulationEvent.SESSION_END)
@@ -1927,17 +1930,27 @@ class TradingAlgorithm:
             yield capital_change
 
         self.simulation_dt = dt_to_use
+        # self.datetime = dt_to_use
         # called every tick (minute or day).
-        self.on_dt_changed(dt=dt_to_use)
+        # self.on_dt_changed(dt=dt_to_use)
 
         # handle any transactions and commissions coming out new orders
         # placed in the last bar
-
-        (
-            new_transactions,
-            new_commissions,
-            closed_orders,
-        ) = await self.default_exchange.get_transactions(orders=self.blotter.get_open_orders(), bar_data=current_data)
+        new_transactions = []
+        new_commissions = []
+        closed_orders = []
+        for exchange in self.exchanges.values():
+            (
+                new_transactions,
+                new_commissions,
+                closed_orders,
+            ) = await exchange.get_transactions(
+                orders=self.blotter.get_open_orders(exchange_name=exchange.name),
+                current_dt=self.simulation_dt
+            )
+            new_transactions.extend(new_transactions)
+            new_commissions.extend(new_commissions)
+            closed_orders.extend(closed_orders)
         # print(f"getting transactions for {current_data.current_dt}, new transactions: {len(new_transactions)}, new commissions: {len(new_commissions)}, closed orders: {len(closed_orders)}" )
         self.blotter.prune_orders(closed_orders=closed_orders)
 
@@ -1949,7 +1962,7 @@ class TradingAlgorithm:
                 continue
 
             # since this order was modified, record it
-            order = self.blotter.get_order_by_id(transaction.order_id)
+            order = self.blotter.get_order_by_id(transaction.order_id, exchange_name=transaction.exchange_name)
             self._ledger.process_order(order=order)
 
         for commission in new_commissions:
@@ -1982,13 +1995,14 @@ class TradingAlgorithm:
 
         # set all the timestamps
         self.simulation_dt = midnight_dt
-        self.on_dt_changed(midnight_dt)
+        # self.datetime = midnight_dt
+        # self.on_dt_changed(midnight_dt)
 
         self.metrics_tracker.handle_market_open(session_label=midnight_dt)
 
         # handle any splits that impact any positions or any open orders.
         assets_we_care_about = (
-                self._ledger.position_tracker.positions.keys() | self.blotter.get_open_orders().keys()
+                self._ledger.position_tracker.positions.keys() | self.blotter.get_all_assets_in_open_orders()
         )
 
         if assets_we_care_about:
@@ -2065,7 +2079,8 @@ class TradingAlgorithm:
                     yield self._get_daily_message(dt=dt)
                 elif action == SimulationEvent.BEFORE_TRADING_START_BAR:
                     self.simulation_dt = dt
-                    self.on_dt_changed(dt=dt)
+                    # self.datetime = dt
+                    # self.on_dt_changed(dt=dt)
                     self.before_trading_start(data=self.current_data)
                 elif action == SimulationEvent.EMISSION_RATE_END:
                     minute_msg = self._get_minute_message(
@@ -2091,7 +2106,7 @@ class TradingAlgorithm:
            auto_close_date.
         """
 
-        def past_auto_close_date(asset: AssetModel):
+        def past_auto_close_date(asset: Asset):
             acd = asset.auto_close_date
             if acd is not None:
                 acd = acd
@@ -2103,7 +2118,6 @@ class TradingAlgorithm:
             for asset in position_assets
             if past_auto_close_date(asset)
         ]
-        metrics_tracker = self.metrics_tracker
         # data_portal = self.data_portal
         for asset in assets_to_clear:
             self._ledger.close_position(asset=asset, dt=dt)
@@ -2111,10 +2125,9 @@ class TradingAlgorithm:
         # Remove open orders for any sids that have reached their auto close
         # date. These orders get processed immediately because otherwise they
         # would not be processed until the first bar of the next day.
-
         assets_to_cancel = [
             asset
-            for asset in self.blotter.get_open_orders().keys()
+            for asset in self.blotter.get_all_assets_in_open_orders()
             if past_auto_close_date(asset=asset)
         ]
 
@@ -2135,7 +2148,6 @@ class TradingAlgorithm:
         """
         perf_message = self.metrics_tracker.handle_market_close(
             dt=dt,
-            data_bundle=self.data_bundle,
         )
         perf_message["daily_perf"]["recorded_vars"] = self.recorded_vars
         return perf_message

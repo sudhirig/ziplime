@@ -33,7 +33,7 @@ async def initialize(context: TradingAlgorithm):
 
 async def handle_data(context: TradingAlgorithm, data: BarData):
     context.counter += 1
-    print(f"Handle data for: {context.datetime}")
+    print(f"Handle data for: {context.get_datetime()}")
 
     for asset in context.assets:
         submitted_order = await context.order(asset=asset, amount=1, style=MarketOrder())

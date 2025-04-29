@@ -7,6 +7,7 @@ from math import isnan, copysign
 import numpy as np
 import structlog
 
+from ziplime.assets.entities.asset import Asset
 from ziplime.assets.models.dividend import Dividend
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.exchanges.exchange import Exchange
@@ -17,8 +18,6 @@ from ziplime.finance.finance_ext import (
     calculate_position_tracker_stats,
     update_position_last_sale_prices,
 )
-
-from ziplime.assets.models.asset_model import AssetModel
 
 
 class PositionTracker:
@@ -47,7 +46,7 @@ class PositionTracker:
 
     def update_position(
             self,
-            asset: AssetModel,
+            asset: Asset,
             amount: Decimal | None = None,
             last_sale_price: Decimal | None = None,
             last_sale_date=None,
@@ -58,8 +57,8 @@ class PositionTracker:
         if asset not in self.positions:
             position = Position(asset,
                                 amount=0,
-                                cost_basis=0.0,
-                                last_sale_price=0.0,
+                                cost_basis=Decimal(0.0),
+                                last_sale_price=Decimal(0.0),
                                 last_sale_date=None)
             self.positions[asset] = position
         else:
@@ -82,8 +81,8 @@ class PositionTracker:
         if asset not in self.positions:
             position = Position(asset=asset,
                                 amount=0,
-                                cost_basis=0.0,
-                                last_sale_price=0.0,
+                                cost_basis=Decimal(0.0),
+                                last_sale_price=Decimal(0.0),
                                 last_sale_date=None
                                 )
             self.positions[asset] = position
@@ -134,13 +133,13 @@ class PositionTracker:
 
         position.amount = total_shares
 
-    def handle_commission(self, asset: AssetModel, cost: Decimal) -> None:
+    def handle_commission(self, asset: Asset, cost: Decimal) -> None:
         # Adjust the cost basis of the stock if we own it
         if asset in self.positions:
             self._dirty_stats = True
             self.adjust_commission_cost_basis(position=self.positions[asset], asset=asset, cost=cost)
 
-    def adjust_commission_cost_basis(self, position: Position, asset: AssetModel, cost: Decimal):
+    def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: Decimal):
         """
         A note about cost-basis in ziplime: all positions are considered
         to share a cost basis, even if they were executed in different
@@ -225,7 +224,7 @@ class PositionTracker:
             "share_count": np.floor(position.amount * float(stock_dividend.ratio)),
         }
 
-    def handle_split(self, position: Position, asset: AssetModel, ratio: float):
+    def handle_split(self, position: Position, asset: Asset, ratio: float):
         """
         Update the position by the split ratio, and return the resulting
         fractional share that will be converted into cash.
@@ -350,7 +349,7 @@ class PositionTracker:
 
         return net_cash_payment
 
-    def maybe_create_close_position_transaction(self, asset: AssetModel, dt: datetime.datetime):
+    def maybe_create_close_position_transaction(self, asset: Asset, dt: datetime.datetime):
         if not self.positions.get(asset):
             return None
 
@@ -403,7 +402,7 @@ class PositionTracker:
 
         else:
             get_price = partial(
-                exchange.get_scalar_asset_spot_value,
+                exchange.get_scalar_asset_spot_value_sync,
                 field="close",
                 dt=dt,
                 frequency=self.data_frequency

@@ -10,7 +10,7 @@ class TradingSignalExecutor:
         self.completed_trading_signals = []
 
     async def create_order_execute_trading_signal(self,
-                                                  algorithm: TradingAlgorithm,
+                                                  algorithm: TrteaadingAlgorithm,
                                                   order: OrderRequest, exchange: Exchange):
         trading_signal = OrderExecuteTradingSignal(order=order, exchange=exchange, algorithm=algorithm)
         trading_signal.start()

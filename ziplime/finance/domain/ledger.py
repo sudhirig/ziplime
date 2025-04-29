@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import structlog
 
+from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.domain.account import Account
 from ziplime.domain.portfolio import Portfolio
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.commission import CommissionModel
 
-from ziplime.assets.models.asset_model import AssetModel
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.position_tracker import PositionTracker
 from ziplime.finance.domain.transaction import Transaction
@@ -237,7 +237,7 @@ class Ledger:
 
         Parameters
         ----------
-        splits: list[(AssetModel, float)]
+        splits: list[(Asset, float)]
             A list of splits. Each split is a tuple of (asset, ratio).
         """
         leftover_cash = self.position_tracker.handle_splits(splits)
@@ -282,7 +282,7 @@ class Ledger:
         self.position_tracker.handle_commission(asset, cost)
         self._cash_flow(-cost)
 
-    def close_position(self, asset: AssetModel, dt: datetime.datetime):
+    def close_position(self, asset: Asset, dt: datetime.datetime):
         txn = self.position_tracker.maybe_create_close_position_transaction(
             asset=asset,
             dt=dt,
@@ -304,10 +304,10 @@ class Ledger:
         held_sids = set(position_tracker.positions)
         if held_sids:
             cash_dividends = adjustment_reader.get_dividends_with_ex_date(
-                held_sids, next_session, self.data_bundle.asset_repository
+                held_sids, next_session, None#self.data_bundle.asset_repository
             )
             stock_dividends = adjustment_reader.get_stock_dividends_with_ex_date(
-                held_sids, next_session, self.data_bundle.asset_repository
+                held_sids, next_session, None #self.data_bundle.asset_repository
             )
 
             # Earning a dividend just marks that we need to get paid out on

@@ -7,6 +7,7 @@ from functools import partial
 from lime_trader.models.page import PageRequest
 from lime_trader.utils.pagination import iterate_pages_async
 
+from ziplime.assets.entities.asset import Asset
 from ziplime.domain.bar_data import BarData
 
 from ziplime.domain.portfolio import Portfolio as ZpPortfolio
@@ -17,7 +18,6 @@ from lime_trader.models.accounts import AccountDetails, TradeSide
 from lime_trader.models.market import Period
 from lime_trader.models.trading import Order as LimeTraderOrder, OrderSide, OrderDetails, \
     OrderStatus as LimeTraderOrderStatus, OrderType, TimeInForce
-from ziplime.assets.models.asset_model import AssetModel
 from ziplime.finance.execution import (MarketOrder,
                                        LimitOrder,
                                        )
@@ -40,7 +40,7 @@ class TradingSignalExchange(Exchange):
         super().__init__(name=name)
         self._logger = logging.getLogger(__name__)
 
-    def get_positions(self) -> dict[AssetModel, ZpPosition]:
+    def get_positions(self) -> dict[Asset, ZpPosition]:
         return {}
 
     def get_portfolio(self) -> ZpPortfolio:
@@ -70,7 +70,7 @@ class TradingSignalExchange(Exchange):
         except Exception as _:
             return False
 
-    def _order2zp(self, order: OrderDetails, asset: AssetModel) -> Order | None:
+    def _order2zp(self, order: OrderDetails, asset: Asset) -> Order | None:
 
         match order.order_status:
             case LimeTraderOrderStatus.CANCELED:
@@ -141,7 +141,7 @@ class TradingSignalExchange(Exchange):
             result.append(order)
         return result
 
-    async def get_transactions(self, orders: dict[AssetModel, dict[str, Order]], bar_data: BarData):
+    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData):
         closed_orders = []
         transactions = []
         commissions = []
@@ -394,8 +394,8 @@ class TradingSignalExchange(Exchange):
 
         return order_details
 
-    def get_commission_model(self, asset: AssetModel) -> CommissionModel:
+    def get_commission_model(self, asset: Asset) -> CommissionModel:
         pass
 
-    def get_slippage_model(self, asset: AssetModel) -> SlippageModel:
+    def get_slippage_model(self, asset: Asset) -> SlippageModel:
         pass

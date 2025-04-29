@@ -51,6 +51,14 @@ async def _run_simulation(
     bundle_service = BundleService(bundle_registry=bundle_registry)
     data_bundle = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
     algo = AlgorithmFile(algorithm_file=algorithm_file, algorithm_config_file=config_file)
+
+
+    clock = SimulationClock(
+        trading_calendar=calendar,
+        start_date=start_date,
+        end_date=end_date,
+        emission_rate=emission_rate,
+    )
     if exchange is None:
         exchange = SimulationExchange(
             name="LIME",
@@ -72,15 +80,9 @@ async def _run_simulation(
                 min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
             ),
             cash_balance=cash_balance,
+            clock=clock
         )
 
-
-    clock = SimulationClock(
-        trading_calendar=calendar,
-        start_date=start_date,
-        end_date=end_date,
-        emission_rate=emission_rate,
-    )
     db_url = f"sqlite+aiosqlite:///{str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())}"
     assets_repository = SqlAlchemyAssetRepository(db_url=db_url, future_chain_predicates=CHAIN_PREDICATES)
     adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)

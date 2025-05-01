@@ -21,11 +21,10 @@ try:
 except ImportError:
     PYGMENTS = False
 
-from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.pipeline.data import USEquityPricing
 from ziplime.pipeline.loaders import USEquityPricingLoader
 
-from ziplime.algorithm import TradingAlgorithm, NoBenchmark
+from ziplime.trading.trading_algorithm import TradingAlgorithm
 
 logger = structlog.get_logger(__name__)
 

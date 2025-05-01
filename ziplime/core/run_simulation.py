@@ -1,8 +1,9 @@
+import asyncio
 import datetime
 from decimal import Decimal
 from pathlib import Path
 
-import uvloop
+# import uvloop
 from exchange_calendars import get_calendar
 
 from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
@@ -110,7 +111,7 @@ def run_simulation(start_date: datetime.datetime,
                    config_file: str | None = None,
                    exchange: Exchange | None = None
                    ):
-    return uvloop.run(_run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
+    return asyncio.run(_run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
                                       cash_balance=total_cash,
                                       algorithm_file=algorithm_file,
                                       config_file=config_file, bundle_name=bundle_name, exchange=exchange,

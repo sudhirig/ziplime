@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -5,6 +6,9 @@ from pathlib import Path
 from ziplime.core.run_simulation import run_simulation
 
 if __name__ == "__main__":
+
+    asyncio.get_event_loop().set_debug(True)
+
     res = run_simulation(
         start_date=datetime.datetime(year=2024, month=10, day=5, tzinfo=datetime.timezone.utc),
         end_date=datetime.datetime(year=2024, month=10, day=12, tzinfo=datetime.timezone.utc),

@@ -1,13 +1,12 @@
-import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
 
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.config.base_algorithm_config import BaseAlgorithmConfig
-from ziplime.finance.execution import ExecutionStyle, LimitOrder, MarketOrder
+from ziplime.finance.execution import MarketOrder
 
-from ziplime.algorithm import TradingAlgorithm
+from ziplime.trading.trading_algorithm import TradingAlgorithm
 from ziplime.domain.bar_data import BarData
 
 

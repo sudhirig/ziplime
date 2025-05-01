@@ -19,6 +19,7 @@ from sys import float_info
 from numpy import isfinite
 import ziplime.utils.math_utils as zp_math
 from ziplime.errors import BadOrderParameters
+from ziplime.trading.enums.order_type import OrderType
 from ziplime.utils.compat import consistent_round
 
 
@@ -50,6 +51,9 @@ class ExecutionStyle(metaclass=abc.ABCMeta):
         """
         return self._exchange
 
+    def to_order_type(self) -> OrderType:
+        raise NotImplementedError("to_order_type not implemented for ExecutionStyle")
+
 
 class MarketOrder(ExecutionStyle):
     """
@@ -66,6 +70,9 @@ class MarketOrder(ExecutionStyle):
 
     def get_stop_price(self, is_buy: bool):
         return None
+
+    def to_order_type(self) -> OrderType:
+        return OrderType.MARKET
 
 
 class LimitOrder(ExecutionStyle):
@@ -97,6 +104,9 @@ class LimitOrder(ExecutionStyle):
     def get_stop_price(self, is_buy):
         return None
 
+    def to_order_type(self) -> OrderType:
+        return OrderType.LIMIT
+
 
 class StopOrder(ExecutionStyle):
     """
@@ -127,6 +137,9 @@ class StopOrder(ExecutionStyle):
             not is_buy,
             tick_size=(0.01 if self.asset is None else self.asset.tick_size),
         )
+
+    def to_order_type(self) -> OrderType:
+        return OrderType.STOP
 
 
 class StopLimitOrder(ExecutionStyle):
@@ -167,6 +180,9 @@ class StopLimitOrder(ExecutionStyle):
             not is_buy,
             tick_size=(0.01 if self.asset is None else self.asset.tick_size),
         )
+
+    def to_order_type(self) -> OrderType:
+        return OrderType.STOP_LIMIT
 
 
 def asymmetric_round_price(price: Decimal, prefer_round_down: bool, tick_size: Decimal, diff: Decimal = Decimal(0.95)):

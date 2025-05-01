@@ -64,10 +64,10 @@ async def run_live_trading(
         simulation_params=simulation_parameters,
         clock=clock,
         config=TestAlgoConfig.model_validate({"equities_to_trade": ["AAPL"], "currency": "USD",
-                                       "trading_calendar": "NYSE",
-                                       "emission_rate": "PT1M",
-                                       "exchange": "lime",
-                                       })
+                                              "trading_calendar": "NYSE",
+                                              "emission_rate": "PT1M",
+                                              "exchange": "lime",
+                                              })
     )
 
 
@@ -76,6 +76,12 @@ if __name__ == "__main__":
 
     exchange_class = LimeTraderSdkExchange(
         name="LIME",
+        country_code="US",
+        trading_calendar=calendar,
+        data_bundle=data_bundle,
+        clock=clock,
+        cash_balance=cash_balance,
+
         lime_sdk_credentials_file=lime_credentials_file
     )
 
@@ -89,7 +95,6 @@ if __name__ == "__main__":
         trading_calendar=calendar,
         capital_base=100000.0,
         emission_rate=datetime.timedelta(seconds=60),
-        max_shares=10000,
         exchange=exchange_class,
         bundle_name="limex_us_polars_minute",
     )

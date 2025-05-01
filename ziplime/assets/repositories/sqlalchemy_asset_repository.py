@@ -23,6 +23,7 @@ from toolz import (
 
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.currency_symbol_mapping import CurrencySymbolMapping
 from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.models.asset_router import AssetRouter
 from ziplime.assets.entities.commodity import Commodity
@@ -296,11 +297,42 @@ class SqlAlchemyAssetRepository(AssetRepository):
         #     asset = await session.execute(q).scalar_one_or_none()
         #     return asset
 
-    async def get_currency_by_symbol(self, symbol: str) -> Currency | None:
+    async def get_currency_by_symbol(self, symbol: str, exchange_name: str) -> Currency | None:
+        currencies = await self.get_currencies_by_symbols(symbols=[symbol], exchange_name=exchange_name)
+        if currencies:
+            return currencies[0]
+        return None
+
+    async def get_currencies_by_symbols(self, symbols: list[str], exchange_name: str) -> list[Currency]:
         async with self.session_maker() as session:
-            q_currency = select(Currency).where(Currency.symbol == symbol).options(selectinload(Currency.asset_router))
-            asset = (await session.execute(q_currency)).scalar_one_or_none()
-            return asset
+            q_currency_symbol_mapping = select(CurrencySymbolMappingModel).where(
+                CurrencySymbolMappingModel.exchange == exchange_name,
+                CurrencySymbolMappingModel.symbol.in_(symbols))
+
+            currency_mappings = (await session.execute(q_currency_symbol_mapping)).scalars()
+
+            q_currencies = select(CurrencyModel).where(
+                CurrencyModel.sid.in_([currency_mapping.sid for currency_mapping in currency_mappings])).options(
+                selectinload(CurrencyModel.asset_router)).options(selectinload(CurrencyModel.currency_symbol_mappings))
+            assets: list[CurrencyModel] = list((await session.execute(q_currencies)).scalars())
+
+            return [Currency(
+                sid=asset.sid,
+                asset_name=asset.asset_name,
+                start_date=asset.start_date,
+                first_traded=asset.first_traded,
+                end_date=asset.end_date,
+                auto_close_date=asset.auto_close_date,
+                symbol_mapping={
+                    currency_mapping.exchange: CurrencySymbolMapping(
+                        symbol=currency_mapping.symbol,
+                        exchange_name=currency_mapping.exchange,
+                        end_date=currency_mapping.end_date,
+                        start_date=currency_mapping.start_date
+                    )
+                    for currency_mapping in asset.currency_symbol_mappings
+                }
+            ) for asset in assets]
 
     async def get_commodity_by_symbol(self, symbol: str) -> Commodity | None:
         raise NotImplementedError("Not implemented")
@@ -316,7 +348,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
 
             equity_mappings = (await session.execute(q_equity_symbol_mapping)).scalars()
 
-            q_equities = select(EquityModel).where(EquityModel.sid.in_([equity_mapping.sid for equity_mapping in equity_mappings])).options(
+            q_equities = select(EquityModel).where(
+                EquityModel.sid.in_([equity_mapping.sid for equity_mapping in equity_mappings])).options(
                 selectinload(EquityModel.asset_router)).options(selectinload(EquityModel.equity_symbol_mappings))
             assets: list[EquityModel] = list((await session.execute(q_equities)).scalars())
 
@@ -1370,7 +1403,6 @@ class SqlAlchemyAssetRepository(AssetRepository):
     #     """
     #     sids = self._compute_asset_lifetimes(exchange_names=[exchange_name]).sid
     #     return tuple(sids.tolist())
-
 
     def to_json(self):
         return {

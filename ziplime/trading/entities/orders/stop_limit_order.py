@@ -7,7 +7,7 @@ from ziplime.trading.enums.order_type import OrderType
 
 class StopLimitOrder(OrderRequest):
 
-    def __init(self, order_id: str, order_side: OrderSide, quantity: Decimal, limit_price: Decimal,
+    def __init__(self, order_id: str, order_side: OrderSide, quantity: Decimal, limit_price: Decimal,
                stop_price: Decimal):
         super().__init__(order_id=order_id, order_type=OrderType.LIMIT)
         self.order_side = order_side

@@ -3,11 +3,11 @@ import datetime
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.commodity import Commodity
+from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 from ziplime.assets.repositories.asset_repository import AssetRepository
-from ziplime.currency import Currency
 from ziplime.exchanges.exchange import Exchange
 from ziplime.trading.entities.trading_pair import TradingPair
 

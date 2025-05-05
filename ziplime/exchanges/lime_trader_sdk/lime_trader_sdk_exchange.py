@@ -10,6 +10,7 @@ from lime_trader.models.page import PageRequest
 from lime_trader.utils.pagination import iterate_pages_async
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.domain.bar_data import BarData
 from ziplime.errors import SymbolNotFound
 
@@ -36,18 +37,27 @@ import uuid
 
 from ziplime.finance.slippage.slippage_model import SlippageModel
 from ziplime.exchanges.exchange import Exchange
+from ziplime.gens.domain.trading_clock import TradingClock
 
 
 class LimeTraderSdkExchange(Exchange):
 
     def __init__(self, name: str,
+                 country_code: str,
                  trading_calendar: ExchangeCalendar,
-                 account_id: str | None = None, lime_sdk_credentials_file: str | None = None):
+                 clock: TradingClock,
+                 cash_balance: Decimal,
+                 account_id: str | None = None,
+                 lime_sdk_credentials_file: str | None = None,
+                 data_bundle: DataBundle | None = None,
+                 ):
         super().__init__(name=name,
                          canonical_name=name,
-                         country_code="US",
-                         trading_calendar=trading_calendar
-                         )
+                         clock=clock,
+                         data_bundle=data_bundle,
+                         country_code=country_code,
+                         trading_calendar=trading_calendar)
+
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self._logger = logging.getLogger(__name__)
         if lime_sdk_credentials_file is None:
@@ -60,13 +70,15 @@ class LimeTraderSdkExchange(Exchange):
         self._tracked_orders = {}
         self.processed_transaction_ids = set()
 
+        self.cash_balance = cash_balance
+
     def get_start_cash_balance(self) -> Decimal:
         # TODO: fix: get real cash
-        return 100000
+        return self.cash_balance
 
     def get_current_cash_balance(self) -> Decimal:
         # TODO: fix: get real cash
-        return 100000
+        return self.cash_balance
 
     def get_positions(self) -> dict[Asset, ZpPosition]:
         z_positions = {}
@@ -165,7 +177,7 @@ class LimeTraderSdkExchange(Exchange):
             case OrderType.MARKET:
                 execution_style = MarketOrder()
             case OrderType.LIMIT:
-                execution_style = LimitOrder(limit_price=float(order.price))
+                execution_style = LimitOrder(limit_price=order.price)
             case _:
                 raise Exception(f"Unknown order type {order.order_type}")
 
@@ -175,7 +187,7 @@ class LimeTraderSdkExchange(Exchange):
             amount=int(order.quantity) if order.order_side == OrderSide.BUY else -int(order.quantity),
             filled=int(order.executed_quantity),
             dt=order.executed_timestamp,
-            commission=0.0,
+            commission=Decimal(0.0),
             execution_style=execution_style,
             status=order_status,
             exchange_order_id=order.order_id
@@ -375,10 +387,10 @@ class LimeTraderSdkExchange(Exchange):
                 cols["exchange"].append(self.name)
                 cols["exchange_country"].append(self.country_code)
                 cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Decimal), ("close", pl.Decimal),
-                                        ("price", pl.Decimal),
-                                        ("high", pl.Decimal), ("low", pl.Decimal),
-                                        ("volume", pl.Decimal),
+        df = pl.DataFrame(cols, schema=[("open", pl.Decimal(scale=8)), ("close", pl.Decimal(scale=8)),
+                                        ("price", pl.Decimal(scale=8)),
+                                        ("high", pl.Decimal(scale=8)), ("low", pl.Decimal(scale=8)),
+                                        ("volume", pl.Decimal(scale=8)),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])
@@ -459,8 +471,17 @@ class LimeTraderSdkExchange(Exchange):
     def get_slippage_model(self, asset: Asset) -> SlippageModel:
         pass
 
-    async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
-                                          frequency: datetime.timedelta):
+    async def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
+                                               frequency: datetime.timedelta):
         quote = self._sync_lime_sdk_client.market.get_current_quote(
             symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
         return getattr(quote, field)
+
+    async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
+                                          frequency: datetime.timedelta):
+        quote = await self._lime_sdk_client.market.get_current_quote(
+            symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
+        return getattr(quote, field)
+
+    async def get_spot_values(self, assets: list[Asset], fields: list[str], exchange_name: str):
+        ...

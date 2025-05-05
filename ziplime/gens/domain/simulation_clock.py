@@ -13,7 +13,7 @@ class SimulationClock(TradingClock):
                  end_date: datetime.datetime,
                  trading_calendar: ExchangeCalendar,
                  emission_rate: datetime.timedelta):
-
+        super().__init__(trading_calendar=trading_calendar, emission_rate=emission_rate)
         if start_date >= end_date:
             raise ValueError("Period start falls after period end.")
         if start_date >= trading_calendar.last_session.replace(tzinfo=trading_calendar.tz):
@@ -34,10 +34,6 @@ class SimulationClock(TradingClock):
         if trading_calendar.sessions_distance(self.start_session, self.end_session) < 1:
             raise Exception(
                 f"There are no trading days between {self.start_session} and {self.end_session}")
-
-        self.emission_rate = emission_rate
-
-        self.trading_calendar = trading_calendar
         if not trading_calendar.is_session(self.start_session):
             # if the start date is not a valid session in this calendar,
             # push it forward to the first valid session

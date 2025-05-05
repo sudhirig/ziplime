@@ -28,7 +28,6 @@ class AlphaBeta:
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
                    exchanges: dict[str, Exchange]):
         risk = packet["cumulative_risk_metrics"]
-
         alpha, beta = ep.alpha_beta_aligned(
             ledger.daily_returns_array[: session_ix + 1],
             self._daily_returns_array[: session_ix + 1]["pct_change"].to_pandas(),

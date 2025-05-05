@@ -103,7 +103,7 @@ class DataBundle:
                 total_bar_count).sort(by="date")
         if self.frequency < frequency:
             df = df_raw.group_by_dynamic(
-                index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields)
+                index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields).tail(limit)
             return df
         return df_raw
 

@@ -85,6 +85,7 @@ class BenchmarkReturnsAndVolatility:
 
     def end_of_session(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
                        exchanges: dict[str, Exchange]):
+        #print(session_ix)
         r = self._daily_cumulative_returns[session_ix]
         if np.isnan(r):
             r = None

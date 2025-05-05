@@ -1,24 +1,43 @@
+import asyncio
 import datetime
+from decimal import Decimal
 from pathlib import Path
 
-import uvloop
+# import uvloop
 from exchange_calendars import get_calendar
 
+from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
+from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
+from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
+from ziplime.assets.services.asset_service import AssetService
+from ziplime.core.algorithm_file import AlgorithmFile
+from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
-from ziplime.data.services.lime_trader_sdk_data_source import LimeTraderSdkDataSource
-from ziplime.domain.benchmark_spec import BenchmarkSpec
-from ziplime.finance.domain.simulation_paremeters import SimulationParameters
-from ziplime.finance.metrics import default_metrics
-from ziplime.gens.domain.realtime_clock import RealtimeClock
 from ziplime.exchanges.lime_trader_sdk.lime_trader_sdk_exchange import LimeTraderSdkExchange
+from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, \
+    PerContract, DEFAULT_PER_CONTRACT_COST, DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
+from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
+from ziplime.finance.metrics import default_metrics
+from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
+from ziplime.finance.slippage.slippage_model import DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT
+from ziplime.finance.slippage.volatility_volume_share import VolatilityVolumeShare
+from ziplime.gens.domain.realtime_clock import RealtimeClock
+from ziplime.gens.domain.simulation_clock import SimulationClock
+from ziplime.exchanges.exchange import Exchange
+from ziplime.exchanges.simulation_exchange import SimulationExchange
 from ziplime.utils.run_algo import run_algorithm
 
 
 async def _run_live_trading(
-        simulation_parameters: SimulationParameters,
-        algorithm_file: Path,
-        lime_sdk_credentials_file: str = None,
-        bundle_storage_path: str = Path(Path.home(), ".ziplime", "data"),
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
+        trading_calendar: str,
+        emission_rate: datetime.timedelta,
+        cash_balance: Decimal,
+        bundle_name: str,
+        algorithm_file: str,
+        exchange: Exchange = None,
+        config_file: str | None = None,
 
 ):
     # benchmark_spec = BenchmarkSpec(
@@ -28,65 +47,65 @@ async def _run_live_trading(
     #     benchmark_file=benchmark_file,
     #     no_benchmark=no_benchmark,
     # )
-    benchmark_spec = BenchmarkSpec(
-        benchmark_returns=None,
-        benchmark_sid=None,
-        benchmark_symbol=None,
-        benchmark_file=None,
-        no_benchmark=True,
+    calendar = get_calendar(trading_calendar)
+
+    bundle_storage_path = str(Path(Path.home(), ".ziplime", "data"))
+    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
+    bundle_service = BundleService(bundle_registry=bundle_registry)
+    data_bundle = None
+    if bundle_name is not None:
+        data_bundle = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
+
+    algo = AlgorithmFile(algorithm_file=algorithm_file, algorithm_config_file=config_file)
+
+    clock = RealtimeClock(
+        trading_calendar=calendar,
+        start_date=start_date,
+        end_date=end_date,
+        emission_rate=emission_rate,
     )
     timedelta_diff_from_current_time = datetime.timedelta(seconds=0)
 
-    clock = RealtimeClock(
-        sessions=sim_params.sessions,
-        market_opens=sim_params.market_opens,
-        market_closes=sim_params.market_closes,
-        before_trading_start_minutes=sim_params.before_trading_start_minutes,
-        emission_rate=sim_params.emission_rate,
-        timezone=sim_params.trading_calendar.tz,
-        timedelta_diff_from_current_time=-timedelta_diff_from_current_time
-    )
+    if exchange is None:
+        exchange = LimeTraderSdkExchange(
+            name="LIME",
+            country_code="US",
+            trading_calendar=calendar,
+            data_bundle=data_bundle,
+            cash_balance=cash_balance,
+            clock=clock
+        )
 
-    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
-
-    missing_data_source = LimeTraderSdkDataSource(lime_sdk_credentials_file=lime_sdk_credentials_file)
+    db_url = f"sqlite+aiosqlite:///{str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())}"
+    assets_repository = SqlAlchemyAssetRepository(db_url=db_url, future_chain_predicates=CHAIN_PREDICATES)
+    adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
+    asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
 
     return await run_algorithm(
-        algorithm_file=str(algorithm_file),
+        algorithm=algo,
+        asset_service=asset_service,
         print_algo=True,
         metrics_set=default_metrics(),
-        benchmark_spec=benchmark_spec,
+        # benchmark_spec=benchmark_spec,
         custom_loader=None,
-        missing_data_bundle_source=missing_data_source,
-        bundle_registry=bundle_registry,
-        simulation_params=simulation_parameters,
-        clock=clock
+        exchanges=[exchange],
+        clock=clock,
     )
 
 
-def run_live_trading():
-    lime_credentials_file = None
-
-    exchange_class = LimeTraderSdkExchange(
-        name="LIME",
-        lime_sdk_credentials_file=lime_credentials_file
-    )
-
-    calendar = get_calendar("NYSE")
-    algorithm_file = Path("algorithms/test_algo.py").absolute()
-    # TODO: currently start time needs to be at moment when trading was open. Fix it to allow any date
-    start_date = datetime.datetime.now(tz=calendar.tz) - datetime.timedelta(hours=16)
-    sim_params = SimulationParameters(
-        start_date=start_date,
-        end_date=start_date + datetime.timedelta(days=2),
-        trading_calendar=calendar,
-        capital_base=100000.0,
-        emission_rate=datetime.timedelta(seconds=60),
-        max_shares=10000,
-        exchange=exchange_class,
-        bundle_name="limex_us_polars_minute",
-    )
-    result = uvloop.run(_run_live_trading(simulation_parameters=sim_params, algorithm_file=algorithm_file,
-                                         lime_sdk_credentials_file=lime_credentials_file))
-
-    print(result.head())
+def run_live_trading(
+        trading_calendar: str,
+        algorithm_file: str,
+        total_cash: Decimal,
+        emission_rate: datetime.timedelta,
+        start_date: datetime.datetime | None = None,
+        end_date: datetime.datetime | None = None,
+        bundle_name: str | None = None,
+        config_file: str | None = None,
+        exchange: Exchange | None = None
+):
+    return asyncio.run(_run_live_trading(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
+                                         cash_balance=total_cash,
+                                         algorithm_file=algorithm_file,
+                                         config_file=config_file, bundle_name=bundle_name, exchange=exchange,
+                                         emission_rate=emission_rate))

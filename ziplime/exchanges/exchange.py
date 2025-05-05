@@ -1,4 +1,5 @@
 import datetime
+import polars as pl
 from abc import abstractmethod
 
 from exchange_calendars import ExchangeCalendar
@@ -106,8 +107,18 @@ class Exchange:
     @abstractmethod
     async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                           frequency: datetime.timedelta): ...
+
     @abstractmethod
     def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
-                                          frequency: datetime.timedelta): ...
+                                         frequency: datetime.timedelta): ...
 
     async def get_spot_values(self, assets: list[Asset], fields: list[str], exchange_name: str): ...
+
+    def get_data_by_limit(self, fields: list[str],
+                          limit: int,
+                          end_date: datetime.datetime,
+                          frequency: datetime.timedelta,
+                          assets: list[Asset],
+                          include_end_date: bool,
+                          ) -> pl.DataFrame:
+        ...

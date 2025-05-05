@@ -5,7 +5,7 @@ from collections import namedtuple
 from functools import lru_cache
 from pathlib import Path
 from typing import Self, Any
-
+import polars as pl
 import numpy as np
 import pandas as pd
 from numpy import integer as any_integer
@@ -255,6 +255,9 @@ class SqlAlchemyAdjustmentRepository(AdjustmentRepository):
         c.close()
 
         return divs
+
+    def get_stock_dividends(self, sid: int, trading_days: pl.Series) -> list[Dividend]:
+        return []
 
     def get_stock_dividends_with_ex_date(self, assets, date, asset_finder):
         # seconds = date.value / int(1e9)
@@ -667,6 +670,7 @@ class SqlAlchemyAdjustmentRepository(AdjustmentRepository):
         self.write_frame("splits", splits)
         self.write_frame("mergers", mergers)
         self.write_dividend_data(dividends, stock_dividends)
+
     def get_splits(self, assets: list[Asset], dt: datetime.date):
         """Returns any splits for the given sids and the given dt.
 

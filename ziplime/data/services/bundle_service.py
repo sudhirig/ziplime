@@ -62,7 +62,7 @@ class BundleService:
         data = data.with_columns(
             pl.lit(0).alias("sid")
         )
-        equities_by_exchange = data.select("symbol", "exchange").group_by("exchange").all()
+        equities_by_exchange = data.select("symbol", "exchange").group_by("exchange").agg(pl.col("symbol").unique())
         for row in equities_by_exchange.iter_rows(named=True):
             exchange_name = row["exchange"]
             symbols = row["symbol"]

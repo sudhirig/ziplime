@@ -4,6 +4,7 @@ import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.services.asset_service import AssetService
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.errors import (
     InvalidBenchmarkAsset,
@@ -12,24 +13,26 @@ from ziplime.errors import (
 )
 import polars as pl
 
+from ziplime.exchanges.exchange import Exchange
+
 
 class BenchmarkSource:
     def __init__(
             self,
-            benchmark_asset: Asset,
+            asset_service: AssetService,
             trading_calendar: ExchangeCalendar,
-            sessions: pd.DatetimeIndex,
-            data_bundle: DataBundle,
+            sessions: pl.Series,
+            exchange: Exchange,
             emission_rate: datetime.timedelta,
-            timedelta_period: datetime.timedelta,
             benchmark_fields: list[str],
-            benchmark_returns: pd.Series | None = None,
+            benchmark_asset: Asset | None = None,
+            benchmark_returns: pl.Series | None = None,
     ):
+        self.asset_service=asset_service
         self.benchmark_asset = benchmark_asset
         self.sessions = sessions
         self.emission_rate = emission_rate
-        self.data_bundle = data_bundle
-        self.timedelta_period = timedelta_period
+        self.exchange = exchange
         self.benchmark_fields = benchmark_fields
         if len(sessions) == 0:
             self._precalculated_series = pl.Series()
@@ -38,19 +41,22 @@ class BenchmarkSource:
             self._validate_benchmark(benchmark_asset=benchmark_asset)
             self._precalculated_series = self._initialize_precalculated_series(
                 asset=benchmark_asset, trading_calendar=trading_calendar, trading_days=sessions,
-                data_bundle=data_bundle
+                exchange=exchange
             )
         elif benchmark_returns is not None:
             all_bars = pl.from_pandas(
                 trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(trading_calendar.tz)
             )
             self._precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
-                index_column="date", every=self.timedelta_period
+                index_column="date", every=self.emission_rate
             ).agg(pl.col("close").sum())
         else:
-            raise Exception(
-                "Must provide either benchmark_asset or " "benchmark_returns."
+            all_bars = pl.from_pandas(
+                trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(trading_calendar.tz)
             )
+            self._precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
+                index_column="date", every=self.emission_rate
+            ).agg(pl.col("close").sum())
 
     def get_value(self, dt: datetime.datetime) -> pd.Series:
         """Look up the returns for a given dt.
@@ -136,7 +142,7 @@ class BenchmarkSource:
         # check if this security has a stock dividend.  if so, raise an
         # error suggesting that the user pick a different asset to use
         # as benchmark.
-        stock_dividends = self.data_portal.get_stock_dividends(
+        stock_dividends = self.asset_service.get_stock_dividends(
             sid=self.benchmark_asset.sid, trading_days=self.sessions
         )
 
@@ -177,8 +183,8 @@ class BenchmarkSource:
         return daily_returns.iloc[1:]
 
     def _initialize_precalculated_series(
-            self, asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pd.DatetimeIndex,
-            data_bundle: DataBundle
+            self, asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pl.Series,
+            exchange: Exchange
     ):
         """
         Internal method that pre-calculates the benchmark return series for
@@ -192,7 +198,7 @@ class BenchmarkSource:
 
         trading_days: pd.DateTimeIndex
 
-        data_bundle: DataBundle
+        exchange: Exchange
 
         Notes
         -----
@@ -215,23 +221,28 @@ class BenchmarkSource:
         daily_returns : pd.Series
             the partial daily returns for each minute
         """
-        all_bars = pl.from_pandas(
+        all_bars: pl.Series = pl.from_pandas(
             trading_calendar.sessions_minutes(start=self.sessions[0], end=self.sessions[-1]).tz_convert(
                 trading_calendar.tz)
-        )
+        )#.to_frame("date").group_by_dynamic(
+       #     index_column="date", every=self.emission_rate
+        #).agg()["date"]
+        limit =all_bars .to_frame("date").group_by_dynamic(
+           index_column="date", every=self.emission_rate
+        ).agg()["date"].len()
         # precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
         #     index_column="date", every=self.timedelta_period
         # ).agg(pl.col("value").sum())
 
-        benchmark_series = self.data_bundle.get_data_by_limit(
+        benchmark_series = self.exchange.get_data_by_limit(
             fields=self.benchmark_fields,
-            limit=len(all_bars) + 1,
-            frequency=self.timedelta_period,
+            limit=limit,
+            frequency=self.emission_rate,
             end_date=all_bars[-1],
             assets=[asset],
-            include_end_date=False
+            include_end_date=True
         )
-        return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))[1:]
+        return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))#[1:]
         return (
             benchmark_series.pct_change()[1:],
             self.downsample_minute_return_series(

@@ -180,8 +180,9 @@ class SimulationExchange(Exchange):
             dt=dt,
             frequency=frequency,
         )
+
     def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
-                                          frequency: datetime.timedelta):
+                                         frequency: datetime.timedelta):
 
         return self.data_bundle.get_spot_value(
             assets=[asset],
@@ -189,6 +190,7 @@ class SimulationExchange(Exchange):
             dt=dt,
             frequency=frequency,
         )
+
     def current(self, assets: list[Asset], fields: list[str], dt: datetime.datetime):
         data = {}
         # TODO: check this, uncomment adjust_minutes
@@ -199,3 +201,18 @@ class SimulationExchange(Exchange):
             dt=dt,
             frequency=self.data_bundle.frequency
         )
+
+    def get_data_by_limit(self, fields: list[str],
+                          limit: int,
+                          end_date: datetime.datetime,
+                          frequency: datetime.timedelta,
+                          assets: list[Asset],
+                          include_end_date: bool,
+                          ) -> pl.DataFrame:
+        return self.data_bundle.get_data_by_limit(fields=fields,
+                                                  limit=limit,
+                                                  end_date=end_date,
+                                                  frequency=frequency,
+                                                  assets=assets,
+                                                  include_end_date=include_end_date,
+                                                  )

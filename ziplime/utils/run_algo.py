@@ -3,14 +3,15 @@ import sys
 
 import structlog
 
+from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
-from ziplime.domain.benchmark_spec import BenchmarkSpec
 from ziplime.exchanges.exchange import Exchange
 
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
 from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.sources.benchmark_source import BenchmarkSource
+import polars as pl
 
 try:
     from pygments import highlight
@@ -29,39 +30,6 @@ from ziplime.trading.trading_algorithm import TradingAlgorithm
 logger = structlog.get_logger(__name__)
 
 
-def get_benchmark(clock: TradingClock):
-    benchmark_spec = BenchmarkSpec(
-        benchmark_returns=None,
-        benchmark_sid=None,
-        benchmark_symbol=None,
-        benchmark_file=None,
-        no_benchmark=True,
-    )
-    benchmark_sid, benchmark_returns = benchmark_spec.resolve(
-        asset_repository=None,
-        start_date=clock.start_session,
-        end_date=clock.end_session,
-    )
-
-    if benchmark_sid is not None:
-        benchmark_asset = data_bundle.asset_repository.retrieve_asset(sid=benchmark_sid)
-        benchmark_returns = None
-    else:
-        benchmark_asset = None
-        benchmark_returns = benchmark_returns
-
-    benchmark_source = BenchmarkSource(
-        benchmark_asset=benchmark_asset,
-        benchmark_returns=benchmark_returns,
-        trading_calendar=clock.trading_calendar,
-        sessions=clock.sessions,
-        data_bundle=None,
-        emission_rate=clock.emission_rate,
-        timedelta_period=clock.emission_rate,
-        benchmark_fields=["close"]
-    )
-
-    return benchmark_source
 async def run_algorithm(
         algorithm: AlgorithmFile,
         asset_service: AssetService,
@@ -69,8 +37,9 @@ async def run_algorithm(
         exchanges: list[Exchange],
         metrics_set: str,
         custom_loader,
-        # benchmark_spec,
         clock: TradingClock,
+        benchmark_asset_symbol: str | None = None,
+        benchmark_returns: pl.Series | None = None,
 ):
     """Run a backtest for the given algorithm.
     This is shared between the cli and :func:`ziplime.run_algo`.
@@ -98,13 +67,34 @@ async def run_algorithm(
         except KeyError:
             raise ValueError("No PipelineLoader registered for column %s." % column)
 
+    benchmark_asset = None
+    if benchmark_asset_symbol is not None:
+        benchmark_asset = await asset_service.get_asset_by_symbol(symbol=benchmark_asset_symbol,
+                                                                  asset_type=AssetType.EQUITY,
+                                                                  exchange_name=exchanges[0].name)
+        if benchmark_asset is None:
+            raise ValueError(f"No asset found with symbol {benchmark_asset_symbol} for benchmark")
+
+    benchmark_source = BenchmarkSource(
+        asset_service=asset_service,
+        benchmark_asset=benchmark_asset,
+        benchmark_returns=benchmark_returns,
+        trading_calendar=clock.trading_calendar,
+        sessions=clock.sessions,
+        exchange=exchanges[0],
+        emission_rate=clock.emission_rate,
+        benchmark_fields=["close"]
+    )
+
     tr = TradingAlgorithm(
         exchanges=exchanges_dict,
         asset_service=asset_service,
         get_pipeline_loader=choose_loader,
         metrics_set=metrics_set,
         blotter=InMemoryBlotter(exchanges=exchanges_dict, cancel_policy=None),
-        benchmark_source=get_benchmark(clock=clock),
+        # benchmark_source=get_benchmark(clock=clock),
+        benchmark_source=benchmark_source,
+        #        benchmark_source=None,
         algorithm=algorithm,
         clock=clock,
     )

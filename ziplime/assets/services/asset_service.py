@@ -1,11 +1,16 @@
 import datetime
 
+import aiocache
+import polars as pl
+from aiocache import Cache
+
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.commodity import Commodity
 from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.futures_contract import FuturesContract
+from ziplime.assets.models.dividend import Dividend
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 from ziplime.assets.repositories.asset_repository import AssetRepository
 from ziplime.exchanges.exchange import Exchange
@@ -43,6 +48,7 @@ class AssetService:
         return await self._asset_repository.get_equities_by_symbols(symbols=symbols,
                                                                     exchange_name=exchange_name)
 
+    @aiocache.cached(cache=Cache.MEMORY)
     async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType, exchange_name: str) -> Asset | None:
         return await self._asset_repository.get_asset_by_symbol(symbol=symbol,
                                                                 asset_type=asset_type,
@@ -51,7 +57,7 @@ class AssetService:
     async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContract | None:
         return await self._asset_repository.get_futures_contract_by_symbol(symbol=symbol,
                                                                            exchange_name=exchange_name)
-
+    @aiocache.cached(cache=Cache.MEMORY)
     async def get_currency_by_symbol(self, symbol: str, exchange_name: str) -> Currency | None:
         return await self._asset_repository.get_currency_by_symbol(symbol=symbol,
                                                                    exchange_name=exchange_name)
@@ -60,7 +66,9 @@ class AssetService:
         return await self._asset_repository.get_commodity_by_symbol(symbol=symbol,
                                                                     exchange_name=exchange_name)
 
-
+    def get_stock_dividends(self, sid: int, trading_days: pl.Series) -> list[Dividend]:
+        return self._adjustments_repository.get_stock_dividends(sid=sid,
+                                                                      trading_days=trading_days)
 
     def get_splits(self, assets: list[Asset], dt: datetime.date):
         return self._adjustments_repository.get_splits(assets=assets, dt=dt)

@@ -192,7 +192,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             # Algorithm API
             metrics_set,
             blotter: Blotter,
-            benchmark_source: BenchmarkSource,
+            benchmark_source: BenchmarkSource | None,
             clock: TradingClock,
             capital_changes=None,
             get_pipeline_loader=None,
@@ -855,10 +855,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             The amount of shares to order. If ``amount`` is positive, this is
             the number of shares to buy or cover. If ``amount`` is negative,
             this is the number of shares to sell or short.
-        limit_price : Decimal, optional
-            The limit price for the order.
-        stop_price : Decimal, optional
-            The stop price for the order.
         style : ExecutionStyle, optional
             The execution style for the order.
 
@@ -890,17 +886,14 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             self._logger.warning("Not executing order for zero shares.")
             return None
         # TODO: implement dynamic risk control
-        # elif amount > self.sim_params.max_shares:
-        #     # Arbitrary limit of 100 billion (US) shares will never be
-        #     # exceeded except by a buggy algorithm.
-        #     raise OverflowError(f"Can't order more than {self.sim_params.max_shares} shares")
-        # Raises a ZiplineError if invalid parameters are detected.
+
         self.validate_order_params(asset=asset, amount=amount)
         if exchange_name is None:
             exchange = self.default_exchange
         else:
             exchange = self.exchanges[exchange_name]
         order_id = None
+
         order = Order(
             dt=self.simulation_dt,
             asset=asset,
@@ -912,6 +905,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             status=OrderStatus.OPEN,
             exchange_name=exchange.name
         )
+        quote_asset = await self.asset_service.get_currency_by_symbol(symbol="USD",
+                                                                      exchange_name=exchange_name)
 
         submitted_order = await self.default_exchange.submit_order(order=order)
         # quote_asset = await self.asset_service.get_currency_by_symbol(symbol="USD",
@@ -2101,7 +2096,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                     # self.datetime = dt
                     # self.on_dt_changed(dt=dt)
                     self.before_trading_start(data=self.current_data)
-                elif action == SimulationEvent.EMISSION_RATE_END:
+                elif action == SimulationEvent.EMISSION_RATE_END and self.clock.emission_rate == datetime.timedelta(minutes=1):
                     minute_msg = self._get_minute_message(
                         dt=dt,
                     )
@@ -2156,7 +2151,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # Make a copy here so that we are not modifying the list that is being
         # iterated over.
         new_order_values = list(self.new_orders.values())
-        print(self.new_orders)
+        # print(self.new_orders)
         for order in new_order_values:
             if order.status == OrderStatus.CANCELLED:
                 self._ledger.process_order(order=order)

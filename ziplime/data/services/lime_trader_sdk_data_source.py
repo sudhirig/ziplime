@@ -41,10 +41,10 @@ class LimeTraderSdkDataSource(DataBundleSource):
                 cols["exchange"].append("LIME")
                 cols["exchange_country"].append("US")
                 cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Decimal), ("close", pl.Decimal),
-                                        ("price", pl.Decimal),
-                                        ("high", pl.Decimal), ("low", pl.Decimal),
-                                        ("volume", pl.Decimal),
+        df = pl.DataFrame(cols, schema=[("open", pl.Decimal(scale=8)), ("close", pl.Decimal(scale=8)),
+                                        ("price", pl.Decimal(scale=8)),
+                                        ("high", pl.Decimal(scale=8)), ("low", pl.Decimal(scale=8)),
+                                        ("volume", pl.Decimal(scale=8)),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])
@@ -76,10 +76,10 @@ class LimeTraderSdkDataSource(DataBundleSource):
                 cols["exchange"].append("LIME")
                 cols["exchange_country"].append("US")
                 cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Decimal), ("close", pl.Decimal),
-                                        ("price", pl.Decimal),
-                                        ("high", pl.Decimal), ("low", pl.Decimal),
-                                        ("volume", pl.Decimal),
+        df = pl.DataFrame(cols, schema=[("open", pl.Decimal(scale=8)), ("close", pl.Decimal(scale=8)),
+                                        ("price", pl.Decimal(scale=8)),
+                                        ("high", pl.Decimal(scale=8)), ("low", pl.Decimal(scale=8)),
+                                        ("volume", pl.Decimal(scale=8)),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])

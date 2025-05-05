@@ -24,6 +24,7 @@ from ziplime.gens.domain.simulation_clock import SimulationClock
 from ziplime.exchanges.exchange import Exchange
 from ziplime.exchanges.simulation_exchange import SimulationExchange
 from ziplime.utils.run_algo import run_algorithm
+import polars as pl
 
 
 async def _run_simulation(
@@ -36,7 +37,8 @@ async def _run_simulation(
         algorithm_file: str,
         exchange: Exchange = None,
         config_file: str | None = None,
-
+        benchmark_asset_symbol: str | None = None,
+        benchmark_returns: pl.Series | None = None,
 ):
     # benchmark_spec = BenchmarkSpec(
     #     benchmark_returns=None,
@@ -52,7 +54,6 @@ async def _run_simulation(
     bundle_service = BundleService(bundle_registry=bundle_registry)
     data_bundle = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
     algo = AlgorithmFile(algorithm_file=algorithm_file, algorithm_config_file=config_file)
-
 
     clock = SimulationClock(
         trading_calendar=calendar,
@@ -89,6 +90,7 @@ async def _run_simulation(
     adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
     asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
 
+
     return await run_algorithm(
         algorithm=algo,
         asset_service=asset_service,
@@ -98,6 +100,8 @@ async def _run_simulation(
         custom_loader=None,
         exchanges=[exchange],
         clock=clock,
+        benchmark_returns=benchmark_returns,
+        benchmark_asset_symbol=benchmark_asset_symbol,
     )
 
 
@@ -109,10 +113,15 @@ def run_simulation(start_date: datetime.datetime,
                    total_cash: Decimal,
                    bundle_name: str,
                    config_file: str | None = None,
-                   exchange: Exchange | None = None
+                   exchange: Exchange | None = None,
+                   benchmark_asset_symbol: str | None = None,
+                   benchmark_returns: pl.Series | None = None,
                    ):
     return asyncio.run(_run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
-                                      cash_balance=total_cash,
-                                      algorithm_file=algorithm_file,
-                                      config_file=config_file, bundle_name=bundle_name, exchange=exchange,
-                                      emission_rate=emission_rate))
+                                       cash_balance=total_cash,
+                                       algorithm_file=algorithm_file,
+                                       config_file=config_file, bundle_name=bundle_name, exchange=exchange,
+                                       emission_rate=emission_rate,
+                                       benchmark_asset_symbol=benchmark_asset_symbol,
+                                       benchmark_returns=benchmark_returns,
+                                       ))

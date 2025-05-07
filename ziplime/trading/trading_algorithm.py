@@ -755,7 +755,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name or self.default_exchange.name
         )
 
-    def _calculate_order_value_amount(self, asset: Asset, value: Decimal):
+    def _calculate_order_value_amount(self, asset: Asset, value: Decimal, exchange_name: str):
         """Calculates how many shares/contracts to order based on the type of
         asset being ordered.
         """
@@ -773,9 +773,12 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                 msg=f"Cannot order sid={asset.sid}, as it stopped trading on {asset.end_date}."
             )
         else:
-            last_price = self.current_data.current([asset], fields=["price"])["price"][0]
+            # last_price = self.current_data.current([asset], fields=["price"])["price"][0]
+            last_price = self.exchanges[exchange_name].current([asset],
+                                                               dt=self.simulation_dt,
+                                                               fields=["price"])["price"][0]
 
-            if np.isnan(last_price):
+            if last_price is None:
                 raise CannotOrderDelistedAsset(
                     msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."
                 )
@@ -948,8 +951,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         return submitted_order
 
-
-    def new_order_submitted(self, order:Order):
+    def new_order_submitted(self, order: Order):
         self.blotter.save_order(order=order)
         self.new_orders[order.id] = order
         return order
@@ -979,7 +981,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_value(self, asset: Asset, value: Decimal, limit_price: Decimal | None = None,
                           stop_price: Decimal | None = None,
-                          style: ExecutionStyle | None = None):
+                          style: ExecutionStyle | None = None,
+                          exchange_name: str | None = None
+                          ):
         """Place an order for a fixed amount of money.
 
         Equivalent to ``order(asset, value / data.current(asset, 'price'))``.
@@ -1017,13 +1021,15 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset):
             return None
 
-        amount = self._calculate_order_value_amount(asset, value)
+        amount = self._calculate_order_value_amount(asset=asset, value=value,
+                                                    exchange_name=exchange_name or self.default_exchange.name)
         return await self.order(
             asset,
             amount,
             limit_price=limit_price,
             stop_price=stop_price,
             style=style,
+            exchange_name=exchange_name
         )
 
     @property
@@ -1226,7 +1232,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_percent(
-            self, asset: Asset, percent: Decimal, style: ExecutionStyle
+            self, asset: Asset, percent: Decimal, style: ExecutionStyle,
+            exchange_name: str | None = None
     ):
         """Place an order in the specified asset corresponding to the given
         percent of the current portfolio value.
@@ -1260,21 +1267,24 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset=asset):
             return None
 
-        amount = self._calculate_order_percent_amount(asset=asset, percent=percent)
+        amount = self._calculate_order_percent_amount(asset=asset, percent=percent,
+                                                      exchange_name=exchange_name or self.default_exchange.name)
         return await self.order(
             asset=asset,
             amount=amount,
             style=style,
+            exchange_name=exchange_name
         )
 
-    def _calculate_order_percent_amount(self, asset: Asset, percent: Decimal):
+    def _calculate_order_percent_amount(self, asset: Asset, percent: Decimal, exchange_name:str):
         value = self.portfolio.portfolio_value * percent
-        return self._calculate_order_value_amount(asset=asset, value=value)
+        return self._calculate_order_value_amount(asset=asset, value=value,exchange_name=exchange_name)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target(
-            self, asset: Asset, target: int, style: ExecutionStyle
+            self, asset: Asset, target: int, style: ExecutionStyle,
+            exchange_name: str | None = None
     ):
         """Place an order to adjust a position to a target number of shares. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1333,6 +1343,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             asset=asset,
             amount=amount,
             style=style,
+            exchange_name=exchange_name
         )
 
     def _calculate_order_target_amount(self, asset: Asset, target: int):
@@ -1345,7 +1356,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_value(
-            self, asset: Asset, target: Decimal, style: ExecutionStyle
+            self, asset: Asset, target: Decimal, style: ExecutionStyle,
+            exchange_name: str | None = None
     ):
         """Place an order to adjust a position to a target value. If
         the position doesn't already exist, this is equivalent to placing a new
@@ -1393,19 +1405,21 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset):
             return None
 
-        target_amount = self._calculate_order_value_amount(asset, target)
+        target_amount = self._calculate_order_value_amount(asset=asset, value=target,
+                                                           exchange_name=exchange_name or self.default_exchange.name)
         amount = self._calculate_order_target_amount(asset, target_amount)
         return await self.order(
             asset=asset,
             amount=amount,
             style=style,
+            exchange_name=exchange_name
         )
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_percent(
             self, asset: Asset, target: Decimal,
-            style: ExecutionStyle
+            style: ExecutionStyle, exchange_name: str | None = None
     ):
         """Place an order to adjust a position to a target percent of the
         current portfolio value. If the position doesn't already exist, this is
@@ -1458,16 +1472,20 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset):
             return None
 
-        amount = self._calculate_order_target_percent_amount(asset=asset, target=target)
+        target_amount = self._calculate_order_percent_amount(asset=asset, percent=target,
+                                                             exchange_name=exchange_name or self.default_exchange.name)
+        amount = self._calculate_order_target_amount(asset=asset, target=target_amount)
+
         return await self.order(
             asset=asset,
             amount=amount,
             style=style,
+            exchange_name=exchange_name
         )
 
-    def _calculate_order_target_percent_amount(self, asset, target):
-        target_amount = self._calculate_order_percent_amount(asset, target)
-        return self._calculate_order_target_amount(asset, target_amount)
+    # def _calculate_order_target_percent_amount(self, asset, target):
+    #     target_amount = self._calculate_order_percent_amount(asset, target)
+    #     return self._calculate_order_target_amount(asset, target_amount)
 
     # @api_method
     # def batch_market_order(self, share_counts):
@@ -2096,7 +2114,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                     # self.datetime = dt
                     # self.on_dt_changed(dt=dt)
                     self.before_trading_start(data=self.current_data)
-                elif action == SimulationEvent.EMISSION_RATE_END and self.clock.emission_rate == datetime.timedelta(minutes=1):
+                elif action == SimulationEvent.EMISSION_RATE_END and self.clock.emission_rate == datetime.timedelta(
+                        minutes=1):
                     minute_msg = self._get_minute_message(
                         dt=dt,
                     )

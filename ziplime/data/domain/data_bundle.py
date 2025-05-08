@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import dataclass
-from functools import reduce
+from functools import reduce, lru_cache
 from operator import mul
 from typing import Any
 
@@ -33,15 +33,15 @@ class DataBundle:
         df = self.data
         return df
 
-    def get_data_by_date(self, fields: list[str],
+    def get_data_by_date(self, fields: frozenset[str],
                                from_date: datetime.datetime,
                                to_date: datetime.datetime,
                                frequency: datetime.timedelta,
-                               assets: list[Asset],
+                               assets: frozenset[Asset],
                                include_bounds: bool,
                                ) -> pl.DataFrame:
 
-        cols = list(set(fields + ["date", "sid"]))
+        cols = set(fields.union({"date", "sid"}))
         if include_bounds:
             df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
                 pl.col("date") <= to_date,
@@ -59,11 +59,11 @@ class DataBundle:
             return df
         return df_raw
 
-    def get_missing_data_by_limit(self, fields: list[str],
+    def get_missing_data_by_limit(self, fields: frozenset[str],
                                         limit: int,
                                         end_date: datetime.datetime,
                                         frequency: datetime.timedelta,
-                                        assets: list[Asset],
+                                        assets: frozenset[Asset],
                                         include_end_date: bool,
                                         ) -> pl.DataFrame:
 
@@ -72,11 +72,11 @@ class DataBundle:
             date_from=end_date - frequency * limit,
             date_to=end_date)
 
-    def get_data_by_limit(self, fields: list[str],
+    def get_data_by_limit(self, fields: frozenset[str],
                                 limit: int,
                                 end_date: datetime.datetime,
                                 frequency: datetime.timedelta,
-                                assets: list[Asset],
+                                assets: frozenset[Asset],
                                 include_end_date: bool,
                                 ) -> pl.DataFrame:
 
@@ -90,7 +90,7 @@ class DataBundle:
             multiplier = int(frequency / self.frequency)
             total_bar_count = limit * multiplier
 
-        cols = list(set(fields + ["date", "sid"]))
+        cols = list(fields.union({"date", "sid"}))
         if include_end_date:
             df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
                 pl.col("date") <= end_date,
@@ -138,18 +138,18 @@ class DataBundle:
         # FIXME: fix getting spot value from exchange
         if simulation:
             return self.get_spot_value(
-                assets=[asset],
-                fields=[field],
+                assets=frozenset({asset}),
+                fields=frozenset({field}),
                 dt=dt,
                 frequency=frequency,
             )
         else:
             self.missing_data_bundle_source.get_spot_value(
-                assets=[asset],
-                fields=[field],
+                assets=frozenset({asset}),
+                fields=frozenset({field}),
                 dt=dt, ) # from exchange
 
-    def get_spot_value(self, assets: list[Asset], fields: list[str], dt: datetime.datetime,
+    def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
                              frequency: datetime.timedelta):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
@@ -176,6 +176,7 @@ class DataBundle:
             ``field`` is 'volume' the value will be a int. If the ``field`` is
             'last_traded' the value will be a Timestamp.
         """
+        # print(f"get spot value: {assets}, {fields}, {dt}")
         df_raw = self.get_data_by_limit(
             fields=fields,
             limit=1,
@@ -220,10 +221,10 @@ class DataBundle:
             is 'last_traded' the value will be a Timestamp.
         """
         if spot_value is None:
-            spot_value = self.get_spot_value(assets=[asset], fields=[field], dt=dt, data_frequency=data_frequency)
+            spot_value = self.get_spot_value(assets=frozenset({asset}), fields=frozenset({field}), dt=dt, data_frequency=data_frequency)
 
         if isinstance(asset, Equity):  # TODO: fix this, not valid way to check if it is equity
-            ratio = self.get_adjustments(assets=[asset], field=field, dt=dt, perspective_dt=perspective_dt)[0]
+            ratio = self.get_adjustments(assets=frozenset({asset}), field=field, dt=dt, perspective_dt=perspective_dt)[0]
             spot_value *= ratio
 
         return spot_value
@@ -346,7 +347,7 @@ class DataBundle:
             return None
         return self.asset_repository.retrieve_asset(sid=contract_sid)
 
-    async def get_adjustments(self, assets: list[Asset], field: str, dt: datetime.datetime,
+    async def get_adjustments(self, assets: frozenset[Asset], field: str, dt: datetime.datetime,
                               perspective_dt: datetime.datetime):
         """Returns a list of adjustments between the dt and perspective_dt for the
         given field and list of assets

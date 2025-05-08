@@ -198,7 +198,7 @@ class InMemoryBlotter(Blotter):
             for asset, asset_orders in self.open_orders.items():
                 slippage = self.exchange.get_slippage_model(asset=asset)
 
-                for order, txn in slippage.simulate(data=bar_data, assets=[asset],
+                for order, txn in slippage.simulate(data=bar_data, assets=frozenset({asset}),
                                                     orders_for_asset=asset_orders.values()):
                     commission = self.exchange.get_commission_model(asset=asset)
                     additional_commission = commission.calculate(order, txn)

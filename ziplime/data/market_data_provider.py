@@ -8,21 +8,21 @@ from ziplime.assets.entities.asset import Asset
 class MarketDataProvider:
 
     @abstractmethod
-    async def get_data_by_date(self, fields: list[str],
+    async def get_data_by_date(self, set: list[str],
                                from_date: datetime.datetime,
                                to_date: datetime.datetime,
                                frequency: datetime.timedelta,
-                               assets: list[Asset],
+                               assets: frozenset[Asset],
                                include_bounds: bool,
                                ) -> pl.DataFrame:
         pass
 
     @abstractmethod
-    async def get_data_by_limit(self, fields: list[str],
+    async def get_data_by_limit(self, fields: frozenset[str],
                                 limit: int,
                                 end_date: datetime.datetime,
                                 frequency: datetime.timedelta,
-                                assets: list[Asset],
+                                assets: frozenset[Asset],
                                 include_end_date: bool,
                                 ) -> pl.DataFrame:
         pass
@@ -38,7 +38,7 @@ class MarketDataProvider:
         pass
 
     @abstractmethod
-    async def get_spot_value(self, assets: list[Asset], fields: list[str], dt: datetime.datetime,
+    async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
                              frequency: datetime.timedelta):
         pass
 
@@ -55,7 +55,7 @@ class MarketDataProvider:
     #     pass
     #
     # @abstractmethod
-    # def get_splits(self, assets: list[Asset], dt: datetime.date):
+    # def get_splits(self, assets: frozenset[Asset], dt: datetime.date):
     #     pass
     #
     # @abstractmethod
@@ -71,6 +71,6 @@ class MarketDataProvider:
     #     pass
     #
     # @abstractmethod
-    # def get_adjustments(self, assets: list[Asset], field: str, dt: datetime.datetime,
+    # def get_adjustments(self, assets: frozenset[Asset], field: str, dt: datetime.datetime,
     #                     perspective_dt: datetime.datetime):
     #     pass

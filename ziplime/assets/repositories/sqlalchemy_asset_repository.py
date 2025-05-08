@@ -297,11 +297,13 @@ class SqlAlchemyAssetRepository(AssetRepository):
         #     asset = await session.execute(q).scalar_one_or_none()
         #     return asset
 
+    @aiocache.cached(cache=Cache.MEMORY)
     async def get_currency_by_symbol(self, symbol: str, exchange_name: str) -> Currency | None:
         currencies = await self.get_currencies_by_symbols(symbols=[symbol], exchange_name=exchange_name)
         if currencies:
             return currencies[0]
         return None
+
 
     async def get_currencies_by_symbols(self, symbols: list[str], exchange_name: str) -> list[Currency]:
         async with self.session_maker() as session:

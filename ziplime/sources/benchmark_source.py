@@ -24,7 +24,7 @@ class BenchmarkSource:
             sessions: pl.Series,
             exchange: Exchange,
             emission_rate: datetime.timedelta,
-            benchmark_fields: list[str],
+            benchmark_fields: frozenset[str],
             benchmark_asset: Asset | None = None,
             benchmark_returns: pl.Series | None = None,
     ):
@@ -239,7 +239,7 @@ class BenchmarkSource:
             limit=limit,
             frequency=self.emission_rate,
             end_date=all_bars[-1],
-            assets=[asset],
+            assets=frozenset({asset}),
             include_end_date=True
         )
         return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))#[1:]
@@ -258,11 +258,11 @@ class BenchmarkSource:
             # before the simulation start day (so that we can get the %
             # change on day 1)
             benchmark_series = self.data_bundle.get_data_by_limit(
-                fields=["price"],
+                fields=frozenset({"price"}),
                 limit=len(trading_days) + 1,
                 frequency=self.emission_rate,
                 end_date=trading_days[-1],
-                assets=[asset],
+                assets=frozenset({asset}),
                 include_end_date=False
             )
 
@@ -272,24 +272,24 @@ class BenchmarkSource:
             # Attempt to handle case where stock data starts on first
             # day, in this case use the open to close return.
             benchmark_series = self.data_bundle.get_data_by_limit(
-                fields=["price"],
+                fields=frozenset({"price"}),
                 limit=len(trading_days),
                 frequency=self.emission_rate,
                 end_date=trading_days[-1],
-                assets=[asset],
+                assets=frozenset({asset}),
                 include_end_date=False,
             )
 
             # get a minute history window of the first day
             first_open = data_portal.get_spot_value(
-                assets=[asset],
-                fields=["open"],
+                assets=frozenset({asset}),
+                fields=frozenset({"open"}),
                 dt=trading_days[0],
                 data_frequency=datetime.timedelta(days=1),
             )
             first_close = data_portal.get_spot_value(
-                assets=[asset],
-                fields=["close"],
+                assets=frozenset({asset}),
+                fields=frozenset({"close"}),
                 dt=trading_days[0],
                 frequency=datetime.timedelta(days=1),
             )

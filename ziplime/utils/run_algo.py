@@ -83,7 +83,7 @@ async def run_algorithm(
         sessions=clock.sessions,
         exchange=exchanges[0],
         emission_rate=clock.emission_rate,
-        benchmark_fields=["close"]
+        benchmark_fields=frozenset({"close"})
     )
 
     tr = TradingAlgorithm(

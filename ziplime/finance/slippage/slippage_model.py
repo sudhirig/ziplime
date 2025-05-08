@@ -103,16 +103,17 @@ class SlippageModel(metaclass=FinancialModelMeta):
         """
         raise NotImplementedError("process_order")
 
-    def simulate(self, exchange, assets: list[Asset], orders_for_asset, current_dt: datetime.datetime):
+    def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime):
         self._volume_for_bar = 0
-        volume = exchange.current(assets=assets, fields=["volume"], dt=current_dt)["volume"][0]
+        current_val = exchange.current(assets=assets, fields=frozenset({"close", "volume"}), dt=current_dt)
+        volume = current_val["volume"][0]
 
         if volume == 0:
             return
 
         # can use the close price, since we verified there's volume in this
         # bar.
-        price = exchange.current(assets=assets, fields=["close"], dt=current_dt)["close"][0]
+        price = current_val["close"][0]
 
         # BEGIN
         #

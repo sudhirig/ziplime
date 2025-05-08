@@ -70,5 +70,5 @@ class AssetService:
         return self._adjustments_repository.get_stock_dividends(sid=sid,
                                                                       trading_days=trading_days)
 
-    def get_splits(self, assets: list[Asset], dt: datetime.date):
+    def get_splits(self, assets: frozenset[Asset], dt: datetime.date):
         return self._adjustments_repository.get_splits(assets=assets, dt=dt)

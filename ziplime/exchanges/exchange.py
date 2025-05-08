@@ -112,13 +112,13 @@ class Exchange:
     def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
                                          frequency: datetime.timedelta): ...
 
-    async def get_spot_values(self, assets: list[Asset], fields: list[str], exchange_name: str): ...
+    async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str], exchange_name: str): ...
 
-    def get_data_by_limit(self, fields: list[str],
+    def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta,
-                          assets: list[Asset],
+                          assets: frozenset[Asset],
                           include_end_date: bool,
                           ) -> pl.DataFrame:
         ...

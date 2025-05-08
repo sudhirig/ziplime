@@ -288,7 +288,7 @@ class LimeTraderSdkExchange(Exchange):
         return transactions, commissions, closed_orders
 
         #
-        #     for order, txn in slippage.simulate(data=bar_data, assets=[asset],
+        #     for order, txn in slippage.simulate(data=bar_data, assets={asset},
         #                                         orders_for_asset=asset_orders.values()):
         #         commission = self.get_commission_model(asset=asset)
         #         additional_commission = commission.calculate(order, txn)
@@ -368,7 +368,7 @@ class LimeTraderSdkExchange(Exchange):
         quote = self._lime_sdk_client.market.get_current_quote(asset.symbol)
         return quote.date
 
-    def get_spot_value(self, assets: list[Asset], fields: list[str], dt, data_frequency) -> pl.DataFrame:
+    def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt, data_frequency) -> pl.DataFrame:
         symbols = [asset.get_symbol_by_exchange(exchange_name=self.name) for asset in assets]
         quotes = self._sync_lime_sdk_client.market.get_current_quotes(symbols=symbols)
 
@@ -483,5 +483,5 @@ class LimeTraderSdkExchange(Exchange):
             symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
         return getattr(quote, field)
 
-    async def get_spot_values(self, assets: list[Asset], fields: list[str], exchange_name: str):
+    async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str], exchange_name: str):
         ...

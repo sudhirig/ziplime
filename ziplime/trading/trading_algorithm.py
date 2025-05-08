@@ -773,10 +773,10 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                 msg=f"Cannot order sid={asset.sid}, as it stopped trading on {asset.end_date}."
             )
         else:
-            # last_price = self.current_data.current([asset], fields=["price"])["price"][0]
-            last_price = self.exchanges[exchange_name].current([asset],
+            # last_price = self.current_data.current([asset], fields={"price"})["price"][0]
+            last_price = self.exchanges[exchange_name].current(frozenset({asset}),
                                                                dt=self.simulation_dt,
-                                                               fields=["price"])["price"][0]
+                                                               fields=frozenset({"price"}))["price"][0]
 
             if last_price is None:
                 raise CannotOrderDelistedAsset(

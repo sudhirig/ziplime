@@ -207,7 +207,7 @@ class TradingSignalExchange(Exchange):
         return transactions, commissions, closed_orders
 
         #
-        #     for order, txn in slippage.simulate(data=bar_data, assets=[asset],
+        #     for order, txn in slippage.simulate(data=bar_data, assets={asset},
         #                                         orders_for_asset=asset_orders.values()):
         #         commission = self.get_commission_model(asset=asset)
         #         additional_commission = commission.calculate(order, txn)

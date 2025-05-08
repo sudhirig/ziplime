@@ -1,4 +1,6 @@
 import datetime
+from functools import lru_cache
+
 import polars as pl
 import uuid
 from decimal import Decimal
@@ -125,7 +127,7 @@ class SimulationExchange(Exchange):
         for asset, asset_orders in orders.items():
             slippage = self.get_slippage_model(asset=asset)
 
-            for order, txn in slippage.simulate(exchange=self, assets=[asset],
+            for order, txn in slippage.simulate(exchange=self, assets=frozenset({asset}),
                                                 orders_for_asset=asset_orders.values(),
                                                 current_dt=current_dt
                                                 ):
@@ -165,34 +167,37 @@ class SimulationExchange(Exchange):
     def get_last_traded_dt(self, asset):
         pass
 
-    def get_spot_value(self, assets: list[Asset], fields: list[str], dt: datetime.datetime,
+    def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
                        data_frequency: datetime.timedelta) -> pl.DataFrame:
         pass
 
     def get_realtime_bars(self, assets, frequency):
         pass
 
+    @lru_cache(maxsize=100)
     async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                           frequency: datetime.timedelta):
         return self.data_bundle.get_spot_value(
-            assets=[asset],
-            fields=[field],
+            assets=frozenset({asset}),
+            fields=frozenset({field}),
             dt=dt,
             frequency=frequency,
         )
 
+    @lru_cache(maxsize=100)
     def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
                                          frequency: datetime.timedelta):
 
         return self.data_bundle.get_spot_value(
-            assets=[asset],
-            fields=[field],
+            assets=frozenset({asset}),
+            fields=frozenset({field}),
             dt=dt,
             frequency=frequency,
         )
-
-    def current(self, assets: list[Asset], fields: list[str], dt: datetime.datetime):
+    @lru_cache(maxsize=100)
+    def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime):
         data = {}
+        # print(f"Getting current: {assets}, fields={fields}, dt={dt}")
         # TODO: check this, uncomment adjust_minutes
         # if not self._adjust_minutes:
         return self.data_bundle.get_spot_value(
@@ -202,11 +207,12 @@ class SimulationExchange(Exchange):
             frequency=self.data_bundle.frequency
         )
 
-    def get_data_by_limit(self, fields: list[str],
+    @lru_cache(maxsize=100)
+    def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta,
-                          assets: list[Asset],
+                          assets: frozenset[Asset],
                           include_end_date: bool,
                           ) -> pl.DataFrame:
         return self.data_bundle.get_data_by_limit(fields=fields,

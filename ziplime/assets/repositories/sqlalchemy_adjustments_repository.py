@@ -671,7 +671,7 @@ class SqlAlchemyAdjustmentRepository(AdjustmentRepository):
         self.write_frame("mergers", mergers)
         self.write_dividend_data(dividends, stock_dividends)
 
-    def get_splits(self, assets: list[Asset], dt: datetime.date):
+    def get_splits(self, assets: frozenset[Asset], dt: datetime.date):
         """Returns any splits for the given sids and the given dt.
 
         Parameters

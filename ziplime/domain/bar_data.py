@@ -63,6 +63,9 @@ class BarData:
         self._trading_calendar = trading_calendar
         self._is_restricted = restrictions.is_restricted
         self.exchanges = exchanges
+        first_exchange = exchanges[list(exchanges.keys())[0]]
+        self.default_exchange = first_exchange
+
 
     def _get_current_minute(self):
         """Internal utility method to get the current simulation time.
@@ -91,7 +94,7 @@ class BarData:
         return dt
 
     def current(self, assets: list[Asset], fields: list[str],
-                exchange_name: str):
+                exchange_name: str | None = None):
         """Returns the "current" value of the given fields for the given assets
         at the current simulation time.
 
@@ -152,6 +155,10 @@ class BarData:
         we use the most recent market close instead.
         """
         data = {}
+        assets = frozenset(assets)
+        fields = frozenset(fields)
+        if exchange_name is None:
+            exchange_name = self.default_exchange.name
 
         if not self._adjust_minutes:
             return self.exchanges[exchange_name].get_spot_value(
@@ -218,7 +225,7 @@ class BarData:
             can be traded in the current minute.
         """
         dt = self.simulation_dt_func()
-
+        assets = set(assets)
         if self._adjust_minutes:
             adjusted_dt = self._get_current_minute()
         else:
@@ -241,7 +248,7 @@ class BarData:
         session_label = None
         dt_to_use_for_exchange_check = None
 
-        if self._is_restricted(assets=[asset], dt=adjusted_dt):
+        if self._is_restricted(assets=frozenset({asset}), dt=adjusted_dt):
             return False
 
         session_label = self._trading_calendar.minute_to_session(minute=dt)
@@ -269,12 +276,12 @@ class BarData:
         # is there a last price?
         return not np.isnan(
             self.data_portal.get_spot_value(
-                assets=[asset], field="price", dt=adjusted_dt, data_frequency=self.data_frequency
+                assets=frozenset({asset}), field="price", dt=adjusted_dt, data_frequency=self.data_frequency
             )
         )
 
     def history(self, assets: list[Asset], fields: list[str], bar_count: int, frequency: datetime.timedelta,
-                exchange_name: str
+                exchange_name: str | None = None,
                 ):
         """Returns a trailing window of length ``bar_count`` with data for
         the given assets, fields, and frequency, adjusted for splits, dividends,
@@ -331,6 +338,11 @@ class BarData:
 
         If the current simulation time is not a valid market time, we use the last market close instead.
         """
+        assets = frozenset(assets)
+        fields = frozenset(fields)
+
+        if exchange_name is None:
+            exchange_name = self.default_exchange.name
 
         df = self.exchanges[exchange_name].get_data_by_limit(assets=assets,
                                                              end_date=self._get_current_minute(),

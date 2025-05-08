@@ -26,7 +26,11 @@ async def initialize(context: TradingAlgorithm):
 
 async def handle_data(context: TradingAlgorithm, data: BarData):
     close_price_history = data.history(assets=[context.aapl],fields=['close'],bar_count=10,frequency=datetime.timedelta(minutes=1))
+    close_price_current = data.current(assets=[context.aapl],fields=['close'])
+
     print(close_price_history)
+    print(close_price_current)
+
     submitted_order = await context.order_target_percent(asset=context.aapl, target=Decimal(0.5), style=MarketOrder())
     submitted_order = await context.order_target_percent(asset=context.amzn, target=Decimal(0.5), style=MarketOrder())
 

@@ -161,11 +161,10 @@ class BarData:
             exchange_name = self.default_exchange.name
 
         if not self._adjust_minutes:
-            return self.exchanges[exchange_name].get_spot_value(
+            return self.exchanges[exchange_name].current(
                 assets=assets,
                 fields=fields,
                 dt=self._get_current_minute(),
-                frequency=self.data_bundle.frequency
             )
         else:
             for field in fields:

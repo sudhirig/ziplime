@@ -2,6 +2,7 @@ import datetime
 from typing import Callable
 
 import pandas as pd
+import polars as pl
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
@@ -94,7 +95,7 @@ class BarData:
         return dt
 
     def current(self, assets: list[Asset], fields: list[str],
-                exchange_name: str | None = None):
+                exchange_name: str | None = None) -> pl.DataFrame:
         """Returns the "current" value of the given fields for the given assets
         at the current simulation time.
 
@@ -281,7 +282,7 @@ class BarData:
 
     def history(self, assets: list[Asset], fields: list[str], bar_count: int, frequency: datetime.timedelta,
                 exchange_name: str | None = None,
-                ):
+                ) -> pl.DataFrame:
         """Returns a trailing window of length ``bar_count`` with data for
         the given assets, fields, and frequency, adjusted for splits, dividends,
         and mergers as of the current simulation time.

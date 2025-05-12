@@ -225,8 +225,8 @@ class MetricsTracker:
         """
         self._logger.info(
             f"Simulated {self._session_count} trading days\n first open: "
-            f"{self._trading_calendar.session_open(self._first_session)}\n "
-            f"last close: {self._trading_calendar.session_close(self._last_session)}",
+            f"{self._trading_calendar.session_open(self._first_session).astimezone(tz=self._trading_calendar.tz)}\n "
+            f"last close: {self._trading_calendar.session_close(self._last_session).astimezone(tz=self._trading_calendar.tz)}",
         )
 
         packet = {}

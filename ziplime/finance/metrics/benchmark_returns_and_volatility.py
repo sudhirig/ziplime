@@ -34,7 +34,7 @@ class BenchmarkReturnsAndVolatility:
         self._daily_annual_volatility = (daily_returns_series.with_columns(
             expanding_sum=pl.col("pct_change").rolling_std(
                 window_size=daily_returns_series.height,
-                min_samples=2) * np.sqrt(252)
+                min_samples=2 if daily_returns_series.height > 1 else 1) * np.sqrt(252)
         ))["expanding_sum"]
 
         if emission_rate == datetime.timedelta(days=1):

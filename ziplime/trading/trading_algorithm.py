@@ -885,9 +885,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         """
         if not self._can_order_asset(asset=asset):
             return None
-        if amount == 0:
-            self._logger.warning("Not executing order for zero shares.")
-            return None
         # TODO: implement dynamic risk control
 
         self.validate_order_params(asset=asset, amount=amount)
@@ -896,11 +893,12 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         else:
             exchange = self.exchanges[exchange_name]
         order_id = None
+        order_qty_rounded = int(round_if_near_integer(amount))
 
         order = Order(
             dt=self.simulation_dt,
             asset=asset,
-            amount=amount,
+            amount=order_qty_rounded,
             id=order_id,
             commission=Decimal(0.00),
             filled=0,
@@ -908,6 +906,10 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             status=OrderStatus.OPEN,
             exchange_name=exchange.name
         )
+        if amount == 0:
+            self._logger.warning("Not executing order for zero shares.")
+            return None
+
         quote_asset = await self.asset_service.get_currency_by_symbol(symbol="USD",
                                                                       exchange_name=exchange_name)
 
@@ -2004,12 +2006,12 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         # grab any new orders from the blotter, then clear the list.
         # this includes cancelled orders.
-        new_orders = self.blotter.new_orders
-        self.blotter.new_orders = []
+        new_orders = self.new_orders
+        self.new_orders = dict()
 
         # if we have any new orders, record them so that we know
         # in what perf period they were placed.
-        for new_order in new_orders:
+        for new_order in new_orders.values():
             self._ledger.process_order(order=new_order)
 
     def once_a_day(

@@ -160,69 +160,69 @@ class InMemoryBlotter(Blotter):
             for order in orders_to_modify:
                 order.handle_split(ratio)
 
-    def get_transactions(self, bar_data: BarData):
-        """
-        Creates a list of transactions based on the current open orders,
-        slippage model, and commission model.
-
-        Parameters
-        ----------
-        bar_data: ziplime.protocol.BarData
-
-        Notes
-        -----
-        This method book-keeps the blotter's open_orders dictionary, so that
-         it is accurate by the time we're done processing open orders.
-
-        Returns
-        -------
-        transactions_list: List
-            transactions_list: list of transactions resulting from the current
-            open orders.  If there were no open orders, an empty list is
-            returned.
-
-        commissions_list: List
-            commissions_list: list of commissions resulting from filling the
-            open orders.  A commission is an object with "asset" and "cost"
-            parameters.
-
-        closed_orders: List
-            closed_orders: list of all the orders that have filled.
-        """
-
-        closed_orders = []
-        transactions = []
-        commissions = []
-
-        if self.open_orders:
-            for asset, asset_orders in self.open_orders.items():
-                slippage = self.exchange.get_slippage_model(asset=asset)
-
-                for order, txn in slippage.simulate(data=bar_data, assets=frozenset({asset}),
-                                                    orders_for_asset=asset_orders.values()):
-                    commission = self.exchange.get_commission_model(asset=asset)
-                    additional_commission = commission.calculate(order, txn)
-
-                    if additional_commission > 0:
-                        commissions.append(
-                            {
-                                "asset": order.asset,
-                                "order": order,
-                                "cost": additional_commission,
-                            }
-                        )
-
-                    order.filled += txn.amount
-                    order.commission += additional_commission
-
-                    order.dt = txn.dt
-
-                    transactions.append(txn)
-
-                    if not order.open:
-                        closed_orders.append(order)
-
-        return transactions, commissions, closed_orders
+    # def get_transactions(self, bar_data: BarData):
+    #     """
+    #     Creates a list of transactions based on the current open orders,
+    #     slippage model, and commission model.
+    #
+    #     Parameters
+    #     ----------
+    #     bar_data: ziplime.protocol.BarData
+    #
+    #     Notes
+    #     -----
+    #     This method book-keeps the blotter's open_orders dictionary, so that
+    #      it is accurate by the time we're done processing open orders.
+    #
+    #     Returns
+    #     -------
+    #     transactions_list: List
+    #         transactions_list: list of transactions resulting from the current
+    #         open orders.  If there were no open orders, an empty list is
+    #         returned.
+    #
+    #     commissions_list: List
+    #         commissions_list: list of commissions resulting from filling the
+    #         open orders.  A commission is an object with "asset" and "cost"
+    #         parameters.
+    #
+    #     closed_orders: List
+    #         closed_orders: list of all the orders that have filled.
+    #     """
+    #
+    #     closed_orders = []
+    #     transactions = []
+    #     commissions = []
+    #
+    #     if self.open_orders:
+    #         for asset, asset_orders in self.open_orders.items():
+    #             slippage = self.exchange.get_slippage_model(asset=asset)
+    #
+    #             for order, txn in slippage.simulate(data=bar_data, assets=frozenset({asset}),
+    #                                                 orders_for_asset=asset_orders.values()):
+    #                 commission = self.exchange.get_commission_model(asset=asset)
+    #                 additional_commission = commission.calculate(order, txn)
+    #
+    #                 if additional_commission > 0:
+    #                     commissions.append(
+    #                         {
+    #                             "asset": order.asset,
+    #                             "order": order,
+    #                             "cost": additional_commission,
+    #                         }
+    #                     )
+    #
+    #                 order.filled += txn.amount
+    #                 order.commission += additional_commission
+    #
+    #                 order.dt = txn.dt
+    #
+    #                 transactions.append(txn)
+    #
+    #                 if not order.open:
+    #                     closed_orders.append(order)
+    #
+    #     return transactions, commissions, closed_orders
 
     def prune_orders(self, closed_orders):
         """

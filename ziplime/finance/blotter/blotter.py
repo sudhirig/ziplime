@@ -86,39 +86,6 @@ class Blotter(ABC):
         raise NotImplementedError("process_splits")
 
     @abstractmethod
-    def get_transactions(self, bar_data: BarData) -> tuple[list[Transaction], list[CommissionModel], list[Order]]:
-        """
-        Creates a list of transactions based on the current open orders,
-        slippage model, and commission model.
-
-        Parameters
-        ----------
-        bar_data: ziplime._protocol.BarData
-
-        Notes
-        -----
-        This method book-keeps the blotter's open_orders dictionary, so that
-         it is accurate by the time we're done processing open orders.
-
-        Returns
-        -------
-        transactions_list: List
-            transactions_list: list of transactions resulting from the current
-            open orders.  If there were no open orders, an empty list is
-            returned.
-
-        commissions_list: List
-            commissions_list: list of commissions resulting from filling the
-            open orders.  A commission is an object with "asset" and "cost"
-            parameters.
-
-        closed_orders: List
-            closed_orders: list of all the orders that have filled.
-        """
-
-        raise NotImplementedError("get_transactions")
-
-    @abstractmethod
     def prune_orders(self, closed_orders) -> None:
         """
         Removes all given orders from the blotter's open_orders list.

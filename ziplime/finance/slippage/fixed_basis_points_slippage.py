@@ -66,7 +66,6 @@ class FixedBasisPointsSlippage(SlippageModel):
         )
 
     def process_order(self, exchange: Exchange, dt:datetime.datetime, order: Order) -> tuple[Decimal, Decimal]:
-        # volume = data.current(assets=[order.asset], fields=["volume"])["volume"][0]
         current_val = exchange.current(assets=frozenset({order.asset}), fields=frozenset({"close", "volume"}), dt=dt)
         volume = current_val["volume"][0]
         max_volume = int(self.volume_limit * volume)

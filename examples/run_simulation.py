@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     res = run_simulation(
         start_date=datetime.datetime(year=2024, month=10, day=5, tzinfo=datetime.timezone.utc),
-        end_date=datetime.datetime(year=2024, month=10, day=12, tzinfo=datetime.timezone.utc),
+        end_date=datetime.datetime(year=2024, month=10, day=25, tzinfo=datetime.timezone.utc),
         trading_calendar="NYSE",
         algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
         total_cash=Decimal(100000.0),

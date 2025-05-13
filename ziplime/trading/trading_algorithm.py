@@ -1469,7 +1469,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         :func:`ziplime.api.order_target`
         :func:`ziplime.api.order_target_value`
         """
-        if not 0 <= target <= 1:
+        if not -1 <= target <= 1:
             raise ValueError("target must be between 0 and 1")
         if not self._can_order_asset(asset):
             return None

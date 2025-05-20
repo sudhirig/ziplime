@@ -67,7 +67,7 @@ class BundleService:
             exchange_name = row["exchange"]
             symbols = row["symbol"]
             equities = await asset_service.get_equities_by_symbols(symbols=symbols, exchange_name=exchange_name)
-            symbol_to_sid = {e.get_symbol_by_exchange(exchange_name=exchange_name).symbol: e.sid for e in equities}
+            symbol_to_sid = {e.get_symbol_by_exchange(exchange_name=exchange_name): e.sid for e in equities}
 
             data = data.with_columns(
                 pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")

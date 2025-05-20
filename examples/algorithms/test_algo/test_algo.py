@@ -3,7 +3,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from ziplime.assets.domain.asset_type import AssetType
 from ziplime.config.base_algorithm_config import BaseAlgorithmConfig
 from ziplime.finance.execution import MarketOrder
 
@@ -31,6 +30,8 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
     print(f"Handle data: {context.simulation_dt}")
     # Skip first 300 days to get full windows
     context.i += 1
+    # data.history(assets=[context.aapl], fields=['price'], bar_count=100)[
+    #     "price"]
     if context.i < 300:
         return
 
@@ -40,6 +41,7 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
     long_mavg = \
         data.history(assets=[context.aapl], fields=['price'], bar_count=300, frequency=datetime.timedelta(minutes=1))[
             "price"].mean()
+    # await context.order_target_percent(asset=context.aapl, target=-Decimal(1), style=MarketOrder())
 
     if short_mavg > long_mavg:
         # order_target orders as many shares as needed to

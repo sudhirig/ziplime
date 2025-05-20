@@ -15,4 +15,7 @@ class PeriodLabel:
                    exchanges: dict[str, Exchange]):
         packet["cumulative_risk_metrics"]["period_label"] = self._label
 
-    end_of_session = end_of_bar
+    def end_of_session(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
+                       exchanges: dict[str, Exchange]):
+        packet["cumulative_risk_metrics"]["period_label"] = self._label if hasattr(self, "label") else session.strftime(
+            "%Y-%m")

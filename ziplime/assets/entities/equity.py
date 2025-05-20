@@ -10,7 +10,7 @@ class Equity(Asset):
     symbol_mapping: dict[str, EquitySymbolMapping]
 
     def get_symbol_by_exchange(self, exchange_name: str) -> str | None:
-        return self.symbol_mapping.get(exchange_name, None)
+        return self.symbol_mapping.get(exchange_name, None).symbol
 
 
     def __hash__(self):

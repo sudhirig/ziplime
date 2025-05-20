@@ -11,6 +11,7 @@ from lime_trader.utils.pagination import iterate_pages_async
 
 from ziplime.assets.entities.asset import Asset
 from ziplime.data.domain.data_bundle import DataBundle
+from ziplime.data.services.lime_trader_sdk_data_source import LimeTraderSdkDataSource
 from ziplime.domain.bar_data import BarData
 from ziplime.errors import SymbolNotFound
 
@@ -69,7 +70,8 @@ class LimeTraderSdkExchange(Exchange):
         self._account_id = account_id or self._get_account_number()
         self._tracked_orders = {}
         self.processed_transaction_ids = set()
-
+        self._lime_trader_sdk_data_source = LimeTraderSdkDataSource(lime_sdk_credentials_file=lime_sdk_credentials_file,
+                                                                    trading_calendar=trading_calendar)
         self.cash_balance = cash_balance
 
     def get_start_cash_balance(self) -> Decimal:
@@ -222,7 +224,8 @@ class LimeTraderSdkExchange(Exchange):
             result.append(order)
         return result
 
-    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], bar_data: BarData):
+    async def get_transactions(self, orders: dict[Asset, dict[str, Order]],
+                               current_dt: datetime.datetime = None):
         closed_orders = []
         transactions = []
         commissions = []
@@ -369,32 +372,8 @@ class LimeTraderSdkExchange(Exchange):
         return quote.date
 
     def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt, data_frequency) -> pl.DataFrame:
-        symbols = [asset.get_symbol_by_exchange(exchange_name=self.name) for asset in assets]
-        quotes = self._sync_lime_sdk_client.market.get_current_quotes(symbols=symbols)
+        return self._lime_trader_sdk_data_source.get_spot_value(assets=assets, fields=fields, dt=dt,)
 
-        cols = {"open": [], "close": [], "price": [], "high": [], "low": [], "volume": [], "date": [], "exchange": [],
-                "symbol": [], "exchange_country": []}
-
-        for results, symbol in zip(quotes, symbols):
-            for result in results:
-                cols["open"].append(result.open)
-                cols["close"].append(result.close)
-                cols["price"].append(result.close)
-                cols["high"].append(result.high)
-                cols["low"].append(result.low)
-                cols["volume"].append(result.volume)
-                cols["date"].append(result.date.astimezone(self.trading_calendar.tz))
-                cols["exchange"].append(self.name)
-                cols["exchange_country"].append(self.country_code)
-                cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Decimal(scale=8)), ("close", pl.Decimal(scale=8)),
-                                        ("price", pl.Decimal(scale=8)),
-                                        ("high", pl.Decimal(scale=8)), ("low", pl.Decimal(scale=8)),
-                                        ("volume", pl.Decimal(scale=8)),
-                                        ("date", pl.Datetime), ("exchange", pl.String),
-                                        ("exchange_country", pl.String), ("symbol", pl.String)
-                                        ])
-        return df
 
     def get_realtime_bars(self, assets, data_frequency):
         # TODO: cache the result. The caller
@@ -485,3 +464,53 @@ class LimeTraderSdkExchange(Exchange):
 
     async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str], exchange_name: str):
         ...
+
+    def get_data_by_limit(self, fields: frozenset[str],
+                          limit: int,
+                          end_date: datetime.datetime,
+                          frequency: datetime.timedelta,
+                          assets: frozenset[Asset],
+                          include_end_date: bool,
+                          ) -> pl.DataFrame:
+        # TODO: cache the result. The caller
+        # (DataPortalLive#get_history_window) makes use of only one
+        # column at a time.
+        if self.data_bundle is not None and end_date <= self.data_bundle.end_date:
+            return self.data_bundle.get_data_by_limit(fields=fields,
+                                                      limit=limit,
+                                                      end_date=end_date,
+                                                      frequency=frequency,
+                                                      assets=assets,
+                                                      include_end_date=include_end_date,
+                                                      )
+
+        res = self._lime_trader_sdk_data_source.get_data_by_limit(assets=assets, frequency=frequency, limit=limit,
+                                                                  fields=fields, include_end_date=include_end_date,
+                                                                  end_date=end_date,
+                                                                  exchange_name=self.name,
+                                                                  exchange_country=self.country_code,
+                                                                  trading_calendar=self.clock.trading_calendar)
+        return res
+
+        dfs = []
+        to_date = datetime.datetime.now(tz=datetime.timezone.utc)
+        from_date = to_date - datetime.timedelta(days=1)
+        for asset in assets if not assets_is_scalar else [assets]:
+
+            bars_list = self._lime_sdk_client.market.get_quotes_history(symbol=asset.symbol, period=timeframe,
+                                                                        from_date=from_date,
+                                                                        to_date=to_date
+                                                                        )
+            bars_map = {a.symbol: a for a in bars_list}
+
+            symbol = asset.symbol
+            df = bars_map[symbol].df.copy()
+            if df.index.tz is None:
+                df.index = df.index.tz_localize(
+                    'utc').tz_convert('America/New_York')
+            df.columns = pd.MultiIndex.from_product([[asset, ], df.columns])
+            dfs.append(df)
+        return pd.concat(dfs, axis=1)
+
+    def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime):
+        return self.get_spot_value(assets=assets, fields=fields, dt=dt, data_frequency=None)

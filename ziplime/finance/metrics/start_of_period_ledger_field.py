@@ -1,5 +1,6 @@
 import datetime
 import operator as op
+from decimal import Decimal
 from typing import Any
 
 import pandas as pd
@@ -29,6 +30,7 @@ class StartOfPeriodLedgerField:
             self._packet_field = ledger_field.rsplit(".", 1)[-1]
         else:
             self._packet_field = packet_field
+        self._previous_day = Decimal("0.0")
 
     def start_of_simulation(
             self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar,
@@ -40,6 +42,8 @@ class StartOfPeriodLedgerField:
         self._previous_day = self._get_ledger_field(ledger)
 
     def _end_of_period(self, sub_field, packet, ledger):
+        # if not hasattr(self, "_previous_day"):
+        #     self._previous_day = self._get_ledger_field(ledger)
         packet_field = self._packet_field
         packet["cumulative_perf"][packet_field] = self._start_of_simulation
         packet[sub_field][packet_field] = self._previous_day

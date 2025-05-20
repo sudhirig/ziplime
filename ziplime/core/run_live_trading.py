@@ -57,14 +57,15 @@ async def _run_live_trading(
         data_bundle = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
 
     algo = AlgorithmFile(algorithm_file=algorithm_file, algorithm_config_file=config_file)
+    timedelta_diff_from_current_time = -datetime.timedelta(seconds=0)
 
     clock = RealtimeClock(
         trading_calendar=calendar,
         start_date=start_date,
         end_date=end_date,
         emission_rate=emission_rate,
+        timedelta_diff_from_current_time=timedelta_diff_from_current_time
     )
-    timedelta_diff_from_current_time = datetime.timedelta(seconds=0)
 
     if exchange is None:
         exchange = LimeTraderSdkExchange(

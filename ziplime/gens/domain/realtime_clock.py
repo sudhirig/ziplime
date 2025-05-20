@@ -125,9 +125,12 @@ class RealtimeClock(TradingClock):
                     current_time = self._sleep_and_increase_time(sleep_seconds=1)
             elif current_time > self.market_closes[current_session_index]:
                 if self.market_closes_yielded[current_session_index]:
+                    self._logger.info(
+                        f"Current time {current_time} is after trading hours, waiting till market hours.")
                     current_time = self._sleep_and_increase_time(sleep_seconds=1)
                 else:
                     last_bar_emit = current_time
+                    self.market_closes_yielded[current_session_index] = True
                     yield current_time.date(), SimulationEvent.SESSION_END
             else:
                 # We should never end up in this branch

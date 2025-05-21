@@ -37,6 +37,9 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
     steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Install Poetry
       uses: snok/install-poetry@v1
     - name: Download all the dists

@@ -1,7 +1,5 @@
 from textwrap import dedent
 
-from ziplime.utils.memoize import lazyval
-
 
 class ZiplineError(Exception):
     msg = None
@@ -9,7 +7,7 @@ class ZiplineError(Exception):
     def __init__(self, **kwargs):
         self.kwargs = kwargs
 
-    @lazyval
+    @property
     def message(self):
         return str(self)
 
@@ -386,15 +384,15 @@ class SidsNotFound(ZiplineError):
     non-existent sid.
     """
 
-    @lazyval
+    @property
     def plural(self):
         return len(self.sids) > 1
 
-    @lazyval
+    @property
     def sids(self):
         return self.kwargs["sids"]
 
-    @lazyval
+    @property
     def msg(self):
         if self.plural:
             return "No assets found for sids: {sids}."
@@ -404,7 +402,7 @@ class SidsNotFound(ZiplineError):
 class EquitiesNotFound(SidsNotFound):
     """Raised when a call to `retrieve_equities` fails to find an asset."""
 
-    @lazyval
+    @property
     def msg(self):
         if self.plural:
             return "No equities found for sids: {sids}."
@@ -414,7 +412,7 @@ class EquitiesNotFound(SidsNotFound):
 class FutureContractsNotFound(SidsNotFound):
     """Raised when a call to `retrieve_futures_contracts` fails to find an asset."""
 
-    @lazyval
+    @property
     def msg(self):
         if self.plural:
             return "No future contracts found for sids: {sids}."

@@ -6,13 +6,11 @@ import pandas as pd
 import polars as pl
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.utils.exploding_object import NamedExplodingObject
-
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.data.domain.data_bundle import DataBundle
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.ledger import Ledger
 from ziplime.finance.finance_ext import minute_annual_volatility
 
-from ziplime.domain.data_frequency import DataFrequency
 from ziplime.sources.benchmark_source import BenchmarkSource
 
 
@@ -36,18 +34,13 @@ class BenchmarkReturnsAndVolatility:
         self._daily_annual_volatility = (daily_returns_series.with_columns(
             expanding_sum=pl.col("pct_change").rolling_std(
                 window_size=daily_returns_series.height,
-                min_samples=2) * np.sqrt(252)
+                min_samples=2 if daily_returns_series.height > 1 else 1) * np.sqrt(252)
         ))["expanding_sum"]
 
-        if emission_rate == DataFrequency.DAY:
-            self._minute_cumulative_returns = NamedExplodingObject(
-                "self._minute_cumulative_returns",
-                "does not exist in daily emission rate",
-            )
-            self._minute_annual_volatility = NamedExplodingObject(
-                "self._minute_annual_volatility",
-                "does not exist in daily emission rate",
-            )
+        if emission_rate == datetime.timedelta(days=1):
+            # none existing in minute mode
+            self._minute_cumulative_returns = None
+            self._minute_annual_volatility = None
         else:
             open_ = trading_calendar.session_open(sessions[0]).tz_convert(trading_calendar.tz).to_pydatetime()
             close = trading_calendar.session_close(sessions[-1]).tz_convert(trading_calendar.tz).to_pydatetime()
@@ -76,7 +69,10 @@ class BenchmarkReturnsAndVolatility:
             )  # pl.DataFrame([pd.Series(returns.select("date"))])
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                   bundle_data: BundleData):
+                   exchanges: dict[str, Exchange]):
+        if self._minute_cumulative_returns is None:
+            # TODO: fix this so that we don't have minute/daily returns but dynamic frequency returns
+            return
         r = self._minute_cumulative_returns["date" == session]["literal"][0]
         if np.isnan(r):
             r = None
@@ -88,7 +84,8 @@ class BenchmarkReturnsAndVolatility:
         packet["cumulative_risk_metrics"]["benchmark_volatility"] = v
 
     def end_of_session(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                       bundle_data: BundleData):
+                       exchanges: dict[str, Exchange]):
+        #print(session_ix)
         r = self._daily_cumulative_returns[session_ix]
         if np.isnan(r):
             r = None

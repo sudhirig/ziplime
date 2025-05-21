@@ -1,3 +1,6 @@
+import datetime
+
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.slippage.slippage_model import SlippageModel
 
 
@@ -29,7 +32,7 @@ class FixedSlippage(SlippageModel):
             spread=self.spread,
         )
 
-    def process_order(self, data, order):
+    def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
         price = data.current(order.asset, "close")
 
         return (price + (self.spread / 2.0 * order.direction), order.amount)

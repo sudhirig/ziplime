@@ -1,14 +1,13 @@
 """Caching utilities for ziplime"""
 
-from .sentinel import sentinel
 
 
 class Expired(Exception):
     """Marks that a :class:`CachedObject` has expired."""
 
 
-ExpiredCachedObject = sentinel("ExpiredCachedObject")
-AlwaysExpired = sentinel("AlwaysExpired")
+ExpiredCachedObject = "ExpiredCachedObject"
+AlwaysExpired = "AlwaysExpired"
 
 
 class CachedObject:

@@ -5,7 +5,6 @@ Helpers for downsampling code.
 from toolz import compose
 from operator import attrgetter, methodcaller
 
-from ziplime.utils.input_validation import expect_element
 from ziplime.utils.numpy_utils import changed_locations
 from ziplime.utils.sharedoc import (
     templated_docstring,
@@ -22,12 +21,6 @@ _dt_to_period = {
 SUPPORTED_DOWNSAMPLE_FREQUENCIES = frozenset(_dt_to_period)
 
 
-expect_downsample_frequency = expect_element(
-    frequency=SUPPORTED_DOWNSAMPLE_FREQUENCIES,
-)
-
-
-@expect_downsample_frequency
 @templated_docstring(frequency=PIPELINE_DOWNSAMPLING_FREQUENCY_DOC)
 def select_sampling_indices(dates, frequency):
     """
@@ -57,4 +50,12 @@ def select_sampling_indices(dates, frequency):
     ``np.diff(dates.<frequency>)`` to find dates where the sampling
     period has changed.
     """
+    if frequency not in SUPPORTED_DOWNSAMPLE_FREQUENCIES:
+        raise ValueError(
+            "Frequency {frequency!r} is not supported. "
+            "Supported frequencies are {supported_frequencies}.".format(
+                frequency=frequency,
+                supported_frequencies=sorted(SUPPORTED_DOWNSAMPLE_FREQUENCIES),
+            )
+        )
     return changed_locations(_dt_to_period[frequency](dates), include_first=True)

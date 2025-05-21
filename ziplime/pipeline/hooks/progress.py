@@ -3,6 +3,7 @@
 
 from collections import namedtuple
 import time
+from decimal import Decimal
 
 from ziplime.utils.compat import contextmanager, escape_html
 from ziplime.utils.string_formatting import bulleted_list
@@ -156,7 +157,7 @@ class ProgressModel:
 
         # +1 to be inclusive of end_date.
         self._total_days = (end_date - start_date).days + 1
-        self._progress = 0.0
+        self._progress = Decimal(0.0)
         self._days_completed = 0
 
         self._state = "init"
@@ -222,11 +223,11 @@ class ProgressModel:
         nterms = len(terms)
         if nterms:
             self._completed_term_increment = chunk_percent / len(terms)
-            self._completed_chunk_increment = 0.0
+            self._completed_chunk_increment = Decimal(0)
         else:
             # Special case. If we don't have any terms, increment the entire
             # chunk's worth of progress when we finish the chunk.
-            self._completed_term_increment = 0.0
+            self._completed_term_increment = Decimal(0)
             self._completed_chunk_increment = chunk_percent
 
     def finish_chunk(self, terms, start_date, end_date):

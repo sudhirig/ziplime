@@ -1,8 +1,9 @@
 import math
+from decimal import Decimal
 
 from ziplime.finance.constants import ROOT_SYMBOL_TO_ETA, DEFAULT_ETA
 
-from ziplime.assets.domain.db.futures_contract import FuturesContract
+from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.finance.slippage.market_impact_base import MarketImpactBase
 from ziplime.utils.dummy import DummyMapping
 
@@ -42,8 +43,8 @@ class VolatilityVolumeShare(MarketImpactBase):
         # dictionary that always returns the same value.
         # NOTE: This dictionary does not handle unknown root symbols, so it may
         # be worth revisiting this behavior.
-        if isinstance(eta, (int, float)):
-            self._eta = DummyMapping(float(eta))
+        if isinstance(eta, (int, Decimal)):
+            self._eta = DummyMapping(Decimal(eta))
         else:
             # Eta is a dictionary. If the user's dictionary does not provide a
             # value for a certain contract, fall back on the pre-defined eta

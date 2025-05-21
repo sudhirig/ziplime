@@ -48,8 +48,6 @@ from ziplime.utils.numpy_utils import (
     repeat_first_axis,
 )
 
-from ..sentinels import NotSpecified
-
 
 def concat_tuples(*tuples):
     """
@@ -717,7 +715,7 @@ class MaximumFilter(Filter, StandardOutputs):
     window_length = 0
 
     def __new__(cls, factor, groupby, mask):
-        if groupby is NotSpecified:
+        if groupby is None:
             from ziplime.pipeline.classifiers import Everything
 
             groupby = Everything()

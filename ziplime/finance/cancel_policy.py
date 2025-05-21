@@ -16,7 +16,7 @@ import abc
 
 from abc import abstractmethod
 
-from ziplime.gens.domain.simulation_event import SimulationEvent
+from ziplime.trading.enums.simulation_event import SimulationEvent
 
 
 class CancelPolicy(metaclass=abc.ABCMeta):

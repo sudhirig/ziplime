@@ -3,8 +3,9 @@ import polars as pl
 import structlog
 from exchange_calendars import ExchangeCalendar
 
+from ziplime.assets.services.asset_service import AssetService
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.ledger import Ledger
-from ziplime.data.domain.bundle_data import BundleData
 from ziplime.domain.data_frequency import DataFrequency
 from ziplime.sources.benchmark_source import BenchmarkSource
 
@@ -34,11 +35,11 @@ class MetricsTracker:
     def __init__(
             self,
             sessions: pl.Series,
-            bundle_data: BundleData,
+            asset_service: AssetService,
+            exchanges: dict[str, Exchange],
             trading_calendar: ExchangeCalendar,
             first_session: datetime.datetime,
             last_session: datetime.datetime,
-            capital_base: float,
             emission_rate: datetime.timedelta,
             ledger: Ledger,
             metrics,
@@ -51,11 +52,12 @@ class MetricsTracker:
         self._trading_calendar = trading_calendar
         self._first_session = first_session
         self._last_session = last_session
-        self._capital_base = capital_base
 
         self._current_session = first_session
         self._market_open = trading_calendar.session_first_minute(first_session)
-        self.bundle_data = bundle_data
+        self.exchanges = exchanges
+        self.asset_service = asset_service
+        # self.data_bundle = data_bundle
         self._session_count = 0
 
         self._sessions = sessions
@@ -118,7 +120,7 @@ class MetricsTracker:
         packet = {
             "period_start": self._first_session,
             "period_end": self._last_session,
-            "capital_base": self._capital_base,
+            "capital_base": list(self.exchanges.values())[0].get_start_cash_balance(), # TODO: add support for multiple exchanges
             "minute_perf": {
                 "period_open": self._market_open,
                 "period_close": dt,
@@ -138,23 +140,22 @@ class MetricsTracker:
                 ledger=ledger,
                 session=dt,
                 session_ix=self._session_count,
-                bundle_data=self.bundle_data,
+                exchanges=self.exchanges,
             )
         return packet
 
-    def handle_market_open(self, session_label: datetime.datetime, bundle_data: BundleData) -> None:
+    def handle_market_open(self, session_label: datetime.datetime) -> None:
         """Handles the start of each session.
 
         Parameters
         ----------
         session_label : Timestamp
             The label of the session that is about to begin.
-        bundle_data : BundleData
-            The current data portal.
         """
         self._ledger.start_of_session(session_label=session_label)
 
-        adjustment_reader = bundle_data.adjustment_repository
+        # TODO: handle ajustments repository
+        adjustment_reader = self.asset_service._adjustments_repository
         if adjustment_reader is not None:
             # this is None when running with a dataframe source
             self._ledger.process_dividends(
@@ -166,19 +167,16 @@ class MetricsTracker:
         self._market_open = self._trading_calendar.session_first_minute(session_label)
 
         for metric in self._start_of_session_metrics:
-            metric.start_of_session(ledger=self._ledger, session=session_label, bundle_data=bundle_data)
-        # self.start_of_session(ledger=self._ledger, session=session_label, bundle_data=bundle_data)
+            metric.start_of_session(ledger=self._ledger, session=session_label, exchanges=self.exchanges)
+        # self.start_of_session(ledger=self._ledger, session=session_label, data_bundle=data_bundle)
 
-    def handle_market_close(self, dt: datetime.datetime, bundle_data: BundleData):
+    def handle_market_close(self, dt: datetime.datetime):
         """Handles the close of the given day.
 
         Parameters
         ----------
         dt : Timestamp
             The most recently completed simulation datetime.
-        bundle_data : BundleData
-            The current data portal.
-
         Returns
         -------
         A daily perf packet.
@@ -197,7 +195,7 @@ class MetricsTracker:
         packet = {
             "period_start": self._first_session,
             "period_end": self._last_session,
-            "capital_base": self._capital_base,
+            "capital_base": list(self.exchanges.values())[0].get_start_cash_balance(), # TODO: add support for multiple exchanges
             "daily_perf": {
                 "period_open": self._market_open,
                 "period_close": dt,
@@ -211,14 +209,13 @@ class MetricsTracker:
         }
         self._ledger.end_of_session(session_ix=session_ix)
 
-
         for metric in self._end_of_session_metrics:
             metric.end_of_session(
                 packet=packet,
                 ledger=self._ledger,
                 session=self._current_session,
                 session_ix=session_ix,
-                bundle_data=bundle_data,
+                exchanges=self.exchanges,
             )
         return packet
 
@@ -228,8 +225,8 @@ class MetricsTracker:
         """
         self._logger.info(
             f"Simulated {self._session_count} trading days\n first open: "
-            f"{self._trading_calendar.session_open(self._first_session)}\n "
-            f"last close: {self._trading_calendar.session_close(self._last_session)}",
+            f"{self._trading_calendar.session_open(self._first_session).astimezone(tz=self._trading_calendar.tz)}\n "
+            f"last close: {self._trading_calendar.session_close(self._last_session).astimezone(tz=self._trading_calendar.tz)}",
         )
 
         packet = {}
@@ -239,7 +236,7 @@ class MetricsTracker:
                 ledger=self._ledger,
                 trading_calendar=self._trading_calendar,
                 sessions=self._sessions,
-                bundle_data=self.bundle_data,
+                data_bundle=self.data_bundle,
                 benchmark_source=self._benchmark_source,
             )
         return packet

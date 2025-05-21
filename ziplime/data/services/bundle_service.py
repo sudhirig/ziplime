@@ -1,22 +1,13 @@
 import datetime
-import uuid
 from typing import Any
 
 import polars as pl
 import structlog
 from exchange_calendars import ExchangeCalendar, get_calendar
 
-from ziplime.assets.domain.db.asset import Asset
-from ziplime.assets.domain.db.asset_router import AssetRouter
-from ziplime.assets.domain.db.currency import Currency
-from ziplime.assets.domain.db.equity import Equity
-from ziplime.assets.domain.db.equity_symbol_mapping import EquitySymbolMapping
-from ziplime.assets.domain.db.exchange_info import ExchangeInfo
-from ziplime.assets.domain.db.trading_pair import TradingPair
-from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
-from ziplime.assets.repositories.asset_repository import AssetRepository
-from ziplime.data.domain.bundle_data import BundleData
-from ziplime.data.services.bundle_data_source import BundleDataSource
+from ziplime.assets.services.asset_service import AssetService
+from ziplime.data.domain.data_bundle import DataBundle
+from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.bundle_registry import BundleRegistry
 from ziplime.data.services.bundle_storage import BundleStorage
 from ziplime.utils.class_utils import load_class
@@ -37,11 +28,10 @@ class BundleService:
                             date_end: datetime.datetime,
                             trading_calendar: ExchangeCalendar,
                             symbols: list[str],
-                            bundle_data_source: BundleDataSource,
+                            data_bundle_source: DataBundleSource,
                             frequency: datetime.timedelta,
                             bundle_storage: BundleStorage,
-                            assets_repository: AssetRepository,
-                            adjustments_repository: AdjustmentRepository
+                            asset_service: AssetService
                             ):
 
         """Ingest data for a given bundle.        """
@@ -59,126 +49,134 @@ class BundleService:
                 f"Last session is {trading_calendar.last_session.replace(tzinfo=trading_calendar.tz)} "
                 f"and date end is {date_end}")
 
-        data = await bundle_data_source.get_data(
+        data = await data_bundle_source.get_data(
             symbols=symbols,
             frequency=frequency,
             date_from=date_start,
             date_to=date_end
         )
         if data.is_empty():
-            self._logger.warning("No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
+            self._logger.warning(
+                "No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
             return
         data = data.with_columns(
             pl.lit(0).alias("sid")
         )
-
-
-        equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
-                                                           pl.min("date").alias("min_date"))
-
-        exchanges = [
-            ExchangeInfo(exchange=exchange["exchange"],
-                     canonical_name=exchange["exchange"],
-                     country_code="US")  # TODO: make dynamic
-            for exchange in equities.select(pl.col("exchange")).unique().iter_rows(named=True)
-        ]
-        assets_db = []
-        equity_symbol_mappings = []
-        currency_asset_router = AssetRouter(sid=1, asset_type="currency")
-        asset_routers_db = [currency_asset_router]
-        trading_pairs = []
-
-        currencies_db = [
-            Currency(sid=currency_asset_router.sid,
-                     start_date=datetime.date.today().replace(year=1900),
-                     first_traded=datetime.date.today().replace(year=1900),
-                     end_date=datetime.date.today().replace(year=2099),
-                     asset_name="Currency USD",
-                     symbol="USD",
-                     auto_close_date=datetime.date.today().replace(year=2099), )
-        ]
-        sid_counter = 2
-
-        for idx, asset in enumerate(equities.iter_rows(named=True)):
-            asset_router = AssetRouter(
-                sid=sid_counter,
-                asset_type="equity"
-            )
-            asset_routers_db.append(asset_router)
-            asset_db = Equity(
-                sid=asset_router.sid,
-                start_date=asset["min_date"].date().replace(year=1900),
-                first_traded=asset["min_date"].date(),
-                end_date=asset["max_date"].date().replace(year=2099),
-                asset_name=asset["symbol"],
-                auto_close_date=asset["max_date"].date().replace(year=2099),
-            )
-            assets_db.append(asset_db)
-            equity_symbol_mapping = EquitySymbolMapping(
-                sid=asset_db.sid,
-                company_symbol=asset["symbol"],
-                symbol=asset["symbol"],
-                share_class_symbol="",
-                start_date=asset_db.start_date.replace(year=1900),
-                end_date=asset_db.end_date.replace(year=2099),
-                exchange=asset["exchange"],
-            )
-            equity_symbol_mappings.append(equity_symbol_mapping)
-
-            trading_pair = TradingPair(
-                id=uuid.uuid4(),
-                base_asset_sid=asset_router.sid,
-                quote_asset_sid=asset_db.sid,
-                exchange=asset["exchange"],
-            )
-            trading_pairs.append(trading_pair)
+        equities_by_exchange = data.select("symbol", "exchange").group_by("exchange").agg(pl.col("symbol").unique())
+        for row in equities_by_exchange.iter_rows(named=True):
+            exchange_name = row["exchange"]
+            symbols = row["symbol"]
+            equities = await asset_service.get_equities_by_symbols(symbols=symbols, exchange_name=exchange_name)
+            symbol_to_sid = {e.get_symbol_by_exchange(exchange_name=exchange_name): e.sid for e in equities}
 
             data = data.with_columns(
-                sid=pl.when(pl.col("symbol") == asset["symbol"]).then(sid_counter).otherwise(data["sid"]))
-            sid_counter += 1
+                pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")
+            )
 
-        await assets_repository.save_exchanges(exchanges=exchanges)
-        await assets_repository.save_asset_routers(asset_routers=asset_routers_db)
-        await assets_repository.save_currencies(currencies=currencies_db)
-        await assets_repository.save_equities(equities=assets_db)
-        await assets_repository.save_trading_pairs(trading_pairs=trading_pairs)
-        await assets_repository.save_equity_symbol_mappings(equity_symbol_mappings=equity_symbol_mappings)
-
-        bundle_data = BundleData(name=name,
+        # equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
+        #                                                    pl.min("date").alias("min_date"))
+        #
+        # exchanges = [
+        #     ExchangeInfo(exchange=exchange["exchange"],
+        #              canonical_name=exchange["exchange"],
+        #              country_code="US")  # TODO: make dynamic
+        #     for exchange in equities.select(pl.col("exchange")).unique().iter_rows(named=True)
+        # ]
+        # assets_db = []
+        # equity_symbol_mappings = []
+        # currency_asset_router = AssetRouter(sid=1, asset_type="currency")
+        # asset_routers_db = [currency_asset_router]
+        # trading_pairs = []
+        #
+        # currencies_db = [
+        #     CurrencyModel(sid=currency_asset_router.sid,
+        #              start_date=datetime.date.today().replace(year=1900),
+        #              first_traded=datetime.date.today().replace(year=1900),
+        #              end_date=datetime.date.today().replace(year=2099),
+        #              asset_name="Currency USD",
+        #              symbol="USD",
+        #              auto_close_date=datetime.date.today().replace(year=2099), )
+        # ]
+        # sid_counter = 2
+        #
+        # for idx, asset in enumerate(equities.iter_rows(named=True)):
+        #     # asset_router = AssetRouter(
+        #     #     sid=sid_counter,
+        #     #     asset_type=AssetType.EQUITY.value
+        #     # )
+        #     # asset_routers_db.append(asset_router)
+        #     asset_db = Equity(
+        #         sid=asset_router.sid,
+        #         start_date=asset["min_date"].date().replace(year=1900),
+        #         first_traded=asset["min_date"].date(),
+        #         end_date=asset["max_date"].date().replace(year=2099),
+        #         asset_name=asset["symbol"],
+        #         auto_close_date=asset["max_date"].date().replace(year=2099),
+        #         symbol_mapping={"LIME": asset["symbol"]}
+        #     )
+        #     assets_db.append(asset_db)
+        #     equity_symbol_mapping = EquitySymbolMappingModel(
+        #         sid=asset_db.sid,
+        #         company_symbol=asset["symbol"],
+        #         symbol=asset["symbol"],
+        #         share_class_symbol="",
+        #         start_date=asset_db.start_date.replace(year=1900),
+        #         end_date=asset_db.end_date.replace(year=2099),
+        #         exchange=asset["exchange"],
+        #     )
+        #     equity_symbol_mappings.append(equity_symbol_mapping)
+        #
+        #     # trading_pair = TradingPairModel(
+        #     #     id=uuid.uuid4(),
+        #     #     base_asset_sid=asset_router.sid,
+        #     #     quote_asset_sid=asset_db.sid,
+        #     #     exchange=asset["exchange"],
+        #     # )
+        #     # trading_pairs.append(trading_pair)
+        #
+        #     data = data.with_columns(
+        #         sid=pl.when(pl.col("symbol") == asset["symbol"]).then(sid_counter).otherwise(data["sid"]))
+        #     sid_counter += 1
+        #
+        # await assets_repository.save_exchanges(exchanges=exchanges)
+        # await assets_repository.save_asset_routers(asset_routers=asset_routers_db)
+        # await assets_repository.save_currencies(currencies=currencies)
+        # await assets_repository.save_equities(equities=assets_db)
+        # await assets_repository.save_trading_pairs(trading_pairs=trading_pairs)
+        # await assets_repository.save_equity_symbol_mappings(equity_symbol_mappings=equity_symbol_mappings)
+        #
+        data_bundle = DataBundle(name=name,
                                  start_date=date_start,
                                  end_date=date_end,
                                  trading_calendar=trading_calendar,
                                  frequency=frequency,
-                                 asset_repository=assets_repository,
-                                 adjustment_repository=adjustments_repository,
                                  data=data,
                                  timestamp=datetime.datetime.now(tz=trading_calendar.tz),
                                  version=bundle_version
                                  )
-        await self._bundle_registry.register_bundle(bundle_data=bundle_data, bundle_storage=bundle_storage)
-        await bundle_storage.store_bundle(bundle_data=bundle_data)
+        await self._bundle_registry.register_bundle(data_bundle=data_bundle, bundle_storage=bundle_storage)
+        await bundle_storage.store_bundle(data_bundle=data_bundle)
 
         self._logger.info(f"Finished ingesting bundle_name={name}, bundle_version={bundle_version}")
 
-    async def load_bundle(self, bundle_name: str, bundle_version: str | None,
-                           missing_bundle_data_source: BundleDataSource) -> BundleData:
+    async def load_bundle(self, bundle_name: str, bundle_version: str | None) -> DataBundle:
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
                                                                            bundle_version=bundle_version)
 
         bundle_storage_class: BundleStorage = load_class(
             module_name='.'.join(bundle_metadata["bundle_storage_class"].split(".")[:-1]),
             class_name=bundle_metadata["bundle_storage_class"].split(".")[-1])
-        asset_repository_class: AssetRepository = load_class(
-            module_name='.'.join(bundle_metadata["asset_repository_class"].split(".")[:-1]),
-            class_name=bundle_metadata["asset_repository_class"].split(".")[-1])
-        adjustment_repository_class: AdjustmentRepository = load_class(
-            module_name='.'.join(bundle_metadata["adjustment_repository_class"].split(".")[:-1]),
-            class_name=bundle_metadata["adjustment_repository_class"].split(".")[-1])
+        # asset_repository_class: AssetRepository = load_class(
+        #     module_name='.'.join(bundle_metadata["asset_repository_class"].split(".")[:-1]),
+        #     class_name=bundle_metadata["asset_repository_class"].split(".")[-1])
+        # adjustment_repository_class: AdjustmentRepository = load_class(
+        #     module_name='.'.join(bundle_metadata["adjustment_repository_class"].split(".")[:-1]),
+        #     class_name=bundle_metadata["adjustment_repository_class"].split(".")[-1])
 
         bundle_storage = await bundle_storage_class.from_json(bundle_metadata["bundle_storage_data"])
 
-        asset_repository = asset_repository_class.from_json(bundle_metadata["asset_repository_data"])
-        adjustment_repository = adjustment_repository_class.from_json(bundle_metadata["adjustment_repository_data"])
+        # asset_repository = asset_repository_class.from_json(bundle_metadata["asset_repository_data"])
+        # adjustment_repository = adjustment_repository_class.from_json(bundle_metadata["adjustment_repository_data"])
         start_date = datetime.datetime.strptime(bundle_metadata["start_date"], "%Y-%m-%dT%H:%M:%SZ")
         trading_calendar = get_calendar(bundle_metadata["trading_calendar_name"],
                                         start=start_date - datetime.timedelta(days=30))
@@ -188,71 +186,26 @@ class BundleService:
         frequency = datetime.timedelta(seconds=int(bundle_metadata["frequency_seconds"]))
         timestamp = datetime.datetime.strptime(bundle_metadata["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=trading_calendar.tz)
-        bundle_data = BundleData(name=bundle_name,
+        data_bundle = DataBundle(name=bundle_name,
                                  start_date=start_date,
                                  end_date=end_date,
                                  trading_calendar=trading_calendar,
                                  frequency=frequency,
-                                 asset_repository=asset_repository,
-                                 adjustment_repository=None,  # TODO: add
-                                 data=None,
-                                 timestamp=timestamp,
-                                 version=bundle_metadata["version"],
-                                 missing_bundle_data_source=missing_bundle_data_source
-                                 )
-        data = await bundle_storage.load_bundle_data(bundle_data=bundle_data)
-        bundle_data.data = data
-        return bundle_data
-        # data_portal = DataPortal(
-        #     bundle_data=bundle_data,
-        #     historical_data_reader=bundle_data.historical_data_reader,
-        #     fundamental_data_reader=bundle_data.fundamental_data_reader,
-        #     future_minute_reader=bundle_data.historical_data_reader,
-        #     future_daily_reader=bundle_data.historical_data_reader,
-        # )
-        # return data_portal
-
-    async def _load_bundle_without_data(self, bundle_name: str, bundle_version: str | None) -> BundleData:
-        bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
-                                                                           bundle_version=bundle_version)
-
-        bundle_storage_class: BundleStorage = load_class(
-            module_name='.'.join(bundle_metadata["bundle_storage_class"].split(".")[:-1]),
-            class_name=bundle_metadata["bundle_storage_class"].split(".")[-1])
-        asset_repository_class: AssetRepository = load_class(
-            module_name='.'.join(bundle_metadata["asset_repository_class"].split(".")[:-1]),
-            class_name=bundle_metadata["asset_repository_class"].split(".")[-1])
-        adjustment_repository_class: AdjustmentRepository = load_class(
-            module_name='.'.join(bundle_metadata["adjustment_repository_class"].split(".")[:-1]),
-            class_name=bundle_metadata["adjustment_repository_class"].split(".")[-1])
-
-        bundle_storage = await bundle_storage_class.from_json(bundle_metadata["bundle_storage_data"])
-
-        asset_repository = asset_repository_class.from_json(bundle_metadata["asset_repository_data"])
-        adjustment_repository = adjustment_repository_class.from_json(bundle_metadata["adjustment_repository_data"])
-        start_date = datetime.datetime.strptime(bundle_metadata["start_date"], "%Y-%m-%dT%H:%M:%SZ")
-        trading_calendar = get_calendar(bundle_metadata["trading_calendar_name"],
-                                        start=start_date - datetime.timedelta(days=30))
-        start_date = start_date.replace(tzinfo=trading_calendar.tz)
-        end_date = datetime.datetime.strptime(bundle_metadata["end_date"], "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=trading_calendar.tz)
-        frequency = datetime.timedelta(seconds=int(bundle_metadata["frequency_seconds"]))
-        timestamp = datetime.datetime.strptime(bundle_metadata["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=trading_calendar.tz)
-        bundle_data = BundleData(name=bundle_name,
-                                 start_date=start_date,
-                                 end_date=end_date,
-                                 trading_calendar=trading_calendar,
-                                 frequency=frequency,
-                                 asset_repository=asset_repository,
-                                 adjustment_repository=None,  # TODO: add
-                                 historical_data_reader=None,
-                                 fundamental_data_reader=None,
                                  data=None,
                                  timestamp=timestamp,
                                  version=bundle_metadata["version"]
                                  )
-        return bundle_data
+        data = await bundle_storage.load_data_bundle(data_bundle=data_bundle)
+        data_bundle.data = data
+        return data_bundle
+        # data_portal = DataPortal(
+        #     data_bundle=data_bundle,
+        #     historical_data_reader=data_bundle.historical_data_reader,
+        #     fundamental_data_reader=data_bundle.fundamental_data_reader,
+        #     future_minute_reader=data_bundle.historical_data_reader,
+        #     future_daily_reader=data_bundle.historical_data_reader,
+        # )
+        # return data_portal
 
     async def clean(self, bundle_name: str, before: datetime.datetime = None, after: datetime.datetime = None,
                     keep_last: bool = None):

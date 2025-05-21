@@ -8,7 +8,7 @@ from toolz import groupby
 
 from enum import IntEnum
 
-from ziplime.assets.domain.db.asset import Asset
+from ziplime.assets.entities.asset import Asset
 from ziplime.utils.numpy_utils import vectorized_is_element
 
 Restriction = namedtuple("Restriction", ["asset", "effective_date", "state"])
@@ -187,23 +187,23 @@ class HistoricalRestrictions(Restrictions):
         return state == RESTRICTION_STATES.FROZEN
 
 
-class SecurityListRestrictions(Restrictions):
-    """Restrictions based on a security list.
-
-    Parameters
-    ----------
-    restrictions : ziplime.utils.security_list.SecurityList
-        The restrictions defined by a SecurityList
-    """
-
-    def __init__(self, security_list_by_dt):
-        self.current_securities = security_list_by_dt.current_securities
-
-    def is_restricted(self, assets, dt):
-        securities_in_list = self.current_securities(dt)
-        if isinstance(assets, Asset):
-            return assets in securities_in_list
-        return pd.Series(
-            index=pd.Index(assets),
-            data=vectorized_is_element(assets, securities_in_list),
-        )
+# class SecurityListRestrictions(Restrictions):
+#     """Restrictions based on a security list.
+#
+#     Parameters
+#     ----------
+#     restrictions : ziplime.utils.security_list.SecurityList
+#         The restrictions defined by a SecurityList
+#     """
+#
+#     def __init__(self, security_list_by_dt):
+#         self.current_securities = security_list_by_dt.current_securities
+#
+#     def is_restricted(self, assets, dt):
+#         securities_in_list = self.current_securities(dt)
+#         if isinstance(assets, Asset):
+#             return assets in securities_in_list
+#         return pd.Series(
+#             index=pd.Index(assets),
+#             data=vectorized_is_element(assets, securities_in_list),
+#         )

@@ -19,7 +19,7 @@ fileConfig(config.config_file_name)
 # target_metadata = mymodel.Base.metadata
 # target_metadata = None
 
-from ziplime.db.base import BaseModel
+from ziplime.core.db.base import BaseModel
 
 target_metadata = BaseModel.metadata
 x_args = context.get_x_argument(as_dictionary=True)

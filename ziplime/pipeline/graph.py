@@ -5,7 +5,6 @@ Dependency-Graph representation of Pipeline API terms.
 import uuid
 
 import networkx as nx
-from ziplime.utils.memoize import lazyval
 from ziplime.pipeline.visualize import display_graph
 
 from .term import LoadableTerm
@@ -144,19 +143,23 @@ class TermGraph:
     def ordered(self):
         return iter(nx.topological_sort(self.graph))
 
-    @lazyval
+    #@lazyval
+    @property
     def loadable_terms(self):
         return {term for term in self.graph if isinstance(term, LoadableTerm)}
 
-    @lazyval
+    #@lazyval
+    @property
     def jpeg(self):
         return display_graph(self, "jpeg")
 
-    @lazyval
+    #@lazyval
+    @property
     def png(self):
         return display_graph(self, "png")
 
-    @lazyval
+    #@lazyval
+    @property
     def svg(self):
         return display_graph(self, "svg")
 
@@ -330,7 +333,8 @@ class ExecutionPlan(TermGraph):
                 min_extra_rows=extra_rows_for_term + additional_extra_rows,
             )
 
-    @lazyval
+    #@lazyval
+    @property
     def offset(self):
         """
         For all pairs (term, input) such that `input` is an input to `term`,
@@ -412,7 +416,8 @@ class ExecutionPlan(TermGraph):
 
         return out
 
-    @lazyval
+    #@lazyval
+    @property
     def extra_rows(self):
         """
         A dict mapping `term` -> `# of extra rows to load/compute of `term`.

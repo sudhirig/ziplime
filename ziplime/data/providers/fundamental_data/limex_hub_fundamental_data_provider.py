@@ -174,7 +174,7 @@ class LimexHubFundamentalDataProvider(AbstractFundamentalDataProvider):
 
         return data
 
-    def get_fundamental_data_column_names(self, fundamental_data_fields: set[str]) -> set[str]:
+    def get_fundamental_data_column_names(self, fundamental_data_fields: frozenset[str]) -> set[str]:
         columns = set()
         for fund_col in FundamentalData:
             col_name = fund_col.value

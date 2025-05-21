@@ -2,7 +2,7 @@ from typing import Any
 
 import pandas as pd
 
-from ziplime.algorithm import TradingAlgorithm
+from ziplime.trading.trading_algorithm import TradingAlgorithm
 from ziplime.domain.bar_data import BarData
 
 

@@ -1,15 +1,16 @@
 import datetime
 from collections import OrderedDict
+from decimal import Decimal
 from functools import partial
 from math import isnan, copysign
 
 import numpy as np
 import structlog
 
-
-from ziplime.assets.domain.db.dividend import Dividend
-from ziplime.assets.domain.db.futures_contract import FuturesContract
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.assets.entities.asset import Asset
+from ziplime.assets.models.dividend import Dividend
+from ziplime.assets.entities.futures_contract import FuturesContract
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.position import Position
 from ziplime.finance.domain.transaction import Transaction
 from ziplime.finance.finance_ext import (
@@ -17,8 +18,6 @@ from ziplime.finance.finance_ext import (
     calculate_position_tracker_stats,
     update_position_last_sale_prices,
 )
-
-from ziplime.assets.domain.db.asset import Asset
 
 
 class PositionTracker:
@@ -30,7 +29,7 @@ class PositionTracker:
         The data frequency of the simulation.
     """
 
-    def __init__(self, bundle_data: BundleData, data_frequency: datetime.timedelta):
+    def __init__(self, exchanges: dict[str, Exchange], data_frequency: datetime.timedelta):
         self.positions = OrderedDict()
 
         self._unpaid_dividends = {}
@@ -38,17 +37,18 @@ class PositionTracker:
         self._positions_store = {}
 
         self.data_frequency = data_frequency
-        self.bundle_data = bundle_data
+        # self.data_bundle = data_bundle
         # cache the stats until something alters our positions
         self._dirty_stats = True
+        self.exchanges = exchanges
         self._stats = PositionStats.new()
         self._logger = structlog.get_logger(__name__)
 
     def update_position(
             self,
             asset: Asset,
-            amount: float | None = None,
-            last_sale_price: float | None = None,
+            amount: Decimal | None = None,
+            last_sale_price: Decimal | None = None,
             last_sale_date=None,
             cost_basis=None,
     ):
@@ -57,8 +57,8 @@ class PositionTracker:
         if asset not in self.positions:
             position = Position(asset,
                                 amount=0,
-                                cost_basis=0.0,
-                                last_sale_price=0.0,
+                                cost_basis=Decimal(0.0),
+                                last_sale_price=Decimal(0.0),
                                 last_sale_date=None)
             self.positions[asset] = position
         else:
@@ -81,8 +81,8 @@ class PositionTracker:
         if asset not in self.positions:
             position = Position(asset=asset,
                                 amount=0,
-                                cost_basis=0.0,
-                                last_sale_price=0.0,
+                                cost_basis=Decimal(0.0),
+                                last_sale_price=Decimal(0.0),
                                 last_sale_date=None
                                 )
             self.positions[asset] = position
@@ -108,7 +108,7 @@ class PositionTracker:
         total_shares = position.amount + txn.amount
 
         if total_shares == 0:
-            position.cost_basis = 0.0
+            position.cost_basis = Decimal(0.0)
         else:
             prev_direction = copysign(1, position.amount)
             txn_direction = copysign(1, txn.amount)
@@ -133,13 +133,13 @@ class PositionTracker:
 
         position.amount = total_shares
 
-    def handle_commission(self, asset: Asset, cost: float) -> None:
+    def handle_commission(self, asset: Asset, cost: Decimal) -> None:
         # Adjust the cost basis of the stock if we own it
         if asset in self.positions:
             self._dirty_stats = True
             self.adjust_commission_cost_basis(position=self.positions[asset], asset=asset, cost=cost)
 
-    def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: float):
+    def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: Decimal):
         """
         A note about cost-basis in ziplime: all positions are considered
         to share a cost basis, even if they were executed in different
@@ -152,7 +152,7 @@ class PositionTracker:
 
         if asset != position.asset:
             raise Exception("Updating a commission for a different asset?")
-        if cost == 0.0:
+        if cost == Decimal(0.0):
             return
 
         # If we no longer hold this position, there is no cost basis to
@@ -207,7 +207,7 @@ class PositionTracker:
 
         return total_leftover_cash
 
-    def earn_dividend(self, position: Position, dividend: Dividend) -> dict[str, float]:
+    def earn_dividend(self, position: Position, dividend: Dividend) -> dict[str, Decimal]:
         """
         Register the number of shares we held at this dividend's ex date so
         that we can pay out the correct amount on the dividend's pay date.
@@ -307,7 +307,7 @@ class PositionTracker:
         according to the accumulated bookkeeping of earned, unpaid, and stock
         dividends.
         """
-        net_cash_payment = 0.0
+        net_cash_payment = Decimal(0.0)
 
         try:
             payments = self._unpaid_dividends[next_trading_day]
@@ -355,7 +355,7 @@ class PositionTracker:
 
         amount = self.positions.get(asset).amount
         # TODO: check this
-        price = self.bundle_data.get_spot_value(assets=asset, field="price", dt=dt,
+        price = self.data_bundle.get_spot_value(assets=asset, field="price", dt=dt,
                                                 data_frequency=self._data_frequency)
 
         # Get the last traded price if price is no longer available
@@ -368,30 +368,31 @@ class PositionTracker:
             dt=dt,
             price=price,
             order_id=None,
+            exchange_name=None
         )
 
     def get_positions(self):
-        positions = self._positions_store
-
         for asset, pos in self.positions.items():
             # Adds the new position if we didn't have one before, or overwrite
             # one we have currently
-            positions[asset] = pos
+            self._positions_store[asset] = pos
 
-        return positions
+        return self._positions_store
 
     def get_position_list(self):
         return [
             pos.to_dict() for asset, pos in self.positions.items() if pos.amount != 0
         ]
 
-    def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False):
+    def sync_last_sale_prices(self, dt: datetime.datetime,
+                              exchange_name:str,
+                              handle_non_market_minutes: bool = False):
         self._dirty_stats = True
-
+        exchange = self.exchanges[exchange_name]
         if handle_non_market_minutes:
-            previous_minute = self.bundle_data.trading_calendar.previous_minute(minute=dt)
+            previous_minute = exchange.trading_calendar.previous_minute(minute=dt)
             get_price = partial(
-                self.bundle_data.get_adjusted_value,
+                exchange.get_adjusted_value,
                 field="close",
                 dt=previous_minute,
                 perspective_dt=dt,
@@ -400,7 +401,7 @@ class PositionTracker:
 
         else:
             get_price = partial(
-                self.bundle_data.get_scalar_asset_spot_value,
+                exchange.get_scalar_asset_spot_value_sync,
                 field="close",
                 dt=dt,
                 frequency=self.data_frequency

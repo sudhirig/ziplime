@@ -25,15 +25,12 @@ from ziplime.errors import (
 )
 from ziplime.lib.labelarray import LabelArray, labelarray_where
 from ziplime.utils.context_tricks import nop_context
-from ziplime.utils.input_validation import expect_dtypes
 from ziplime.utils.numpy_utils import bool_dtype
 from ziplime.utils.pandas_utils import nearest_unequal_elements
 
 from .downsample_helpers import (
-    select_sampling_indices,
-    expect_downsample_frequency,
+    select_sampling_indices, SUPPORTED_DOWNSAMPLE_FREQUENCIES,
 )
-from .sentinels import NotSpecified
 from .term import Term
 
 
@@ -72,7 +69,7 @@ class StandardOutputs(Term):
 
     def _validate(self):
         super(StandardOutputs, self)._validate()
-        if self.outputs is not NotSpecified:
+        if self.outputs is not None:
             raise ValueError(
                 "{typename} does not support custom outputs,"
                 " but received custom outputs={outputs}.".format(
@@ -87,11 +84,11 @@ class RestrictedDTypeMixin(Term):
     Validation mixin enforcing that a term has a specific dtype.
     """
 
-    ALLOWED_DTYPES = NotSpecified
+    ALLOWED_DTYPES = None
 
     def _validate(self):
         super(RestrictedDTypeMixin, self)._validate()
-        assert self.ALLOWED_DTYPES is not NotSpecified, (
+        assert self.ALLOWED_DTYPES is not None, (
                 "ALLOWED_DTYPES not supplied on subclass "
                 "of RestrictedDTypeMixin: %s." % type(self).__name__
         )
@@ -117,13 +114,13 @@ class CustomTermMixin(Term):
 
     def __new__(
             cls,
-            inputs=NotSpecified,
-            outputs=NotSpecified,
-            window_length=NotSpecified,
-            mask=NotSpecified,
-            dtype=NotSpecified,
-            missing_value=NotSpecified,
-            ndim=NotSpecified,
+            inputs=None,
+            outputs=None,
+            window_length=None,
+            mask=None,
+            dtype=None,
+            missing_value=None,
+            ndim=None,
             **kwargs,
     ):
 
@@ -163,7 +160,7 @@ class CustomTermMixin(Term):
 
         The resulting array must have a shape of ``shape``.
 
-        If we have standard outputs (i.e. self.outputs is NotSpecified), the
+        If we have standard outputs (i.e. self.outputs is None), the
         default is an empty ndarray whose dtype is ``self.dtype``.
 
         If we have an outputs tuple, the default is an empty recarray with
@@ -175,7 +172,7 @@ class CustomTermMixin(Term):
         """
         missing_value = self.missing_value
         outputs = self.outputs
-        if outputs is not NotSpecified:
+        if outputs is not None:
             out = recarray(
                 shape,
                 formats=[self.dtype.str] * len(outputs),
@@ -397,8 +394,12 @@ class DownsampledMixin(StandardOutputs, UniversalMixin):
     # point is that you're re-using the same result multiple times.
     window_safe = False
 
-    @expect_downsample_frequency
     def __new__(cls, term: Term, frequency):
+        if frequency not in SUPPORTED_DOWNSAMPLE_FREQUENCIES:
+            raise ValueError(
+                "Downsampled terms only support frequencies in %s, but got %s."
+                % (SUPPORTED_DOWNSAMPLE_FREQUENCIES, frequency)
+            )
         return super(DownsampledMixin, cls).__new__(
             cls,
             inputs=term.inputs,
@@ -658,8 +659,7 @@ class IfElseMixin(UniversalMixin):
 
     window_length = 0
 
-    @expect_dtypes(condition=bool_dtype)
-    def __new__(cls, condition, if_true, if_false):
+    def __new__(cls, condition: bool_dtype, if_true, if_false):
         return super(IfElseMixin, cls).__new__(
             cls,
             inputs=[condition, if_true, if_false],

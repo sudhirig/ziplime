@@ -27,7 +27,6 @@ from ziplime.errors import (
 )
 from ziplime.lib.adjusted_array import can_represent_dtype
 from ziplime.lib.labelarray import LabelArray
-from ziplime.utils.memoize import classlazyval, lazyval
 from ziplime.utils.numpy_utils import (
     bool_dtype,
     categorical_dtype,
@@ -42,9 +41,8 @@ from ziplime.utils.sharedoc import (
 )
 
 from .domain import Domain, GENERIC, infer_domain
-from .downsample_helpers import expect_downsample_frequency
-from .sentinels import NotSpecified
-from ..assets.domain.db.asset import Asset
+from .downsample_helpers import SUPPORTED_DOWNSAMPLE_FREQUENCIES
+from ziplime.assets.entities.asset import Asset
 
 
 class Term(ABC):
@@ -81,8 +79,8 @@ class Term(ABC):
     """
 
     # These are NotSpecified because a subclass is required to provide them.
-    dtype = NotSpecified
-    missing_value = NotSpecified
+    dtype = None
+    missing_value = None
 
     # Subclasses aren't required to provide `params`.  The default behavior is
     # no params.
@@ -101,11 +99,11 @@ class Term(ABC):
 
     def __new__(
         cls,
-        domain=NotSpecified,
-        dtype=NotSpecified,
-        missing_value=NotSpecified,
-        window_safe=NotSpecified,
-        ndim=NotSpecified,
+        domain=None,
+        dtype=None,
+        missing_value=None,
+        window_safe=None,
+        ndim=None,
         # params is explicitly not allowed to be passed to an instance.
         *args,
         **kwargs,
@@ -122,15 +120,15 @@ class Term(ABC):
         """
         # Subclasses can override these class-level attributes to provide
         # different default values for instances.
-        if domain is NotSpecified:
+        if domain is None:
             domain = cls.domain
-        if dtype is NotSpecified:
+        if dtype is None:
             dtype = cls.dtype
-        if missing_value is NotSpecified:
+        if missing_value is None:
             missing_value = cls.missing_value
-        if ndim is NotSpecified:
+        if ndim is None:
             ndim = cls.ndim
-        if window_safe is NotSpecified:
+        if window_safe is None:
             window_safe = cls.window_safe
 
         dtype, missing_value = validate_dtype(
@@ -193,12 +191,12 @@ class Term(ABC):
         """
         params = cls.params
         if not isinstance(params, Mapping):
-            params = {k: NotSpecified for k in params}
+            params = {k: None for k in params}
         param_values = []
         for key, default_value in params.items():
             try:
                 value = kwargs.pop(key, default_value)
-                if value is NotSpecified:
+                if value is None:
                     raise KeyError(key)
 
                 # Check here that the value is hashable so that we fail here
@@ -473,7 +471,7 @@ class LoadableTerm(Term):
     windowed = False
     inputs = ()
 
-    @lazyval
+    @property
     def dependencies(self):
         return {self.mask: 0}
 
@@ -486,11 +484,11 @@ class ComputableTerm(Term):
     :class:`ziplime.pipeline.Filter`, and :class:`ziplime.pipeline.Classifier`.
     """
 
-    inputs = NotSpecified
-    outputs = NotSpecified
-    window_length = NotSpecified
-    mask = NotSpecified
-    domain = NotSpecified
+    inputs = None
+    outputs = None
+    window_length = None
+    mask = None
+    domain = None
 
     def __new__(
         cls,
@@ -503,12 +501,12 @@ class ComputableTerm(Term):
         **kwargs,
     ):
 
-        if inputs is NotSpecified:
+        if inputs is None:
             inputs = cls.inputs
 
-        # Having inputs = NotSpecified is an error, but we handle it later
+        # Having inputs = None is an error, but we handle it later
         # in self._validate rather than here.
-        if inputs is not NotSpecified:
+        if inputs is not None:
             # Allow users to specify lists as class-level defaults, but
             # normalize to a tuple so that inputs is hashable.
             inputs = tuple(inputs)
@@ -519,20 +517,20 @@ class ComputableTerm(Term):
             if non_terms:
                 raise NonPipelineInputs(cls.__name__, non_terms)
 
-            if domain is NotSpecified:
+            if domain is None:
                 domain = infer_domain(inputs)
 
-        if outputs is NotSpecified:
+        if outputs is None:
             outputs = cls.outputs
-        if outputs is not NotSpecified:
+        if outputs is not None:
             outputs = tuple(outputs)
 
-        if mask is NotSpecified:
+        if mask is None:
             mask = cls.mask
-        if mask is NotSpecified:
+        if mask is None:
             mask = AssetExists()
 
-        if window_length is NotSpecified:
+        if window_length is None:
             window_length = cls.window_length
 
         return super(ComputableTerm, cls).__new__(
@@ -567,7 +565,7 @@ class ComputableTerm(Term):
         super(ComputableTerm, self)._validate()
 
         # Check inputs.
-        if self.inputs is NotSpecified:
+        if self.inputs is None:
             raise TermInputsNotSpecified(termname=type(self).__name__)
 
         if not isinstance(self.domain, Domain):
@@ -577,7 +575,7 @@ class ComputableTerm(Term):
             )
 
         # Check outputs.
-        if self.outputs is NotSpecified:
+        if self.outputs is None:
             pass
         elif not self.outputs:
             raise TermOutputsEmpty(termname=type(self).__name__)
@@ -600,10 +598,10 @@ class ComputableTerm(Term):
                         disallowed_names=disallowed_names,
                     )
 
-        if self.window_length is NotSpecified:
+        if self.window_length is None:
             raise WindowLengthNotSpecified(termname=type(self).__name__)
 
-        if self.mask is NotSpecified:
+        if self.mask is None:
             # This isn't user error, this is a bug in our code.
             raise AssertionError("{term} has no mask".format(term=self))
 
@@ -644,7 +642,7 @@ class ComputableTerm(Term):
         """
         raise NotImplementedError("_principal_computable_term_type")
 
-    @lazyval
+    @property
     def windowed(self):
         """
         Whether or not this term represents a trailing window computation.
@@ -655,9 +653,9 @@ class ComputableTerm(Term):
         If term.windowed is falsey, its compute_from_baseline will be called
         with instances of np.ndarray as inputs.
         """
-        return self.window_length is not NotSpecified and self.window_length > 0
+        return self.window_length is not None and self.window_length > 0
 
-    @lazyval
+    @property
     def dependencies(self):
         """
         The number of extra rows needed for each of our inputs to compute this
@@ -712,7 +710,6 @@ class ComputableTerm(Term):
             .values
         )
 
-    @expect_downsample_frequency
     @templated_docstring(frequency=PIPELINE_DOWNSAMPLING_FREQUENCY_DOC)
     def downsample(self, frequency):
         """
@@ -723,7 +720,16 @@ class ComputableTerm(Term):
         {frequency}
         """
         from .mixins import DownsampledMixin
-
+        if frequency not in SUPPORTED_DOWNSAMPLE_FREQUENCIES:
+            raise ValueError(
+                "Invalid downsampling frequency: {frequency}.\n\n"
+                "Valid downsampling frequencies are: {valid_frequencies}".format(
+                    frequency=frequency,
+                    valid_frequencies=", ".join(
+                        sorted(SUPPORTED_DOWNSAMPLE_FREQUENCIES)
+                    ),
+                )
+            )
         downsampled_type = type(self)._with_mixin(DownsampledMixin)
         return downsampled_type(term=self, frequency=frequency)
 
@@ -880,13 +886,15 @@ class ComputableTerm(Term):
 
         return self.notnull().if_else(if_true=self, if_false=if_false)
 
-    @classlazyval
+    # @classlazyval
+    @property
     def _constant_type(cls):
         from .mixins import ConstantMixin
 
         return cls._with_mixin(ConstantMixin)
 
-    @classlazyval
+    #@classlazyval
+    @property
     def _if_else_type(cls):
         from .mixins import IfElseMixin
 
@@ -931,9 +939,9 @@ def validate_dtype(termname, dtype, missing_value):
         coercible to a numpy dtype.
     NoDefaultMissingValue
         When dtype requires an explicit missing_value, but
-        ``missing_value`` is NotSpecified.
+        ``missing_value`` is None.
     """
-    if dtype is NotSpecified:
+    if dtype is None:
         raise DTypeNotSpecified(termname=termname)
 
     try:
@@ -944,7 +952,7 @@ def validate_dtype(termname, dtype, missing_value):
     if not can_represent_dtype(dtype):
         raise UnsupportedDType(dtype=dtype, termname=termname)
 
-    if missing_value is NotSpecified:
+    if missing_value is None:
         missing_value = default_missing_value_for_dtype(dtype)
 
     try:

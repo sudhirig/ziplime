@@ -1,6 +1,6 @@
 from ziplime.finance.shared import AllowedAssetMarker
 
-from ziplime.assets.domain.db.equity import Equity
+from ziplime.assets.entities.equity import Equity
 from ziplime.finance.slippage.slippage_model import SlippageModel
 
 

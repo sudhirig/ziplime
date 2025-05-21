@@ -1,12 +1,15 @@
+import datetime
 import math
 from abc import abstractmethod
+from decimal import Decimal
+
 from pandas import isnull
 
-from ziplime.assets.domain.db.asset import Asset
-from ziplime.assets.domain.db.equity import Equity
-from ziplime.assets.domain.db.futures_contract import FuturesContract
-from ziplime.domain.bar_data import BarData
+from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.equity import Equity
+from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.errors import LiquidityExceeded
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.shared import FinancialModelMeta
 from ziplime.finance.domain.transaction import Transaction
 
@@ -17,8 +20,8 @@ LIMIT = 1 << 3
 
 SQRT_252 = math.sqrt(252)
 
-DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT = 0.025
-DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT = 0.05
+DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT = Decimal(0.025)
+DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT = Decimal(0.05)
 
 
 class SlippageModel(metaclass=FinancialModelMeta):
@@ -62,7 +65,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
         return self._volume_for_bar
 
     @abstractmethod
-    def process_order(self, data, order):
+    def process_order(self, exchange: Exchange, dt: datetime.datetime, order):
         """Compute the number of shares and price to fill for ``order`` in the
         current minute.
 
@@ -100,16 +103,17 @@ class SlippageModel(metaclass=FinancialModelMeta):
         """
         raise NotImplementedError("process_order")
 
-    def simulate(self, data: BarData, assets: list[Asset], orders_for_asset):
+    def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime):
         self._volume_for_bar = 0
-        volume = data.current(assets=assets, fields=["volume"])["volume"][0]
+        current_val = exchange.current(assets=assets, fields=frozenset({"close", "volume"}), dt=current_dt)
+        volume = current_val["volume"][0]
 
         if volume == 0:
             return
 
         # can use the close price, since we verified there's volume in this
         # bar.
-        price = data.current(assets=assets, fields=["close"])["close"][0]
+        price = current_val["close"][0]
 
         # BEGIN
         #
@@ -118,20 +122,19 @@ class SlippageModel(metaclass=FinancialModelMeta):
         if isnull(price):
             return
         # END
-        dt = data.current_dt
 
         for order in orders_for_asset:
             if order.open_amount == 0:
                 continue
 
-            order.check_triggers(price, dt)
+            order.check_triggers(price, current_dt)
             if not order.triggered:
                 continue
 
             txn = None
 
             try:
-                execution_price, execution_volume = self.process_order(data=data, order=order)
+                execution_price, execution_volume = self.process_order(exchange=exchange, dt=current_dt, order=order)
 
                 if execution_price is not None:
                     # txn = create_transaction(
@@ -144,8 +147,10 @@ class SlippageModel(metaclass=FinancialModelMeta):
                     txn = Transaction(
                         asset=order.asset,
                         amount=int(execution_volume),
-                        dt=data.current_dt,
-                        price=execution_price, order_id=order.id
+                        dt=current_dt,
+                        price=execution_price,
+                        order_id=order.id,
+                        exchange_name=exchange.name
                     )
 
 

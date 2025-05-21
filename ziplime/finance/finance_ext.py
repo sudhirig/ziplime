@@ -1,19 +1,23 @@
+import asyncio
+import datetime
+from decimal import Decimal
 from math import sqrt
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 
-from ziplime.assets.domain.db.futures_contract import FuturesContract
+from ziplime.assets.entities.futures_contract import FuturesContract
 
 
-def update_position_last_sale_prices(positions, get_price, dt):
+def update_position_last_sale_prices(positions, get_price: Callable, dt: datetime.datetime):
     """Update the positions' last sale prices.
 
     Parameters
     ----------
     positions : OrderedDict
         The positions to update.
-    get_price : callable[Asset, float]
+    get_price : callable[Asset, Decimal]
         The function to retrieve the price for the asset.
     dt : datetime.datetime
         The dt to set as the last sale date if the price is not nan.
@@ -94,14 +98,14 @@ class PositionStats:
     # cdef object underlying_index_array
 
     def __init__(self):
-        self.gross_exposure = 0.0
-        self.gross_value = 0.0
-        self.long_exposure = 0.0
-        self.long_value = 0.0
-        self.net_exposure = 0.0
-        self.net_value = 0.0
-        self.short_exposure = 0.0
-        self.short_value = 0.0
+        self.gross_exposure = Decimal(0.0)
+        self.gross_value = Decimal(0.0)
+        self.long_exposure = Decimal(0.0)
+        self.long_value = Decimal(0.0)
+        self.net_exposure = Decimal(0.0)
+        self.net_value = Decimal(0.0)
+        self.short_exposure = Decimal(0.0)
+        self.short_value = Decimal(0.0)
         self.longs_count = 0
         self.shorts_count = 0
         self.position_exposure_array = None
@@ -144,11 +148,11 @@ def calculate_position_tracker_stats(positions, stats):
         stats.underlying_value_array
     )
 
-    long_value = 0.0
-    short_value = 0.0
+    long_value = Decimal(0.0)
+    short_value = Decimal(0.0)
 
-    long_exposure = 0.0
-    short_exposure = 0.0
+    long_exposure = Decimal(0.0)
+    short_exposure = Decimal(0.0)
 
     longs_count = 0
     shorts_count = 0
@@ -283,7 +287,7 @@ def minute_annual_volatility(date_labels,
 
             # variance /= day_ix  # day_count - 1 for ddof=1
             variance = variance/day_ix
-        print(ix, sqrt(variance) * annualization_factor)
+        # print(ix, sqrt(variance) * annualization_factor)
         res = sqrt(variance) * annualization_factor
         if np.isnan(res):
             out[ix] = 0

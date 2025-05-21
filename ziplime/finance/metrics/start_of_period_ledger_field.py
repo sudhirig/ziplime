@@ -1,16 +1,15 @@
 import datetime
 import operator as op
+from decimal import Decimal
 from typing import Any
 
 import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
-
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.ledger import Ledger
 
 from ziplime.sources.benchmark_source import BenchmarkSource
-
 
 
 class StartOfPeriodLedgerField:
@@ -31,6 +30,7 @@ class StartOfPeriodLedgerField:
             self._packet_field = ledger_field.rsplit(".", 1)[-1]
         else:
             self._packet_field = packet_field
+        self._previous_day = Decimal("0.0")
 
     def start_of_simulation(
             self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar,
@@ -38,18 +38,20 @@ class StartOfPeriodLedgerField:
     ):
         self._start_of_simulation = self._get_ledger_field(ledger)
 
-    def start_of_session(self, ledger, session, bundle_data: BundleData):
+    def start_of_session(self, ledger, session, exchanges: dict[str, Exchange]):
         self._previous_day = self._get_ledger_field(ledger)
 
     def _end_of_period(self, sub_field, packet, ledger):
+        # if not hasattr(self, "_previous_day"):
+        #     self._previous_day = self._get_ledger_field(ledger)
         packet_field = self._packet_field
         packet["cumulative_perf"][packet_field] = self._start_of_simulation
         packet[sub_field][packet_field] = self._previous_day
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                   bundle_data: BundleData):
+                   exchanges: dict[str, Exchange]):
         self._end_of_period("minute_perf", packet, ledger)
 
     def end_of_session(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                       bundle_data: BundleData):
+                       exchanges: dict[str, Exchange]):
         self._end_of_period("daily_perf", packet, ledger)

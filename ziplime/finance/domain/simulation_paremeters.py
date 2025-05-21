@@ -2,8 +2,6 @@ import datetime
 from exchange_calendars import ExchangeCalendar
 import polars as pl
 
-from ziplime.gens.exchanges.exchange import Exchange
-
 
 class SimulationParameters:
     def __init__(
@@ -11,12 +9,7 @@ class SimulationParameters:
             start_date: datetime.datetime,
             end_date: datetime.datetime,
             trading_calendar: ExchangeCalendar,
-            capital_base: float,
             emission_rate: datetime.timedelta,
-            max_shares: int,
-            exchange: Exchange,
-            bundle_name: str,
-            arena: str = "backtest",
     ):
 
         if start_date >= end_date:
@@ -35,16 +28,10 @@ class SimulationParameters:
 
         self.start_session = start_date.date()
         self.end_session = end_date.date()
-        self.capital_base = capital_base
-        self.max_shares = max_shares
 
         self.emission_rate = emission_rate
 
-        # copied to algorithm's environment for runtime access
-        self.arena = arena
-
         self.trading_calendar = trading_calendar
-        self.bundle_name = bundle_name
         if not trading_calendar.is_session(self.start_session):
             # if the start date is not a valid session in this calendar,
             # push it forward to the first valid session
@@ -79,5 +66,3 @@ class SimulationParameters:
                 self.trading_calendar.tz))
 
         self.before_trading_start_minutes = self.market_opens - datetime.timedelta(minutes=46)
-
-        self.exchange = exchange

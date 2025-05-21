@@ -22,7 +22,7 @@ from ziplime.utils.numpy_utils import repeat_first_axis
 from .base import PipelineLoader
 from .utils import shift_dates
 from ..data.equity_pricing import EquityPricing
-from ...data.domain.bundle_data import BundleData
+from ...data.domain.data_bundle import DataBundle
 
 UINT32_MAX = iinfo(uint32).max
 
@@ -46,7 +46,7 @@ class EquityPricingLoader(PipelineLoader):
         self.fx_reader = fx_reader
 
     @classmethod
-    def without_fx(cls, bundle_data: BundleData):
+    def without_fx(cls, data_bundle: DataBundle):
         """
         Construct an EquityPricingLoader without support for fx rates.
 
@@ -66,8 +66,8 @@ class EquityPricingLoader(PipelineLoader):
             A loader that can only provide currency-naive data.
         """
         return cls(
-            raw_price_reader=bundle_data,
-            adjustments_reader=bundle_data.adjustment_repository,
+            raw_price_reader=None, # fix this
+            adjustments_reader=None,
             fx_reader=ExplodingFXRateReader(),
         )
 

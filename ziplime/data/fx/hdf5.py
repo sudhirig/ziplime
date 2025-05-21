@@ -98,7 +98,6 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ziplime.utils.memoize import lazyval
 from ziplime.utils.numpy_utils import bytes_array_to_native_str_object_array
 
 from .base import FXRateReader, DEFAULT_FX_RATE
@@ -153,7 +152,7 @@ class HDF5FXRateReader(FXRateReader):
         """
         return cls(h5py.File(path), default_rate=default_rate)
 
-    @lazyval
+    @property
     def version(self):
         try:
             return self._group.attrs["version"]
@@ -161,7 +160,7 @@ class HDF5FXRateReader(FXRateReader):
             # TODO: Remove this.
             return 0
 
-    @lazyval
+    @property
     def dts(self):
         """Column labels for rate groups."""
         raw_dts = self._group[INDEX][DTS][:].astype("M8[ns]")
@@ -170,7 +169,7 @@ class HDF5FXRateReader(FXRateReader):
 
         return pd.DatetimeIndex(raw_dts, tz="UTC")
 
-    @lazyval
+    @property
     def currencies(self):
         """Row labels for rate groups."""
         # Currencies are stored as fixed-length bytes in the file, but we want

@@ -13,11 +13,6 @@ from toolz import compose
 
 from ziplime.utils.compat import unicode
 from ziplime.utils.functional import instance
-from ziplime.utils.preprocess import preprocess
-from ziplime.utils.sentinel import sentinel
-from ziplime.utils.input_validation import (
-    coerce,
-)
 from ziplime.utils.numpy_utils import (
     bool_dtype,
     unsigned_int_dtype_with_size_in_bytes,
@@ -81,7 +76,7 @@ class CategoryMismatch(ValueError):
         )
 
 
-_NotPassed = sentinel("_NotPassed")
+_NotPassed = "_NotPassed"
 
 
 class LabelArray(ndarray):
@@ -138,13 +133,13 @@ class LabelArray(ndarray):
     SUPPORTED_SCALAR_TYPES = (bytes, unicode, type(None))
     SUPPORTED_NON_NONE_SCALAR_TYPES = (bytes, unicode)
 
-    @preprocess(
-        values=coerce(list, partial(np.asarray, dtype=object)),
-        # Coerce ``list`` to ``list`` to make a copy. Code internally may call
-        # ``categories.insert(0, missing_value)`` which will mutate this list
-        # in place.
-        categories=coerce((list, np.ndarray, set), list),
-    )
+    # @preprocess(
+    #     values=coerce(list, partial(np.asarray, dtype=object)),
+    #     # Coerce ``list`` to ``list`` to make a copy. Code internally may call
+    #     # ``categories.insert(0, missing_value)`` which will mutate this list
+    #     # in place.
+    #     categories=coerce((list, np.ndarray, set), list),
+    # )
     def __new__(cls, values: np.ndarray, missing_value: SUPPORTED_SCALAR_TYPES, categories: list|None=None, sort=True):
 
         # Numpy's fixed-width string types aren't very efficient. Working with
@@ -744,8 +739,8 @@ class LabelArray(ndarray):
         """
         return self.map_predicate(lambda elem: substring in elem)
 
-    @preprocess(pattern=coerce(from_=(bytes, unicode), to=re.compile))
-    def matches(self, pattern):
+    # @preprocess(pattern=coerce(from_=(bytes, unicode), to=re.compile))
+    def matches(self, pattern: re.Pattern):
         """
         Elementwise regex match.
 
@@ -763,8 +758,8 @@ class LabelArray(ndarray):
 
     # These types all implement an O(N) __contains__, so pre-emptively
     # coerce to `set`.
-    @preprocess(container=coerce((list, tuple, np.ndarray), set))
-    def element_of(self, container):
+    #@preprocess(container=coerce((list, tuple, np.ndarray), set))
+    def element_of(self, container:set):
         """
         Check if each element of self is an of ``container``.
 

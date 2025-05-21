@@ -3,13 +3,15 @@ import sys
 
 import structlog
 
-from ziplime.data.services.bundle_data_source import BundleDataSource
-from ziplime.data.services.bundle_registry import BundleRegistry
-from ziplime.data.services.bundle_service import BundleService
+from ziplime.assets.domain.asset_type import AssetType
+from ziplime.assets.services.asset_service import AssetService
+from ziplime.core.algorithm_file import AlgorithmFile
+from ziplime.exchanges.exchange import Exchange
 
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
 from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.sources.benchmark_source import BenchmarkSource
+import polars as pl
 
 try:
     from pygments import highlight
@@ -20,62 +22,42 @@ try:
 except ImportError:
     PYGMENTS = False
 
-from ziplime.finance.domain.simulation_paremeters import SimulationParameters
 from ziplime.pipeline.data import USEquityPricing
 from ziplime.pipeline.loaders import USEquityPricingLoader
 
-from ziplime.algorithm import TradingAlgorithm, NoBenchmark
+from ziplime.trading.trading_algorithm import TradingAlgorithm
 
 logger = structlog.get_logger(__name__)
 
 
 async def run_algorithm(
-        algorithm_file: str,
+        algorithm: AlgorithmFile,
+        asset_service: AssetService,
         print_algo: bool,
+        exchanges: list[Exchange],
         metrics_set: str,
         custom_loader,
-        benchmark_spec,
         clock: TradingClock,
-        missing_bundle_data_source: BundleDataSource,
-        simulation_params: SimulationParameters,
-        bundle_registry: BundleRegistry,
+        benchmark_asset_symbol: str | None = None,
+        benchmark_returns: pl.Series | None = None,
 ):
     """Run a backtest for the given algorithm.
-
     This is shared between the cli and :func:`ziplime.run_algo`.
     """
-    bundle_service = BundleService(bundle_registry=bundle_registry)
-
-    bundle_data = await bundle_service.load_bundle(bundle_name=simulation_params.bundle_name, bundle_version=None,
-                                                   missing_bundle_data_source=missing_bundle_data_source)
-    # date parameter validation
-    if simulation_params.trading_calendar.sessions_distance(simulation_params.start_session,
-                                                            simulation_params.end_session) < 1:
-        raise Exception(
-            f"There are no trading days between {simulation_params.start_session} and {simulation_params.end_session}")
-
-    benchmark_sid, benchmark_returns = benchmark_spec.resolve(
-        asset_repository=bundle_data.asset_repository,
-        start_date=simulation_params.start_session,
-        end_date=simulation_params.end_session,
-    )
 
     if print_algo:
-        with open(algorithm_file, "r") as f:
-            algotext = f.read()
+
         if PYGMENTS:
             highlight(
-                algotext,
+                algorithm.algorithm_text,
                 PythonLexer(),
                 TerminalFormatter(),
                 outfile=sys.stdout,
             )
         else:
-            logger.info(f"\n{algotext}")
-
-    pipeline_loader = USEquityPricingLoader.without_fx(
-        bundle_data,
-    )
+            logger.info(f"\n{algorithm.algorithm_text}")
+    exchanges_dict = {exchange.name: exchange for exchange in exchanges}
+    pipeline_loader = USEquityPricingLoader.without_fx(None)  # TODO: fix pipeline
 
     def choose_loader(column):
         if column in USEquityPricing.columns:
@@ -85,36 +67,40 @@ async def run_algorithm(
         except KeyError:
             raise ValueError("No PipelineLoader registered for column %s." % column)
 
-    if benchmark_sid is not None:
-        benchmark_asset = bundle_data.asset_repository.retrieve_asset(sid=benchmark_sid)
-        benchmark_returns = None
-    else:
-        benchmark_asset = None
-        benchmark_returns = benchmark_returns
+    benchmark_asset = None
+    if benchmark_asset_symbol is not None:
+        benchmark_asset = await asset_service.get_asset_by_symbol(symbol=benchmark_asset_symbol,
+                                                                  asset_type=AssetType.EQUITY,
+                                                                  exchange_name=exchanges[0].name)
+        if benchmark_asset is None:
+            raise ValueError(f"No asset found with symbol {benchmark_asset_symbol} for benchmark")
+
     benchmark_source = BenchmarkSource(
+        asset_service=asset_service,
         benchmark_asset=benchmark_asset,
         benchmark_returns=benchmark_returns,
-        trading_calendar=simulation_params.trading_calendar,
-        sessions=simulation_params.sessions,
-        bundle_data=bundle_data,
-        emission_rate=simulation_params.emission_rate,
-        timedelta_period=simulation_params.emission_rate,
-        benchmark_fields=["close"]
+        trading_calendar=clock.trading_calendar,
+        sessions=clock.sessions,
+        exchange=exchanges[0],
+        emission_rate=clock.emission_rate,
+        benchmark_fields=frozenset({"close"})
     )
 
     tr = TradingAlgorithm(
-        exchange=simulation_params.exchange,
-        bundle_data=bundle_data,
+        exchanges=exchanges_dict,
+        asset_service=asset_service,
         get_pipeline_loader=choose_loader,
-        sim_params=simulation_params,
         metrics_set=metrics_set,
-        blotter=InMemoryBlotter(exchange=simulation_params.exchange, cancel_policy=None),
+        blotter=InMemoryBlotter(exchanges=exchanges_dict, cancel_policy=None),
+        # benchmark_source=get_benchmark(clock=clock),
         benchmark_source=benchmark_source,
-        algorithm_file=algorithm_file,
-        clock=clock
+        #        benchmark_source=None,
+        algorithm=algorithm,
+        clock=clock,
     )
-    start_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz)
+
+    start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
     perf = await tr.run()
-    end_time = datetime.datetime.now(tz=simulation_params.trading_calendar.tz)
+    end_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
     logger.info(f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds.")
     return perf

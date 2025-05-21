@@ -19,7 +19,6 @@ from ziplime.errors import (
 )
 from ziplime.lib.normalize import naive_grouped_rowwise_apply
 from ziplime.lib.rank import masked_rankdata_2d, rankdata_1d_descending
-from ziplime.pipeline.api_utils import restrict_to_dtype
 from ziplime.pipeline.classifiers import Classifier, Everything, Quantiles
 from ziplime.pipeline.dtypes import (
     CLASSIFIER_DTYPES,
@@ -50,7 +49,6 @@ from ziplime.pipeline.mixins import (
     RestrictedDTypeMixin,
     SingleInputMixin,
 )
-from ziplime.pipeline.sentinels import NotSpecified, NotSpecifiedType
 from ziplime.pipeline.term import AssetExists, ComputableTerm, Term
 from ziplime.utils.functional import with_doc, with_name
 from ziplime.utils.math_utils import (
@@ -366,22 +364,22 @@ def function_application(func):
 
 
 # Decorators for Factor methods.
-if_not_float64_tell_caller_to_use_isnull = restrict_to_dtype(
-    dtype=float64_dtype,
-    message_template=(
-        "{method_name}() was called on a factor of dtype {received_dtype}.\n"
-        "{method_name}() is only defined for dtype {expected_dtype}."
-        "To filter missing data, use isnull() or notnull()."
-    ),
-)
+# if_not_float64_tell_caller_to_use_isnull = restrict_to_dtype(
+#     dtype=float64_dtype,
+#     message_template=(
+#         "{method_name}() was called on a factor of dtype {received_dtype}.\n"
+#         "{method_name}() is only defined for dtype {expected_dtype}."
+#         "To filter missing data, use isnull() or notnull()."
+#     ),
+# )
 
-float64_only = restrict_to_dtype(
-    dtype=float64_dtype,
-    message_template=(
-        "{method_name}() is only defined on Factors of dtype {expected_dtype},"
-        " but it was called on a Factor of dtype {received_dtype}."
-    ),
-)
+# float64_only = restrict_to_dtype(
+#     dtype=float64_dtype,
+#     message_template=(
+#         "{method_name}() is only defined on Factors of dtype {expected_dtype},"
+#         " but it was called on a Factor of dtype {received_dtype}."
+#     ),
+# )
 
 CORRELATION_METHOD_NOTE = dedent(
     """\
@@ -433,8 +431,8 @@ class summary_funcs:
 def summary_method(name):
     func = getattr(summary_funcs, name)
 
-    @float64_only
-    def f(self, mask: Filter | NotSpecifiedType = NotSpecified):
+    #@float64_only
+    def f(self, mask: Filter | None = None):
         """Create a 1-dimensional factor computing the {} of self, each day.
 
         Parameters
@@ -528,9 +526,9 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
 
     eq = binary_operator("==")
 
-    @float64_only
-    def demean(self, mask: Filter | NotSpecifiedType = NotSpecified,
-               groupby: Classifier | NotSpecifiedType = NotSpecified):
+    #@float64_only
+    def demean(self, mask: Filter | None = None,
+               groupby: Classifier | None = None):
         """
         Construct a Factor that computes ``self`` and subtracts the mean from
         row of the result.
@@ -654,9 +652,9 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @float64_only
-    def zscore(self, mask: Filter | NotSpecifiedType = NotSpecified,
-               groupby: Classifier | NotSpecifiedType = NotSpecified):
+    #@float64_only
+    def zscore(self, mask: Filter | None = None,
+               groupby: Classifier | None = None):
         """
         Construct a Factor that Z-Scores each day's results.
 
@@ -719,7 +717,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         )
 
     def rank(
-            self, method="ordinal", ascending=True, mask=NotSpecified, groupby=NotSpecified
+            self, method="ordinal", ascending=True, mask=None, groupby=None
     ):
         """
         Construct a new Factor representing the sorted rank of each column
@@ -761,7 +759,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         :func:`scipy.stats.rankdata`
         """
 
-        if groupby is NotSpecified:
+        if groupby is None:
             return Rank(self, method=method, ascending=ascending, mask=mask)
 
         return GroupedRowTransform(
@@ -776,7 +774,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         )
 
     @templated_docstring(CORRELATION_METHOD_NOTE=CORRELATION_METHOD_NOTE)
-    def pearsonr(self, target: Term, correlation_length: int, mask: Filter | NotSpecifiedType = NotSpecified):
+    def pearsonr(self, target: Term, correlation_length: int, mask: Filter | None = None):
         """
         Construct a new Factor that computes rolling pearson correlation
         coefficients between ``target`` and the columns of ``self``.
@@ -840,7 +838,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         )
 
     @templated_docstring(CORRELATION_METHOD_NOTE=CORRELATION_METHOD_NOTE)
-    def spearmanr(self, target: Term, correlation_length: int, mask: Filter | NotSpecifiedType = NotSpecified):
+    def spearmanr(self, target: Term, correlation_length: int, mask: Filter | None = None):
         """
         Construct a new Factor that computes rolling spearman rank correlation
         coefficients between ``target`` and the columns of ``self``.
@@ -903,7 +901,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         )
 
     @templated_docstring(CORRELATION_METHOD_NOTE=CORRELATION_METHOD_NOTE)
-    def linear_regression(self, target: Term, regression_length: int, mask: Filter | NotSpecifiedType = NotSpecified):
+    def linear_regression(self, target: Term, regression_length: int, mask: Filter | None = None):
         """
         Construct a new Factor that performs an ordinary least-squares
         regression predicting the columns of `self` from `target`.
@@ -962,10 +960,10 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @float64_only
+    #@float64_only
     def winsorize(
             self, min_percentile: int | float, max_percentile: int | float,
-            mask: Filter | NotSpecifiedType = NotSpecified, groupby: Classifier | NotSpecifiedType = NotSpecified
+            mask: Filter | None = None, groupby: Classifier | None = None
     ):
         """
         Construct a new factor that winsorizes the result of this factor.
@@ -1059,7 +1057,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             window_safe=self.window_safe,
         )
 
-    def quantiles(self, bins: int, mask: Filter | NotSpecifiedType = NotSpecified):
+    def quantiles(self, bins: int, mask: Filter | None = None):
         """
         Construct a Classifier computing quantiles of the output of ``self``.
 
@@ -1081,11 +1079,11 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         quantiles : ziplime.pipeline.Classifier
             A classifier producing integer labels ranging from 0 to (bins - 1).
         """
-        if mask is NotSpecified:
+        if mask is None:
             mask = self.mask
         return Quantiles(inputs=(self,), bins=bins, mask=mask)
 
-    def quartiles(self, mask: Filter | NotSpecifiedType = NotSpecified):
+    def quartiles(self, mask: Filter | None = None):
         """
         Construct a Classifier computing quartiles over the output of ``self``.
 
@@ -1108,7 +1106,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self.quantiles(bins=4, mask=mask)
 
-    def quintiles(self, mask: Filter | NotSpecifiedType = NotSpecified):
+    def quintiles(self, mask: Filter | None = None):
         """
         Construct a Classifier computing quintile labels on ``self``.
 
@@ -1131,7 +1129,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self.quantiles(bins=5, mask=mask)
 
-    def deciles(self, mask: Filter | NotSpecifiedType = NotSpecified):
+    def deciles(self, mask: Filter | None = None):
         """
         Construct a Classifier computing decile labels on ``self``.
 
@@ -1154,7 +1152,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self.quantiles(bins=10, mask=mask)
 
-    def top(self, N, mask=NotSpecified, groupby=NotSpecified):
+    def top(self, N, mask=None, groupby=None):
         """
         Construct a Filter matching the top N asset values of self each day.
 
@@ -1182,7 +1180,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             return self._maximum(mask=mask, groupby=groupby)
         return self.rank(ascending=False, mask=mask, groupby=groupby) <= N
 
-    def bottom(self, N, mask=NotSpecified, groupby=NotSpecified):
+    def bottom(self, N, mask=None, groupby=None):
         """
         Construct a Filter matching the bottom N asset values of self each day.
 
@@ -1206,10 +1204,10 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self.rank(ascending=True, mask=mask, groupby=groupby) <= N
 
-    def _maximum(self, mask=NotSpecified, groupby=NotSpecified):
+    def _maximum(self, mask=None, groupby=None):
         return MaximumFilter(self, groupby=groupby, mask=mask)
 
-    def percentile_between(self, min_percentile, max_percentile, mask=NotSpecified):
+    def percentile_between(self, min_percentile, max_percentile, mask=None):
         """
         Construct a Filter matching values of self that fall within the range
         defined by ``min_percentile`` and ``max_percentile``.
@@ -1239,7 +1237,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
             mask=mask,
         )
 
-    @if_not_float64_tell_caller_to_use_isnull
+    #@if_not_float64_tell_caller_to_use_isnull
     def isnan(self):
         """
         A Filter producing True for all values where this Factor is NaN.
@@ -1250,7 +1248,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return self != self
 
-    @if_not_float64_tell_caller_to_use_isnull
+    #@if_not_float64_tell_caller_to_use_isnull
     def notnan(self):
         """
         A Filter producing True for values where this Factor is not NaN.
@@ -1261,7 +1259,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return ~self.isnan()
 
-    @if_not_float64_tell_caller_to_use_isnull
+    #@if_not_float64_tell_caller_to_use_isnull
     def isfinite(self):
         """
         A Filter producing True for values where this Factor is anything but
@@ -1269,7 +1267,7 @@ class Factor(RestrictedDTypeMixin, ComputableTerm):
         """
         return (-inf < self) & (self < inf)
 
-    def clip(self, min_bound, max_bound, mask=NotSpecified):
+    def clip(self, min_bound, max_bound, mask=None):
         """
         Clip (limit) the values in a factor.
 
@@ -1385,12 +1383,12 @@ class GroupedRowTransform(Factor):
             **kwargs,
     ):
 
-        if mask is NotSpecified:
+        if mask is None:
             mask = factor.mask
         else:
             mask = mask & factor.mask
 
-        if groupby is NotSpecified:
+        if groupby is None:
             groupby = Everything(mask=mask)
 
         return super(GroupedRowTransform, cls).__new__(
@@ -1705,7 +1703,7 @@ class CustomFactor(PositiveWindowLengthMixin, CustomTermMixin, Factor):
 
     def __getattribute__(self, name):
         outputs = object.__getattribute__(self, "outputs")
-        if outputs is NotSpecified:
+        if outputs is None:
             return super(CustomFactor, self).__getattribute__(name)
         elif name in outputs:
             return RecarrayField(factor=self, attribute=name)
@@ -1723,7 +1721,7 @@ class CustomFactor(PositiveWindowLengthMixin, CustomTermMixin, Factor):
                 ) from exc
 
     def __iter__(self):
-        if self.outputs is NotSpecified:
+        if self.outputs is None:
             raise ValueError(
                 "{factor} does not have multiple outputs.".format(
                     factor=type(self).__name__,

@@ -2,7 +2,8 @@ import enum
 
 
 class AssetType(enum.Enum):
-    EQUITY = "equity"
-    FUTURES_CONTRACT = "futures_contract"
-    OPTIONS_CONTRACT = "options_contract"
-    CURRENCY = "currency"
+    EQUITY = "EQUITY"
+    FUTURES_CONTRACT = "FUTURES_CONTRACT"
+    OPTIONS_CONTRACT = "OPTIONS_CONTRACT"
+    CURRENCY = "CURRENCY"
+    COMMODITY = "COMMODITY"

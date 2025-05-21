@@ -3,28 +3,27 @@ from copy import copy
 
 import structlog
 
-from ziplime.assets.domain.db.asset import Asset
-
 from .blotter import Blotter
 
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.domain.order import Order
-from ...gens.exchanges.exchange import Exchange
+from ziplime.exchanges.exchange import Exchange
+from ...assets.entities.asset import Asset
 
 
 class InMemoryBlotter(Blotter):
     def __init__(
             self,
-            exchange: Exchange,
+            exchanges: dict[str, Exchange],
             cancel_policy,
     ):
         super().__init__(cancel_policy=cancel_policy)
         self._logger = structlog.get_logger(__name__)
-        self.exchange = exchange
+        self.exchanges = exchanges
         # these orders are aggregated by asset
-        self.open_orders = defaultdict(dict)
+        self.open_orders = {exchange.name: defaultdict(dict) for exchange in exchanges.values()}
         # keep a dict of orders by their own id
-        self.orders = {}
+        self.orders = {exchange.name: {} for exchange in exchanges.values()}
         # holding orders that have come in since the last event.
         self.new_orders = OrderedDict()
 
@@ -65,32 +64,35 @@ class InMemoryBlotter(Blotter):
         # something could be done with amount to further divide
         # between buy by share count OR buy shares up to a dollar amount
         # numeric == share count  AND  "$dollar.cents" == cost amount
-        self.open_orders[order.asset][order.id] = order
-        self.orders[order.id] = order
+        self.open_orders[order.exchange_name][order.asset][order.id] = order
+        self.orders[order.exchange_name][order.id] = order
         return order.id
 
     def order_cancelled(self, order: Order) -> None:
-        asset_orders = self.open_orders[order.asset]
+        asset_orders = self.open_orders[order.exchange_name][order.asset.sid]
         asset_orders.pop(order.id, None)
 
     def order_rejected(self, order: Order) -> None:
-        asset_orders = self.open_orders[order.asset]
+        asset_orders = self.open_orders[order.exchange_name][order.asset.sid]
         asset_orders.pop(order.id, None)
 
-    def get_order_by_id(self, order_id: str) -> Order | None:
-        return self.orders.get(order_id, None)
+    def get_order_by_id(self, order_id: str, exchange_name: str) -> Order | None:
+        return self.orders.get(exchange_name, {}).get(order_id, None)
 
-    def get_open_orders_by_asset(self, asset: Asset) -> dict[str, Order] | None:
-        return self.open_orders.get(asset, None)
+    def get_open_orders_by_asset(self, asset: Asset, exchange_name: str) -> dict[str, Order] | None:
+        return self.open_orders.get(exchange_name, {}).get(asset, None)
 
-    def get_open_orders(self) -> dict[Asset, dict[str, Order]]:
-        return self.open_orders
+    def get_open_orders(self, exchange_name: str) -> dict[Asset, dict[str, Order]]:
+        return self.open_orders.get(exchange_name, {})
 
-    def cancel_all_orders_for_asset(self, asset: Asset, relay_status: bool = True):
+    def get_all_assets_in_open_orders(self) -> list[Asset]:
+        return [asset for asset_orders in self.open_orders.values() for asset in asset_orders]
+
+    def cancel_all_orders_for_asset(self, asset: Asset, exchange_name: str, relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
         """
-        self.open_orders.pop(asset, None)
+        self.open_orders.get(exchange_name, {}).pop(asset, None)
 
     # End of day cancel for daily frequency
     def execute_daily_cancel_policy(self, event):
@@ -130,8 +132,9 @@ class InMemoryBlotter(Blotter):
     def execute_cancel_policy(self, event):
         if self.cancel_policy.should_cancel(event):
             warn = self.cancel_policy.warn_on_cancel
-            for asset in copy(self.open_orders):
-                self.cancel_all_orders_for_asset(asset, warn, relay_status=False)
+            for exchange in self.open_orders:
+                for asset in self.open_orders[exchange]:
+                    self.cancel_all_orders_for_asset(asset=asset, exchange_name=exchange, relay_status=False)
 
     def order_held(self, order: Order) -> None:
         pass
@@ -157,69 +160,69 @@ class InMemoryBlotter(Blotter):
             for order in orders_to_modify:
                 order.handle_split(ratio)
 
-    def get_transactions(self, bar_data: BarData):
-        """
-        Creates a list of transactions based on the current open orders,
-        slippage model, and commission model.
-
-        Parameters
-        ----------
-        bar_data: ziplime.protocol.BarData
-
-        Notes
-        -----
-        This method book-keeps the blotter's open_orders dictionary, so that
-         it is accurate by the time we're done processing open orders.
-
-        Returns
-        -------
-        transactions_list: List
-            transactions_list: list of transactions resulting from the current
-            open orders.  If there were no open orders, an empty list is
-            returned.
-
-        commissions_list: List
-            commissions_list: list of commissions resulting from filling the
-            open orders.  A commission is an object with "asset" and "cost"
-            parameters.
-
-        closed_orders: List
-            closed_orders: list of all the orders that have filled.
-        """
-
-        closed_orders = []
-        transactions = []
-        commissions = []
-
-        if self.open_orders:
-            for asset, asset_orders in self.open_orders.items():
-                slippage = self.exchange.get_slippage_model(asset=asset)
-
-                for order, txn in slippage.simulate(data=bar_data, assets=[asset],
-                                                    orders_for_asset=asset_orders.values()):
-                    commission = self.exchange.get_commission_model(asset=asset)
-                    additional_commission = commission.calculate(order, txn)
-
-                    if additional_commission > 0:
-                        commissions.append(
-                            {
-                                "asset": order.asset,
-                                "order": order,
-                                "cost": additional_commission,
-                            }
-                        )
-
-                    order.filled += txn.amount
-                    order.commission += additional_commission
-
-                    order.dt = txn.dt
-
-                    transactions.append(txn)
-
-                    if not order.open:
-                        closed_orders.append(order)
-
-        return transactions, commissions, closed_orders
+    # def get_transactions(self, bar_data: BarData):
+    #     """
+    #     Creates a list of transactions based on the current open orders,
+    #     slippage model, and commission model.
+    #
+    #     Parameters
+    #     ----------
+    #     bar_data: ziplime.protocol.BarData
+    #
+    #     Notes
+    #     -----
+    #     This method book-keeps the blotter's open_orders dictionary, so that
+    #      it is accurate by the time we're done processing open orders.
+    #
+    #     Returns
+    #     -------
+    #     transactions_list: List
+    #         transactions_list: list of transactions resulting from the current
+    #         open orders.  If there were no open orders, an empty list is
+    #         returned.
+    #
+    #     commissions_list: List
+    #         commissions_list: list of commissions resulting from filling the
+    #         open orders.  A commission is an object with "asset" and "cost"
+    #         parameters.
+    #
+    #     closed_orders: List
+    #         closed_orders: list of all the orders that have filled.
+    #     """
+    #
+    #     closed_orders = []
+    #     transactions = []
+    #     commissions = []
+    #
+    #     if self.open_orders:
+    #         for asset, asset_orders in self.open_orders.items():
+    #             slippage = self.exchange.get_slippage_model(asset=asset)
+    #
+    #             for order, txn in slippage.simulate(data=bar_data, assets=frozenset({asset}),
+    #                                                 orders_for_asset=asset_orders.values()):
+    #                 commission = self.exchange.get_commission_model(asset=asset)
+    #                 additional_commission = commission.calculate(order, txn)
+    #
+    #                 if additional_commission > 0:
+    #                     commissions.append(
+    #                         {
+    #                             "asset": order.asset,
+    #                             "order": order,
+    #                             "cost": additional_commission,
+    #                         }
+    #                     )
+    #
+    #                 order.filled += txn.amount
+    #                 order.commission += additional_commission
+    #
+    #                 order.dt = txn.dt
+    #
+    #                 transactions.append(txn)
+    #
+    #                 if not order.open:
+    #                     closed_orders.append(order)
+    #
+    #     return transactions, commissions, closed_orders
 
     def prune_orders(self, closed_orders):
         """
@@ -236,11 +239,12 @@ class InMemoryBlotter(Blotter):
         # remove all closed orders from our open_orders dict
         for order in closed_orders:
             asset = order.asset
-            asset_orders = self.open_orders[asset]
+            asset_orders = self.open_orders[order.exchange_name][asset]
             asset_orders.pop(order, None)
 
         # now clear out the assets from our open_orders dict that have
         # zero open orders
-        for asset in list(self.open_orders.keys()):
-            if len(self.open_orders[asset]) == 0:
-                self.open_orders.pop(asset, None)
+        for exchange_name, exchange_orders in self.open_orders.items():
+            for asset in list(exchange_orders.keys()):
+                if len(self.open_orders[exchange_name][asset]) == 0:
+                    self.open_orders.get(exchange_name, {}).pop(asset, None)

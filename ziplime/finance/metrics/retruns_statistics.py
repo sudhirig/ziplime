@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.ledger import Ledger
 
 
@@ -28,7 +28,7 @@ class ReturnsStatistic:
         self._field_name = field_name
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
-                   bundle_data: BundleData):
+                   exchanges: dict[str, Exchange]):
         res = self._function(ledger.daily_returns_array[: session_ix + 1])
         if not np.isfinite(res):
             res = None

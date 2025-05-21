@@ -4,7 +4,7 @@ from typing import Any, Sequence, Literal, Self
 from polars import CredentialProviderFunction
 from polars._typing import ParquetCompression
 import polars as pl
-from ziplime.data.domain.bundle_data import BundleData
+from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.bundle_storage import BundleStorage
 
 
@@ -38,11 +38,11 @@ class FileSystemParquetBundleStorage(BundleStorage):
         self.partition_chunk_size_bytes = partition_chunk_size_bytes
         self.storage_options = storage_options
 
-    async def store_bundle(self, bundle_data: BundleData):
+    async def store_bundle(self, data_bundle: DataBundle):
         # we need here to know ehere to store bundle, and info is in bundle metadata
-        bundle_path = self.get_bundle_data_path(bundle_data=bundle_data)
+        bundle_path = self.get_data_bundle_path(data_bundle=data_bundle)
         await aiofiles.os.makedirs(bundle_path.parent, exist_ok=True)
-        bundle_data.data.write_parquet(bundle_path, compression=self.compression,
+        data_bundle.data.write_parquet(bundle_path, compression=self.compression,
                                        compression_level=10,
                                        statistics=self.statistics, row_group_size=self.row_group_size,
                                        data_page_size=self.data_page_size, use_pyarrow=self.use_pyarrow,
@@ -50,8 +50,8 @@ class FileSystemParquetBundleStorage(BundleStorage):
                                        partition_chunk_size_bytes=self.partition_chunk_size_bytes,
                                        storage_options=self.storage_options)
 
-    async def load_bundle_data(self, bundle_data: BundleData) -> pl.DataFrame:
-        bundle_path = self.get_bundle_data_path(bundle_data=bundle_data)
+    async def load_data_bundle(self, data_bundle: DataBundle) -> pl.DataFrame:
+        bundle_path = self.get_data_bundle_path(data_bundle=data_bundle)
         data = pl.read_parquet(source=bundle_path)
         return data
 
@@ -60,10 +60,10 @@ class FileSystemParquetBundleStorage(BundleStorage):
     async def from_json(cls, data: dict[str, Any]) -> Self:
         return cls(base_data_path=data["base_data_path"])
 
-    def get_bundle_data_path(self, bundle_data: BundleData) -> Path:
-        return Path(self.base_data_path, "bundle_data", bundle_data.name, bundle_data.version, f"data.parquet")
+    def get_data_bundle_path(self, data_bundle: DataBundle) -> Path:
+        return Path(self.base_data_path, "data_bundle", data_bundle.name, data_bundle.version, f"data.parquet")
 
-    async def to_json(self, bundle_data: BundleData) -> dict[str, Any]:
+    async def to_json(self, data_bundle: DataBundle) -> dict[str, Any]:
         return {
             "base_data_path": self.base_data_path,
         }

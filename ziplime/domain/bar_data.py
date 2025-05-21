@@ -272,7 +272,6 @@ class BarData:
 
             if not asset.is_exchange_open(dt_minute=dt_to_use_for_exchange_check):
                 return False
-
         # is there a last price?
         return not np.isnan(
             self.data_portal.get_spot_value(

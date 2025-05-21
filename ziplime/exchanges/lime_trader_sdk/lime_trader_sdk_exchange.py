@@ -192,7 +192,8 @@ class LimeTraderSdkExchange(Exchange):
             commission=Decimal(0.0),
             execution_style=execution_style,
             status=order_status,
-            exchange_order_id=order.order_id
+            exchange_order_id=order.order_id,
+            exchange_name=self.name
         )
 
         return order_details
@@ -252,7 +253,7 @@ class LimeTraderSdkExchange(Exchange):
         async for transaction_page in iterate_pages_async(start_page=PageRequest(page=1, size=20),
                                                           func=partial(self._lime_sdk_client.account.get_trades,
                                                                        account_number=self._account_id,
-                                                                       date=bar_data.current_dt.date())):
+                                                                       date=current_dt.date())):
             # async for transaction_page in self._lime_sdk_client.account.iterate_trades(
             #         account_number=self._account_id,
             #         start_page=PageRequest(page=1, size=20),
@@ -275,9 +276,10 @@ class LimeTraderSdkExchange(Exchange):
                     asset=asset,
                     amount=transaction_sdk.quantity if transaction_sdk.side == TradeSide.BUY else -transaction_sdk.quantity,
                     dt=transaction_sdk.timestamp,
-                    price=float(transaction_sdk.price),
+                    price=transaction_sdk.price,
                     order_id=None,
                     commission=total_commissions,  # TODO: how to get commission
+                    exchange_name=self.name
                 )
                 transactions.append(tx)
                 self.processed_transaction_ids.add(transaction_sdk.trade_id)
@@ -372,7 +374,11 @@ class LimeTraderSdkExchange(Exchange):
         return quote.date
 
     def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt, data_frequency) -> pl.DataFrame:
-        return self._lime_trader_sdk_data_source.get_spot_value(assets=assets, fields=fields, dt=dt,)
+        return self._lime_trader_sdk_data_source.get_spot_value(assets=assets, fields=fields, dt=dt,
+                                                                exchange_country=self.country_code,
+                                                                exchange_name=self.name,
+                                                                data_frequency=data_frequency
+                                                                )
 
 
     def get_realtime_bars(self, assets, data_frequency):
@@ -450,11 +456,14 @@ class LimeTraderSdkExchange(Exchange):
     def get_slippage_model(self, asset: Asset) -> SlippageModel:
         pass
 
-    async def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
+    def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
                                                frequency: datetime.timedelta):
-        quote = self._sync_lime_sdk_client.market.get_current_quote(
-            symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
-        return getattr(quote, field)
+        # quote = self._sync_lime_sdk_client.market.get_current_quote(
+        #     symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
+        quote = self._lime_trader_sdk_data_source.get_spot_value(
+            assets=frozenset({asset}),fields=frozenset({field}), dt=dt, data_frequency=None, exchange_country=self.country_code,
+            exchange_name=self.name)
+        return quote
 
     async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
                                           frequency: datetime.timedelta):

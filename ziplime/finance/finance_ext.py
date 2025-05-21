@@ -1,6 +1,8 @@
 import asyncio
+import datetime
 from decimal import Decimal
 from math import sqrt
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -8,7 +10,7 @@ import pandas as pd
 from ziplime.assets.entities.futures_contract import FuturesContract
 
 
-def update_position_last_sale_prices(positions, get_price, dt):
+def update_position_last_sale_prices(positions, get_price: Callable, dt: datetime.datetime):
     """Update the positions' last sale prices.
 
     Parameters

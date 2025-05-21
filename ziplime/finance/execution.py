@@ -127,7 +127,7 @@ class LimitOrder(ExecutionStyle):
         return asymmetric_round_price(
             self.limit_price,
             is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=(Decimal("0.01") if self.asset is None else self.asset.tick_size),
         )
 
     def get_stop_price(self, is_buy):
@@ -164,7 +164,7 @@ class StopOrder(ExecutionStyle):
         return asymmetric_round_price(
             self.stop_price,
             not is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=(Decimal("0.01") if self.asset is None else self.asset.tick_size),
         )
 
     def to_order_type(self) -> OrderType:
@@ -200,14 +200,14 @@ class StopLimitOrder(ExecutionStyle):
         return asymmetric_round_price(
             self.limit_price,
             is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=(Decimal("0.01") if self.asset is None else self.asset.tick_size),
         )
 
     def get_stop_price(self, is_buy):
         return asymmetric_round_price(
             self.stop_price,
             not is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=(Decimal("0.01") if self.asset is None else self.asset.tick_size),
         )
 
     def to_order_type(self) -> OrderType:
@@ -232,14 +232,14 @@ def asymmetric_round_price(price: Decimal, prefer_round_down: bool, tick_size: D
     """
     precision = zp_math.number_of_decimal_places(tick_size)
     multiplier = int(tick_size * (10 ** precision))
-    diff -= Decimal(0.5)  # shift the difference down
-    diff *= 10 ** -precision  # adjust diff to precision of tick size
+    diff -= Decimal("0.5")  # shift the difference down
+    diff *= Decimal("10") ** -precision  # adjust diff to precision of tick size
     diff *= multiplier  # adjust diff to value of tick_size
 
     # Subtracting an epsilon from diff to enforce the open-ness of the upper
     # bound on buys and the lower bound on sells.  Using the actual system
     # epsilon doesn't quite get there, so use a slightly less epsilon-ey value.
-    epsilon = float_info.epsilon * 10
+    epsilon = Decimal(str(float_info.epsilon)) * 10
     diff = diff - epsilon
 
     # relies on rounding half away from zero, unlike numpy's bankers' rounding
@@ -247,17 +247,17 @@ def asymmetric_round_price(price: Decimal, prefer_round_down: bool, tick_size: D
         (price - (diff if prefer_round_down else -diff)) / tick_size
     )
     if zp_math.tolerant_equals(rounded, 0.0):
-        return 0.0
+        return Decimal("0.0")
     return rounded
 
 
-def check_stoplimit_prices(price: float, label: str):
+def check_stoplimit_prices(price: Decimal, label: str):
     """
     Check to make sure the stop/limit prices are reasonable and raise
     a BadOrderParameters exception if not.
     """
     try:
-        if not isfinite(price):
+        if not isfinite(float(price)):
             raise BadOrderParameters(
                 msg=f"Attempted to place an order with a {label} price "
                     f"of {price}."

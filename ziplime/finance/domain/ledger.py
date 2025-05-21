@@ -180,11 +180,10 @@ class Ledger:
     def _calculate_payout(multiplier: Decimal, amount: Decimal, old_price: Decimal, price: Decimal) -> Decimal:
         return (price - old_price) * multiplier * amount
 
-    def _cash_flow(self, amount: Decimal):
+    def _cash_flow(self, amount: Decimal) -> None:
         self._dirty_portfolio = True
-        p = self._portfolio
-        p.cash_flow += amount
-        p.cash += amount
+        self._portfolio.cash_flow += amount
+        self._portfolio.cash += amount
 
     def process_transaction(self, transaction: Transaction):
         """Add a transaction to ledger, updating the current state as needed.
@@ -304,10 +303,10 @@ class Ledger:
         held_sids = set(position_tracker.positions)
         if held_sids:
             cash_dividends = adjustment_reader.get_dividends_with_ex_date(
-                held_sids, next_session, None#self.data_bundle.asset_repository
+                held_sids, next_session, None  # self.data_bundle.asset_repository
             )
             stock_dividends = adjustment_reader.get_stock_dividends_with_ex_date(
-                held_sids, next_session, None #self.data_bundle.asset_repository
+                held_sids, next_session, None  # self.data_bundle.asset_repository
             )
 
             # Earning a dividend just marks that we need to get paid out on
@@ -327,11 +326,9 @@ class Ledger:
 
     def capital_change(self, change_amount: float):
         self.update_portfolio()
-        portfolio = self._portfolio
-
         # we update the cash and total value so this is not dirty
-        portfolio.portfolio_value += change_amount
-        portfolio.cash += change_amount
+        self._portfolio.portfolio_value += change_amount
+        self._portfolio.cash += change_amount
 
     def transactions(self, dt=None):
         """Retrieve the dict-form of all of the transactions in a given bar or
@@ -407,20 +404,19 @@ class Ledger:
         if not self._dirty_portfolio:
             return
 
-        portfolio = self._portfolio
         pt = self.position_tracker
 
-        portfolio.positions = pt.get_positions()
+        self._portfolio.positions = pt.get_positions()
         position_stats = pt.stats
 
-        portfolio.positions_value = position_value = position_stats.net_value
-        portfolio.positions_exposure = position_stats.net_exposure
+        self._portfolio.positions_value = position_value = position_stats.net_value
+        self._portfolio.positions_exposure = position_stats.net_exposure
         self._cash_flow(self._get_payout_total(pt.positions))
 
-        start_value = portfolio.portfolio_value
+        start_value = self._portfolio.portfolio_value
 
         # update the new starting value
-        portfolio.portfolio_value = end_value = portfolio.cash + position_value
+        self._portfolio.portfolio_value = end_value = self._portfolio.cash + position_value
 
         pnl = end_value - start_value
         if start_value != 0:
@@ -428,8 +424,8 @@ class Ledger:
         else:
             returns = Decimal("0.00")
 
-        portfolio.pnl += pnl
-        portfolio.returns = (1 + portfolio.returns) * (1 + returns) - 1
+        self._portfolio.pnl += pnl
+        self._portfolio.returns = (1 + self._portfolio.returns) * (1 + returns) - 1
 
         # the portfolio has been fully synced
         self._dirty_portfolio = False

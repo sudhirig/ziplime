@@ -14,6 +14,6 @@ if __name__ == "__main__":
         # bundle_name="limex_us_polars_minute",
         bundle_name=None,
         config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),
-        emission_rate=datetime.timedelta(seconds=60),
+        emission_rate=datetime.timedelta(seconds=5),
     )
     print(res.head(n=10))

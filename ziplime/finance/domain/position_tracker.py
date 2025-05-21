@@ -368,17 +368,16 @@ class PositionTracker:
             dt=dt,
             price=price,
             order_id=None,
+            exchange_name=None
         )
 
     def get_positions(self):
-        positions = self._positions_store
-
         for asset, pos in self.positions.items():
             # Adds the new position if we didn't have one before, or overwrite
             # one we have currently
-            positions[asset] = pos
+            self._positions_store[asset] = pos
 
-        return positions
+        return self._positions_store
 
     def get_position_list(self):
         return [

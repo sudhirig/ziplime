@@ -28,7 +28,7 @@ class BenchmarkSource:
             benchmark_asset: Asset | None = None,
             benchmark_returns: pl.Series | None = None,
     ):
-        self.asset_service=asset_service
+        self.asset_service = asset_service
         self.benchmark_asset = benchmark_asset
         self.sessions = sessions
         self.emission_rate = emission_rate
@@ -224,11 +224,11 @@ class BenchmarkSource:
         all_bars: pl.Series = pl.from_pandas(
             trading_calendar.sessions_minutes(start=self.sessions[0], end=self.sessions[-1]).tz_convert(
                 trading_calendar.tz)
-        )#.to_frame("date").group_by_dynamic(
-       #     index_column="date", every=self.emission_rate
-        #).agg()["date"]
-        limit =all_bars .to_frame("date").group_by_dynamic(
-           index_column="date", every=self.emission_rate
+        )  # .to_frame("date").group_by_dynamic(
+        #     index_column="date", every=self.emission_rate
+        # ).agg()["date"]
+        limit = all_bars.to_frame("date").group_by_dynamic(
+            index_column="date", every=self.emission_rate
         ).agg()["date"].len()
         # precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
         #     index_column="date", every=self.timedelta_period
@@ -242,65 +242,4 @@ class BenchmarkSource:
             assets=frozenset({asset}),
             include_end_date=True
         )
-        return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))#[1:]
-        return (
-            benchmark_series.pct_change()[1:],
-            self.downsample_minute_return_series(
-                trading_calendar=trading_calendar,
-                minutely_returns=benchmark_series,
-            ),
-        )
-
-        start_date = asset.start_date
-        if start_date < trading_days[0]:
-            # get the window of close prices for benchmark_asset from the
-            # last trading day of the simulation, going up to one day
-            # before the simulation start day (so that we can get the %
-            # change on day 1)
-            benchmark_series = self.data_bundle.get_data_by_limit(
-                fields=frozenset({"price"}),
-                limit=len(trading_days) + 1,
-                frequency=self.emission_rate,
-                end_date=trading_days[-1],
-                assets=frozenset({asset}),
-                include_end_date=False
-            )
-
-            returns = benchmark_series.pct_change()[1:]
-            return returns, returns
-        elif start_date == trading_days[0]:
-            # Attempt to handle case where stock data starts on first
-            # day, in this case use the open to close return.
-            benchmark_series = self.data_bundle.get_data_by_limit(
-                fields=frozenset({"price"}),
-                limit=len(trading_days),
-                frequency=self.emission_rate,
-                end_date=trading_days[-1],
-                assets=frozenset({asset}),
-                include_end_date=False,
-            )
-
-            # get a minute history window of the first day
-            first_open = data_portal.get_spot_value(
-                assets=frozenset({asset}),
-                fields=frozenset({"open"}),
-                dt=trading_days[0],
-                data_frequency=datetime.timedelta(days=1),
-            )
-            first_close = data_portal.get_spot_value(
-                assets=frozenset({asset}),
-                fields=frozenset({"close"}),
-                dt=trading_days[0],
-                frequency=datetime.timedelta(days=1),
-            )
-
-            first_day_return = (first_close - first_open) / first_open
-
-            returns = benchmark_series.pct_change()[:]
-            returns[0] = first_day_return
-            return returns, returns
-        else:
-            raise ValueError(
-                "cannot set benchmark to asset that does not exist during"
-                " the simulation period (asset start date=%r)" % start_date
-            )
+        return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))  # [1:]

@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from ziplime.config.base_algorithm_config import BaseAlgorithmConfig
-from ziplime.finance.execution import MarketOrder
+from ziplime.finance.execution import MarketOrder, LimitOrder
 
 from ziplime.trading.trading_algorithm import TradingAlgorithm
 from ziplime.domain.bar_data import BarData
@@ -32,8 +32,8 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
     context.i += 1
     # data.history(assets=[context.aapl], fields=['price'], bar_count=100)[
     #     "price"]
-    if context.i < 300:
-        return
+    # if context.i < 300:
+    #     return
 
     short_mavg = \
         data.history(assets=[context.aapl], fields=['price'], bar_count=100, frequency=datetime.timedelta(minutes=1))[
@@ -46,8 +46,12 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
     if short_mavg > long_mavg:
         # order_target orders as many shares as needed to
         # achieve the desired number of shares.
-        await context.order_target_percent(asset=context.aapl, target=Decimal(1), style=MarketOrder())
+        # await context.order_target_percent(asset=context.aapl, target=Decimal(0.05),style=LimitOrder(limit_price=Decimal(210)))
+
+        await context.order_target_percent(asset=context.aapl, target=Decimal(0.05), style=MarketOrder())
     elif short_mavg < long_mavg:
+        # await context.order_target_percent(asset=context.aapl, target=Decimal(0.05), style=LimitOrder(limit_price=Decimal(210)))
+
         await context.order_target_percent(asset=context.aapl, target=Decimal(0), style=MarketOrder())
 
     # Save values for later inspection

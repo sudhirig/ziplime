@@ -36,7 +36,6 @@ jobs:
       url: https://pypi.org/p/ziplime  # Replace <package-name> with your PyPI project name
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
-
     steps:
     - name: Install Poetry
       uses: snok/install-poetry@v1
@@ -47,7 +46,7 @@ jobs:
         path: dist/
     - name: Publish distribution 📦 to PyPI
       run: |
-       poetry config pypi-token.${{ env.name }} ${{ secrets.PYPI_TOKEN }}
+       poetry config pypi-token.pypi ${{ secrets.PYPI_TOKEN }}
        poetry publish --dry-run
 
 #name: Publish Python 🐍 distribution 📦 to PyPI

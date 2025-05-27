@@ -27,7 +27,7 @@ jobs:
   publish-to-pypi:
     name: >-
       Publish Python 🐍 distribution 📦 to PyPI
-    #if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
+    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
     needs:
     - build
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
     - name: Publish distribution 📦 to PyPI
       run: |
        poetry config pypi-token.pypi ${{ secrets.PYPI_TOKEN }}
-       poetry publish --dry-run
+       poetry publish
 
 #name: Publish Python 🐍 distribution 📦 to PyPI
 #

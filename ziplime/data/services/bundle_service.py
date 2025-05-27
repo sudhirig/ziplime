@@ -60,18 +60,51 @@ class BundleService:
                 "No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
             return
         data = data.with_columns(
-            pl.lit(0).alias("sid")
+            pl.lit(0).alias("sid"),
+            pl.lit(False).alias("backfilled")
         )
-        equities_by_exchange = data.select("symbol", "exchange").group_by("exchange").agg(pl.col("symbol").unique())
+        # repair data
+        all_bars = [s for s in pl.from_pandas(
+            trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None), end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
+        ) if s >= date_start and s <= date_end]
+        required_sessions = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
+            index_column="date", every=frequency
+        ).df
+
+        equities_by_exchange = data.select("symbol", "exchange", "exchange_country").group_by("exchange", "exchange_country").agg(pl.col("symbol").unique())
         for row in equities_by_exchange.iter_rows(named=True):
             exchange_name = row["exchange"]
+            exchange_country = row["exchange_country"]
             symbols = row["symbol"]
             equities = await asset_service.get_equities_by_symbols(symbols=symbols, exchange_name=exchange_name)
             symbol_to_sid = {e.get_symbol_by_exchange(exchange_name=exchange_name): e.sid for e in equities}
 
+            for symbol in symbols:
+                symbol_data = data.filter(symbol=symbol).with_columns(pl.col("date"))
+                missing_sessions = sorted(set(required_sessions["date"]) - set(symbol_data["date"]))
+                if len(missing_sessions) > 0:
+                    self._logger.warning(
+                        f"Data for symbol {symbol} is missing on ticks ({len(missing_sessions)}): {[missing_session.isoformat() for missing_session in missing_sessions]}")
+                    # new_rows = {"date": None for col in data.columns}
+                    # for missing_session in missing_sessions:
+                    #     # Create a dictionary with None for all columns
+                    #     new_rows = {col: None for col in data.columns}
+                    #     # Set the specified column to the desired value
+                    #     new_rows[column_name] = value
+
+                    # Create a DataFrame with just this one row
+                    new_rows_df = pl.DataFrame({"date": missing_sessions, "symbol": symbol, "exchange": exchange_name,
+                                                "exchange_country": exchange_country},
+                                               schema_overrides={"date": data.schema["date"]})
+
+                    # Concatenate with the original DataFrame
+                    data = pl.concat([data, new_rows_df], how="diagonal")
+
             data = data.with_columns(
                 pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")
-            )
+            ).sort(["sid", "date"])
+
+
 
         # equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
         #                                                    pl.min("date").alias("min_date"))

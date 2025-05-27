@@ -8,8 +8,8 @@ from ziplime.core.run_simulation import run_simulation
 if __name__ == "__main__":
 
     res = run_simulation(
-        start_date=datetime.datetime(year=2024, month=10, day=5, tzinfo=datetime.timezone.utc),
-        end_date=datetime.datetime(year=2024, month=10, day=12, tzinfo=datetime.timezone.utc),
+        start_date=datetime.datetime(year=2023, month=8, day=1, tzinfo=datetime.timezone.utc),
+        end_date=datetime.datetime(year=2023, month=8, day=31, tzinfo=datetime.timezone.utc),
         trading_calendar="NYSE",
         algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
         total_cash=Decimal(100000.0),
@@ -20,10 +20,10 @@ if __name__ == "__main__":
         benchmark_returns=None
     )
 
-    # daily
+    #daily
     # res = run_simulation(
-    #     start_date=datetime.datetime(year=2024, month=3, day=4, tzinfo=datetime.timezone.utc),
-    #     end_date=datetime.datetime(year=2024, month=5, day=31, tzinfo=datetime.timezone.utc),
+    #     start_date=datetime.datetime(year=2023, month=3, day=14, tzinfo=datetime.timezone.utc),
+    #     end_date=datetime.datetime(year=2024, month=12, day=15, tzinfo=datetime.timezone.utc),
     #     trading_calendar="NYSE",
     #     algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
     #     total_cash=Decimal(100000.0),

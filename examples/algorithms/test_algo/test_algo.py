@@ -1,70 +1,45 @@
 import datetime
+import logging
 from decimal import Decimal
 
-from pydantic import BaseModel
+import numpy as np
+import talib
 
-from ziplime.config.base_algorithm_config import BaseAlgorithmConfig
-from ziplime.finance.execution import MarketOrder, LimitOrder
-
-from ziplime.trading.trading_algorithm import TradingAlgorithm
 from ziplime.domain.bar_data import BarData
-
-
-class EquityToTrade(BaseModel):
-    target_percentage: Decimal
-    symbol: str
-
-
-class TestAlgoConfig(BaseAlgorithmConfig):
-    equities_to_trade: list[EquityToTrade]
-    currency: str
+from ziplime.finance.execution import MarketOrder
+from ziplime.trading.trading_algorithm import TradingAlgorithm
 
 
 async def initialize(context: TradingAlgorithm):
-    context.i = 0
-    context.aapl = await context.symbol('AAPL')
-    context.amzn = await context.symbol('AMZN')
+    # Set the asset to AAPL
+    context.asset = await context.symbol('AAPL')
+    # Set the count for history data
+    context.count = 20
 
 
 async def handle_data(context: TradingAlgorithm, data: BarData):
-    print(f"Handle data: {context.simulation_dt}")
-    # Skip first 300 days to get full windows
-    context.i += 1
-    # data.history(assets=[context.aapl], fields=['price'], bar_count=100)[
-    #     "price"]
-    # if context.i < 300:
-    #     return
+    try:
+        print(f"Handle data: {context.simulation_dt}")
+        # Get the current price
+        current_price = data.current(assets=[context.asset], fields=['close'])
 
-    short_mavg = \
-        data.history(assets=[context.aapl], fields=['price'], bar_count=100, frequency=datetime.timedelta(minutes=1))[
-            "price"].mean()
-    long_mavg = \
-        data.history(assets=[context.aapl], fields=['price'], bar_count=300, frequency=datetime.timedelta(minutes=1))[
-            "price"].mean()
-    # await context.order_target_percent(asset=context.aapl, target=-Decimal(1), style=MarketOrder())
+        # Get the price history
+        history = data.history(assets=[context.asset], fields=['close'], bar_count=context.count,
+                               frequency=datetime.timedelta(days=1))
 
-    if short_mavg > long_mavg:
-        # order_target orders as many shares as needed to
-        # achieve the desired number of shares.
-        # await context.order_target_percent(asset=context.aapl, target=Decimal(0.05),style=LimitOrder(limit_price=Decimal(210)))
+        # Calculate the moving average
+        ma = history['close'].mean()
+        # Calculate the upper and lower Bollinger Bands
+        upper_bb, middle_bb, lower_bb = talib.BBANDS(history['close'], timeperiod=context.count - 1, nbdevup=2, nbdevdn=2,
+                                                     matype=0)
 
-        await context.order_target_percent(asset=context.aapl, target=Decimal(0.05), style=MarketOrder())
-    elif short_mavg < long_mavg:
-        # await context.order_target_percent(asset=context.aapl, target=Decimal(0.05), style=LimitOrder(limit_price=Decimal(210)))
-
-        await context.order_target_percent(asset=context.aapl, target=Decimal(0), style=MarketOrder())
-
-    # Save values for later inspection
-    context.record(
-        AAPL=data.current(assets=[context.aapl], fields=['price']),
-        short_mavg=short_mavg,
-        long_mavg=long_mavg
-    )
-
-    #
-    # print(close_price_history)
-    # print(close_price_current)
-    #
-    # submitted_order = await context.order_target_percent(asset=context.aapl, target=Decimal(0.5), style=MarketOrder())
-    # submitted_order = await context.order_target_percent(asset=context.amzn, target=Decimal(0.5), style=MarketOrder())
-    #
+        # Check if the current price is above the upper Bollinger Band
+        if not np.isnan(upper_bb[-1]) and current_price['close'][0] > upper_bb[-1]:
+            # Buy the asset
+            await context.order_target_percent(asset=context.asset, target=Decimal('1'), style=MarketOrder())
+        # Check if the current price is below the moving average
+        elif current_price['close'][0] < ma:
+            # Close the position
+            await context.order_target_percent(asset=context.asset, target=Decimal('0'), style=MarketOrder())
+    except Exception as e:
+        logging.exception(f"Exception running algorithm for {context.simulation_dt}")

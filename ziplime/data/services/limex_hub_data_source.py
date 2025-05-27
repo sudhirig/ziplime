@@ -34,8 +34,8 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
     elif frequency == datetime.timedelta(days=90):
         timeframe = 6
     df = pl.from_pandas(limex_client.candles(symbol=symbol,
-                                             from_date=date_from.strftime("%Y-%m-%d"),
-                                             to_date=date_to.strftime("%Y-%m-%d"),
+                                             from_date=(date_from - datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
+                                             to_date=(date_to + datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
                                              timeframe=timeframe), include_index=True,
                         schema_overrides={"o": pl.Decimal(scale=8), "h": pl.Decimal(scale=8), "l": pl.Decimal(scale=8), "c": pl.Decimal(scale=8),
                                           "v": pl.Decimal(scale=8)}

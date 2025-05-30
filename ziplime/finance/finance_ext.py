@@ -6,10 +6,11 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
+import structlog
 
 from ziplime.assets.entities.futures_contract import FuturesContract
 
-
+logger = structlog.get_logger(__name__)
 def update_position_last_sale_prices(positions, get_price: Callable, dt: datetime.datetime):
     """Update the positions' last sale prices.
 
@@ -29,7 +30,9 @@ def update_position_last_sale_prices(positions, get_price: Callable, dt: datetim
         last_sale_price = get_price(inner_position.asset)["close"][0]
 
         # inline ~isnan because this gets called once per position per minute
-        if last_sale_price == last_sale_price:
+        if last_sale_price is None:
+            logger.warning(f"Error updating last sale price for {inner_position.asset.asset_name} on {dt}. Price is None")
+        else: #last_sale_price == last_sale_price:
             inner_position.last_sale_price = last_sale_price
             inner_position.last_sale_date = dt
 

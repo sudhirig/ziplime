@@ -1,5 +1,8 @@
 # Release Notes
 
+### Version v1.6.2
+- Remove uvloop to improve compatibility with Windows OS
+
 ### Version v1.5.30
 - Add additional ETF/stock symbols
 - Log warning if the price is missing when updating the last sale price in positions dict

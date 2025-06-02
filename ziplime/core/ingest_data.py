@@ -2,7 +2,7 @@ import datetime
 import os
 from pathlib import Path
 
-import uvloop
+import asyncio
 from exchange_calendars import get_calendar, ExchangeCalendar
 
 from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
@@ -117,5 +117,5 @@ def ingest_data(start_date: datetime.datetime, end_date: datetime.datetime,
                 bundle_name: str,
                 data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
     calendar = get_calendar(trading_calendar)
-    uvloop.run(_ingest_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
+    asyncio.run(_ingest_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
                             trading_calendar=calendar, symbols=symbols))

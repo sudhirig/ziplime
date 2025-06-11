@@ -1,3 +1,5 @@
+import dataclasses
+import datetime
 from textwrap import dedent
 
 
@@ -828,3 +830,10 @@ class NoDataOnDate(Exception):
 
 class NotAssetConvertible(ValueError):
     pass
+
+
+@dataclasses.dataclass
+class BarSimulationError:
+    message: str
+    trace: str
+    simulation_dt: datetime.datetime

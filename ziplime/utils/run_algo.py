@@ -38,6 +38,7 @@ async def run_algorithm(
         metrics_set: str,
         custom_loader,
         clock: TradingClock,
+        stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
 ):
@@ -97,10 +98,11 @@ async def run_algorithm(
         #        benchmark_source=None,
         algorithm=algorithm,
         clock=clock,
+        stop_on_error=stop_on_error
     )
 
     start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
-    perf = await tr.run()
+    perf, errors = await tr.run()
     end_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
-    logger.info(f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds.")
-    return perf
+    logger.info(f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds. Errors: {len(errors)}")
+    return perf, errors

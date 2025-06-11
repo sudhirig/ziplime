@@ -3,7 +3,6 @@ import datetime
 from decimal import Decimal
 from pathlib import Path
 
-# import uvloop
 from exchange_calendars import get_calendar
 
 from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES

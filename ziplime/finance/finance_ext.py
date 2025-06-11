@@ -209,8 +209,11 @@ def calculate_position_tracker_stats(positions, stats):
         # we call this function every time the portfolio value is needed,
         # which is at least once per simulation day, so let's not iterate
         # through every single position multiple times.
+        # try:
         exposure = position.amount * position.last_sale_price
-
+        # except Exception as e:
+        #     print("exception multiplying a")
+        #     raise
         if type(position.asset) is FuturesContract:
             # Futures don't have an inherent position value.
             value = 0

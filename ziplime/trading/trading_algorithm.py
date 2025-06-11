@@ -1,6 +1,7 @@
 import datetime
 import importlib.util
 import sys
+import traceback
 import uuid
 from collections import namedtuple, OrderedDict
 from contextlib import AsyncExitStack
@@ -65,7 +66,7 @@ from ziplime.errors import (
     SetSlippagePostInit,
     UnsupportedCancelPolicy,
     UnsupportedDatetimeFormat,
-    ZeroCapitalError, SymbolNotFound,
+    ZeroCapitalError, SymbolNotFound, BarSimulationError,
 )
 
 from ziplime.finance.execution import ExecutionStyle
@@ -197,9 +198,11 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
+            stop_on_error: bool = False
     ):
         self.algorithm = algorithm
         self.exchanges = exchanges
+        self.stop_on_error = stop_on_error
         self.default_exchange = list(self.exchanges.values())[0]
         self.trading_signal_executor = TradingSignalExecutor()
         # List of trading controls to be used to validate orders.
@@ -396,7 +399,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # Each iteration returns a perf dictionary
         try:
             perfs = []
-            async for perf in await self.get_generator():
+            errors = []
+            async for perf, errors in await self.get_generator():
                 perfs.append(perf)
 
             # convert perf dict to pandas dataframe
@@ -407,7 +411,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             self.data_portal = None
             self.metrics_tracker = None
 
-        return daily_stats
+        return daily_stats, errors
 
     def _create_daily_stats(self, perfs):
         # create daily and cumulative stats dataframe
@@ -1278,9 +1282,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name
         )
 
-    def _calculate_order_percent_amount(self, asset: Asset, percent: Decimal, exchange_name:str):
+    def _calculate_order_percent_amount(self, asset: Asset, percent: Decimal, exchange_name: str):
         value = self.portfolio.portfolio_value * percent
-        return self._calculate_order_value_amount(asset=asset, value=value,exchange_name=exchange_name)
+        return self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
@@ -2085,47 +2089,57 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             #
             #     def calculate_minute_capital_changes(dt: datetime.datetime):
             #         return []
-
+            errors = []
             for dt, action in self.clock:
-                if action == SimulationEvent.BAR:
-                    async for capital_change_packet in self.every_bar(dt_to_use=dt, current_data=self.current_data,
-                                                                      handle_data=self.event_manager.handle_data):
-                        yield capital_change_packet
-                elif action == SimulationEvent.SESSION_START:
-                    for capital_change_packet in self.once_a_day(midnight_dt=dt,
-                                                                 current_data=self.current_data,
-                                                                 asset_service=self.asset_service):
-                        yield capital_change_packet
-                elif action == SimulationEvent.SESSION_END:
-                    # End of the session.
-                    positions = self._ledger.position_tracker.positions
-                    position_assets = list(positions.keys())
+                try:
+                    if action == SimulationEvent.BAR:
+                        async for capital_change_packet in self.every_bar(dt_to_use=dt, current_data=self.current_data,
+                                                                          handle_data=self.event_manager.handle_data):
+                            yield capital_change_packet, []
+                    elif action == SimulationEvent.SESSION_START:
+                        for capital_change_packet in self.once_a_day(midnight_dt=dt,
+                                                                     current_data=self.current_data,
+                                                                     asset_service=self.asset_service):
+                            yield capital_change_packet, []
+                    elif action == SimulationEvent.SESSION_END:
+                        # End of the session.
+                        positions = self._ledger.position_tracker.positions
+                        position_assets = list(positions.keys())
 
-                    # await self.asset_service.retrieve_all(
-                    #     sids=[a.sid for a in positions]
-                    # )
+                        # await self.asset_service.retrieve_all(
+                        #     sids=[a.sid for a in positions]
+                        # )
 
-                    self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
+                        self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
 
-                    self.execute_order_cancellation_policy()
-                    self.validate_account_controls()
+                        self.execute_order_cancellation_policy()
+                        self.validate_account_controls()
 
-                    yield self._get_daily_message(dt=dt)
-                elif action == SimulationEvent.BEFORE_TRADING_START_BAR:
-                    self.simulation_dt = dt
-                    # self.datetime = dt
-                    # self.on_dt_changed(dt=dt)
-                    self.before_trading_start(data=self.current_data)
-                elif action == SimulationEvent.EMISSION_RATE_END and self.clock.emission_rate == datetime.timedelta(
-                        minutes=1):
-                    minute_msg = self._get_minute_message(
-                        dt=dt,
+                        yield self._get_daily_message(dt=dt), []
+                    elif action == SimulationEvent.BEFORE_TRADING_START_BAR:
+                        self.simulation_dt = dt
+                        # self.datetime = dt
+                        # self.on_dt_changed(dt=dt)
+                        self.before_trading_start(data=self.current_data)
+                    elif action == SimulationEvent.EMISSION_RATE_END and self.clock.emission_rate == datetime.timedelta(
+                            minutes=1):
+                        minute_msg = self._get_minute_message(
+                            dt=dt,
+                        )
+
+                        yield minute_msg, []
+                except Exception as e:
+                    errors.append(
+                        BarSimulationError(
+                            trace=traceback.format_exc(),
+                            message=f"Exception raised during simulation dt={dt}: {e}",
+                            simulation_dt=dt
+                        )
                     )
-
-                    yield minute_msg
-
+                    if self.stop_on_error:
+                        raise
             risk_message = self.metrics_tracker.handle_simulation_end()
-            yield risk_message
+            yield risk_message, errors
 
     def _cleanup_expired_assets(self, dt: datetime.datetime, position_assets):
         """

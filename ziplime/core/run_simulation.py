@@ -34,6 +34,7 @@ async def _run_simulation(
         cash_balance: Decimal,
         bundle_name: str,
         algorithm_file: str,
+        stop_on_error: bool,
         exchange: Exchange = None,
         config_file: str | None = None,
         benchmark_asset_symbol: str | None = None,
@@ -89,7 +90,6 @@ async def _run_simulation(
     adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
     asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
 
-
     return await run_algorithm(
         algorithm=algo,
         asset_service=asset_service,
@@ -101,6 +101,7 @@ async def _run_simulation(
         clock=clock,
         benchmark_returns=benchmark_returns,
         benchmark_asset_symbol=benchmark_asset_symbol,
+        stop_on_error=stop_on_error
     )
 
 
@@ -111,10 +112,12 @@ def run_simulation(start_date: datetime.datetime,
                    algorithm_file: str,
                    total_cash: Decimal,
                    bundle_name: str,
+                   stop_on_error: bool,
                    config_file: str | None = None,
                    exchange: Exchange | None = None,
                    benchmark_asset_symbol: str | None = None,
                    benchmark_returns: pl.Series | None = None,
+
                    ):
     return asyncio.run(_run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
                                        cash_balance=total_cash,
@@ -123,4 +126,5 @@ def run_simulation(start_date: datetime.datetime,
                                        emission_rate=emission_rate,
                                        benchmark_asset_symbol=benchmark_asset_symbol,
                                        benchmark_returns=benchmark_returns,
+                                       stop_on_error=stop_on_error
                                        ))

@@ -2136,6 +2136,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                             simulation_dt=dt
                         )
                     )
+                    self._logger.error(f"Simulation error on dt={dt}")
                     if self.stop_on_error:
                         raise
             risk_message = self.metrics_tracker.handle_simulation_end()

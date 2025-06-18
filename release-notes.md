@@ -1,5 +1,8 @@
 # Release Notes
 
+### Version v1.6.11
+- Add an option to continue running algorith on error - stop_on_error
+
 ### Version v1.6.2
 - Remove uvloop to improve compatibility with Windows OS
 

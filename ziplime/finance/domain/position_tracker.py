@@ -15,8 +15,7 @@ from ziplime.finance.domain.position import Position
 from ziplime.finance.domain.transaction import Transaction
 from ziplime.finance.finance_ext import (
     PositionStats,
-    calculate_position_tracker_stats,
-    update_position_last_sale_prices,
+    calculate_position_tracker_stats
 )
 
 
@@ -406,8 +405,19 @@ class PositionTracker:
                 dt=dt,
                 frequency=self.data_frequency
             )
+        for outer_position in self.positions.values():
+            inner_position = outer_position
 
-        update_position_last_sale_prices(positions=self.positions, get_price=get_price, dt=dt)
+            last_sale_price = get_price(inner_position.asset)["close"][0]
+
+            # inline ~isnan because this gets called once per position per minute
+            if last_sale_price is None:
+
+                self._logger.warning(
+                    f"Error updating last sale price for {inner_position.asset.asset_name} on {dt}. Price is None")
+            else:  # last_sale_price == last_sale_price:
+                inner_position.last_sale_price = last_sale_price
+                inner_position.last_sale_date = dt
 
     @property
     def stats(self):

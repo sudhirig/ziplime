@@ -84,17 +84,17 @@ class DataBundle:
         if self.frequency < frequency:
             multiplier = int(frequency / self.frequency)
             total_bar_count = limit * multiplier
-
         cols = list(fields.union({"date", "sid"}))
+        # fill_null_cols = list( set(cols).intersection({"price","close", "open", "high", "low"}))
         if include_end_date:
             df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
                 pl.col("date") <= end_date,
                 pl.col("sid").is_in([asset.sid for asset in assets])
-            ).group_by(pl.col("sid")).tail(total_bar_count).sort(by="date")
+            ).fill_null(strategy="forward").group_by(pl.col("sid")).tail(total_bar_count).sort(by="date")
         else:
             df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
                 pl.col("date") < end_date,
-                pl.col("sid").is_in([asset.sid for asset in assets])).group_by(pl.col("sid")).tail(
+                pl.col("sid").is_in([asset.sid for asset in assets])).fill_null(strategy="forward").group_by(pl.col("sid")).tail(
                 total_bar_count).sort(by="date")
         if self.frequency < frequency:
             df = df_raw.group_by_dynamic(

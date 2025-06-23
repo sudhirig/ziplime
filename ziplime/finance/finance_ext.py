@@ -11,30 +11,6 @@ import structlog
 from ziplime.assets.entities.futures_contract import FuturesContract
 
 logger = structlog.get_logger(__name__)
-def update_position_last_sale_prices(positions, get_price: Callable, dt: datetime.datetime):
-    """Update the positions' last sale prices.
-
-    Parameters
-    ----------
-    positions : OrderedDict
-        The positions to update.
-    get_price : callable[Asset, Decimal]
-        The function to retrieve the price for the asset.
-    dt : datetime.datetime
-        The dt to set as the last sale date if the price is not nan.
-    """
-
-    for outer_position in positions.values():
-        inner_position = outer_position
-
-        last_sale_price = get_price(inner_position.asset)["close"][0]
-
-        # inline ~isnan because this gets called once per position per minute
-        if last_sale_price is None:
-            logger.warning(f"Error updating last sale price for {inner_position.asset.asset_name} on {dt}. Price is None")
-        else: #last_sale_price == last_sale_price:
-            inner_position.last_sale_price = last_sale_price
-            inner_position.last_sale_date = dt
 
 
 class PositionStats:

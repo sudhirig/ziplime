@@ -189,6 +189,7 @@ async def ingest(ctx, bundle, start_date, end_date, frequency, symbols, fundamen
         trading_calendar=calendar,
         assets_repository=assets_repository,
         adjustments_repository=adjustments_repository,
+        forward_fill_missing_ohlcv_data=True
     )
 
 

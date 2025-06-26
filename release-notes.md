@@ -1,5 +1,9 @@
 # Release Notes
 
+### Version 1.6.26
+- Add the forward_fill_missing_ohlcv_data parameter to the BundleService ingest_data function
+
+
 ### Version v1.6.2
 - Remove uvloop to improve compatibility with Windows OS
 

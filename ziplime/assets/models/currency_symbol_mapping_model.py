@@ -14,4 +14,4 @@ class CurrencySymbolMappingModel(BaseModel):
     symbol: Mapped[str]
     start_date: Mapped[datetime.date]
     end_date: Mapped[datetime.date]
-    exchange: Mapped[ExchangeFK]
+    exchange: Mapped[ExchangeFK | None]

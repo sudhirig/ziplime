@@ -77,6 +77,7 @@ class LimexHubDataSource(DataBundleSource):
                        frequency: datetime.timedelta,
                        date_from: datetime.datetime,
                        date_to: datetime.datetime,
+                       **kwargs
                        ) -> pl.DataFrame:
 
         def fetch_historical(limex_api_key: str, symbol: str) -> pl.DataFrame | None:

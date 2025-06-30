@@ -12,6 +12,7 @@ class DataBundleSource:
                        frequency: datetime.timedelta,
                        date_from: datetime.datetime,
                        date_to: datetime.datetime,
+                       **kwargs
                        ) -> pl.DataFrame:
         pass
 

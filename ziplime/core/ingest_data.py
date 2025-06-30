@@ -16,12 +16,23 @@ from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAs
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.constants.stock_symbols import ALL_US_STOCK_SYMBOLS
 from ziplime.data.services.bundle_service import BundleService
+from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
 from ziplime.data.services.file_system_parquet_bundle_storage import FileSystemParquetBundleStorage
-from ziplime.data.services.limex_hub_data_source import LimexHubDataSource
 
 
-async def add_default_assets(asset_service: AssetService):
+def get_asset_service(clear_asset_db: bool = False) -> AssetService:
+    db_path = str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())
+    if clear_asset_db and os.path.exists(db_path):
+        os.remove(db_path)
+    db_url = f"sqlite+aiosqlite:///{db_path}"
+    assets_repository = SqlAlchemyAssetRepository(db_url=db_url, future_chain_predicates=CHAIN_PREDICATES)
+    adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
+    asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
+    return asset_service
+
+
+async def ingest_default_assets(asset_service: AssetService):
     asset_start_date = datetime.datetime(year=1900, month=1, day=1, tzinfo=datetime.timezone.utc)
     asset_end_date = datetime.datetime(year=2099, month=1, day=1, tzinfo=datetime.timezone.utc)
 
@@ -70,34 +81,25 @@ async def add_default_assets(asset_service: AssetService):
     await asset_service.save_equities(equities)
 
 
-async def _ingest_data(
+async def _ingest_market_data(
         start_date: datetime.datetime,
         end_date: datetime.datetime,
         trading_calendar: ExchangeCalendar,
         bundle_name: str,
         symbols: list[str],
         frequency: datetime.timedelta,
+        data_bundle_source: DataBundleSource,
+        asset_service: AssetService,
         forward_fill_missing_ohlcv_data: bool = True,
         bundle_storage_path: str = str(Path(Path.home(), ".ziplime", "data")),
 ):
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
     bundle_service = BundleService(bundle_registry=bundle_registry)
     bundle_storage = FileSystemParquetBundleStorage(base_data_path=bundle_storage_path, compression_level=5)
-    data_bundle_source = LimexHubDataSource.from_env()
 
     bundle_version = str(int(datetime.datetime.now(tz=trading_calendar.tz).timestamp()))
 
-    db_path = str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())
-    if os.path.exists(db_path):
-        os.remove(db_path)
-    db_url = f"sqlite+aiosqlite:///{db_path}"
-    assets_repository = SqlAlchemyAssetRepository(db_url=db_url, future_chain_predicates=CHAIN_PREDICATES)
-    adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
-    asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
-
-    await add_default_assets(asset_service=asset_service)
-
-    await bundle_service.ingest_bundle(
+    await bundle_service.ingest_market_data_bundle(
         date_start=start_date.replace(tzinfo=trading_calendar.tz),
         date_end=end_date.replace(tzinfo=trading_calendar.tz),
         bundle_storage=bundle_storage,
@@ -112,12 +114,59 @@ async def _ingest_data(
     )
 
 
-def ingest_data(start_date: datetime.datetime, end_date: datetime.datetime,
-                symbols: list[str],
-                trading_calendar: str,
-                bundle_name: str,
-                data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
+async def _ingest_custom_data(
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
+        trading_calendar: ExchangeCalendar,
+        bundle_name: str,
+        symbols: list[str],
+        frequency: datetime.timedelta,
+        data_bundle_source: DataBundleSource,
+        asset_service: AssetService,
+        bundle_storage_path: str = str(Path(Path.home(), ".ziplime", "data")),
+):
+    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
+    bundle_service = BundleService(bundle_registry=bundle_registry)
+    bundle_storage = FileSystemParquetBundleStorage(base_data_path=bundle_storage_path, compression_level=5)
+    bundle_version = str(int(datetime.datetime.now(tz=trading_calendar.tz).timestamp()))
+
+    await bundle_service.ingest_custom_data_bundle(
+        date_start=start_date.replace(tzinfo=trading_calendar.tz),
+        date_end=end_date.replace(tzinfo=trading_calendar.tz),
+        bundle_storage=bundle_storage,
+        data_bundle_source=data_bundle_source,
+        frequency=frequency,
+        symbols=symbols,
+        name=bundle_name,
+        bundle_version=bundle_version,
+        trading_calendar=trading_calendar,
+        asset_service=asset_service,
+    )
+
+
+def ingest_market_data(start_date: datetime.datetime, end_date: datetime.datetime,
+                       symbols: list[str],
+                       trading_calendar: str,
+                       bundle_name: str,
+                       data_bundle_source: DataBundleSource,
+                       asset_service: AssetService,
+                       data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
     calendar = get_calendar(trading_calendar)
     asyncio.run(
-        _ingest_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
-                     trading_calendar=calendar, symbols=symbols))
+        _ingest_market_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
+                            trading_calendar=calendar, symbols=symbols, data_bundle_source=data_bundle_source,
+                            asset_service=asset_service))
+
+
+def ingest_custom_data(start_date: datetime.datetime, end_date: datetime.datetime,
+                       symbols: list[str],
+                       trading_calendar: str,
+                       bundle_name: str,
+                       data_bundle_source: DataBundleSource,
+                       asset_service: AssetService,
+                       data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
+    calendar = get_calendar(trading_calendar)
+    asyncio.run(
+        _ingest_custom_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
+                            trading_calendar=calendar, symbols=symbols, data_bundle_source=data_bundle_source,
+                            asset_service=asset_service))

@@ -12,8 +12,8 @@ class EquitySymbolMappingModel(BaseModel):
     id: Mapped[IntegerPK]
     sid: Mapped[EquityFK]
     symbol: Mapped[str]
-    company_symbol: Mapped[StringIndexed] # The company identifier
+    company_symbol: Mapped[StringIndexed]  # The company identifier
     share_class_symbol: Mapped[str]
     start_date: Mapped[datetime.date]
     end_date: Mapped[datetime.date]
-    exchange: Mapped[ExchangeFK]
+    exchange: Mapped[ExchangeFK | None]

@@ -34,7 +34,8 @@ class SimulationExchange(Exchange):
                  future_slippage: SlippageModel,
                  equity_commission: EquityCommissionModel,
                  future_commission: FutureCommissionModel,
-                 data_bundle: DataBundle = None
+                 data_bundle: DataBundle = None,
+                 extra_data_sources: list = None
                  ):
         super().__init__(name=name,
                          canonical_name=name,
@@ -219,6 +220,24 @@ class SimulationExchange(Exchange):
             include_end_date=True,
         )
         # return df_raw
+
+    @lru_cache(maxsize=100)
+    def get_data_by_period(self,
+                           fields: frozenset[str],
+                          start_date: datetime.datetime,
+                          end_date: datetime.datetime,
+                          frequency: datetime.timedelta,
+                          assets: frozenset[Asset],
+                          include_end_date: bool,
+                          source: str
+                          ) -> pl.DataFrame:
+        return self.data_bundle.get_data_by_limit(fields=fields,
+                                                  limit=limit,
+                                                  end_date=end_date,
+                                                  frequency=frequency,
+                                                  assets=assets,
+                                                  include_end_date=include_end_date,
+                                                  )
 
     @lru_cache(maxsize=100)
     def get_data_by_limit(self, fields: frozenset[str],

@@ -282,6 +282,7 @@ class BarData:
     def history(self, assets: list[Asset], fields: list[str], bar_count: int,
                 frequency: datetime.timedelta = datetime.timedelta(days=1),
                 exchange_name: str | None = None,
+                data_source: str | None = None
                 ) -> pl.DataFrame:
         """Returns a trailing window of length ``bar_count`` with data for
         the given assets, fields, and frequency, adjusted for splits, dividends,

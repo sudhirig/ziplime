@@ -28,9 +28,11 @@ from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.models.asset_router import AssetRouter
 from ziplime.assets.entities.commodity import Commodity
 from ziplime.assets.entities.currency import Currency
+from ziplime.assets.models.commodity_model import CommodityModel
 from ziplime.assets.models.currency_model import CurrencyModel
 from ziplime.assets.models.currency_symbol_mapping_model import CurrencySymbolMappingModel
 from ziplime.assets.models.equity_model import EquityModel
+from ziplime.assets.models.futures_contract_model import FuturesContractModel
 from ziplime.trading.models.trading_pair import TradingPair
 from ziplime.core.db.base_model import BaseModel
 from ziplime.errors import (
@@ -253,18 +255,18 @@ class SqlAlchemyAssetRepository(AssetRepository):
     @cached(cache=Cache.MEMORY)
     async def get_all_assets(self) -> dict[int, Asset]:
         async with self.session_maker() as session:
-            q_equities = select(Equity).options(selectinload(Equity.asset_router)).options(
-                selectinload(Equity.equity_symbol_mappings)
+            q_equities = select(EquityModel).options(selectinload(EquityModel.asset_router)).options(
+                selectinload(EquityModel.equity_symbol_mappings)
             )
             equities = list((await session.execute(q_equities)).scalars().all())
 
-            q_futures_contracts = select(FuturesContract).options(selectinload(FuturesContract.asset_router))
+            q_futures_contracts = select(FuturesContractModel).options(selectinload(FuturesContractModel.asset_router))
             futures_contracts = list((await session.execute(q_futures_contracts)).scalars().all())
 
-            q_currencies = select(Currency).options(selectinload(Currency.asset_router))
+            q_currencies = select(CurrencyModel).options(selectinload(CurrencyModel.asset_router))
             currencies = list((await session.execute(q_currencies)).scalars().all())
 
-            q_commodities = select(Commodity).options(selectinload(Commodity.asset_router))
+            q_commodities = select(CommodityModel).options(selectinload(CommodityModel.asset_router))
             commodities = list((await session.execute(q_commodities)).scalars().all())
 
             res = {
@@ -292,6 +294,10 @@ class SqlAlchemyAssetRepository(AssetRepository):
         assets_by_sid = await self.get_all_assets()
         return assets_by_sid.get(sid, None)
 
+    async def get_assets_by_sids(self, sids: list[int]) -> list[Asset]:
+        assets_by_sid = await self.get_all_assets()
+        return [assets_by_sid.get(sid, None) for sid in sids]
+
         # async with self.session_maker() as session:
         #     q = select(Asset).where(Asset.sid == sid)
         #     asset = await session.execute(q).scalar_one_or_none()
@@ -303,7 +309,6 @@ class SqlAlchemyAssetRepository(AssetRepository):
         if currencies:
             return currencies[0]
         return None
-
 
     async def get_currencies_by_symbols(self, symbols: list[str], exchange_name: str) -> list[Currency]:
         async with self.session_maker() as session:
@@ -342,10 +347,42 @@ class SqlAlchemyAssetRepository(AssetRepository):
     async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContract | None:
         raise NotImplementedError("Not implemented")
 
-    async def get_equities_by_symbols(self, symbols: list[str], exchange_name: str) -> list[Equity]:
+    async def get_equities_by_symbols_and_exchange(self, symbols: list[str], exchange_name: str) -> list[Equity]:
         async with self.session_maker() as session:
             q_equity_symbol_mapping = select(EquitySymbolMappingModel).where(
                 EquitySymbolMappingModel.exchange == exchange_name,
+                EquitySymbolMappingModel.symbol.in_(symbols))
+
+            equity_mappings = (await session.execute(q_equity_symbol_mapping)).scalars()
+
+            q_equities = select(EquityModel).where(
+                EquityModel.sid.in_([equity_mapping.sid for equity_mapping in equity_mappings])).options(
+                selectinload(EquityModel.asset_router)).options(selectinload(EquityModel.equity_symbol_mappings))
+            assets: list[EquityModel] = list((await session.execute(q_equities)).scalars())
+
+            return [Equity(
+                sid=asset.sid,
+                asset_name=asset.asset_name,
+                start_date=asset.start_date,
+                first_traded=asset.first_traded,
+                end_date=asset.end_date,
+                auto_close_date=asset.auto_close_date,
+                symbol_mapping={
+                    equity_mapping.exchange: EquitySymbolMapping(
+                        company_symbol=equity_mapping.company_symbol,
+                        symbol=equity_mapping.symbol,
+                        exchange_name=equity_mapping.exchange,
+                        share_class_symbol=equity_mapping.share_class_symbol,
+                        end_date=equity_mapping.end_date,
+                        start_date=equity_mapping.start_date
+                    )
+                    for equity_mapping in asset.equity_symbol_mappings
+                }
+            ) for asset in assets]
+
+    async def get_equities_by_symbols(self, symbols: list[str]) -> list[Equity]:
+        async with self.session_maker() as session:
+            q_equity_symbol_mapping = select(EquitySymbolMappingModel).where(
                 EquitySymbolMappingModel.symbol.in_(symbols))
 
             equity_mappings = (await session.execute(q_equity_symbol_mapping)).scalars()

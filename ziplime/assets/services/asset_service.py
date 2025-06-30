@@ -40,13 +40,19 @@ class AssetService:
     async def get_asset_by_sid(self, sid: int) -> Asset | None:
         return await self._asset_repository.get_asset_by_sid(sid=sid)
 
+    async def get_assets_by_sids(self, sids: list[int]) -> list[Asset]:
+        return await self._asset_repository.get_assets_by_sids(sids=sids)
+
     async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None:
         return await self._asset_repository.get_equity_by_symbol(symbol=symbol,
                                                                  exchange_name=exchange_name)
 
-    async def get_equities_by_symbols(self, symbols: list[str], exchange_name: str) -> list[Equity]:
-        return await self._asset_repository.get_equities_by_symbols(symbols=symbols,
-                                                                    exchange_name=exchange_name)
+    async def get_equities_by_symbols(self, symbols: list[str]) -> list[Equity]:
+        return await self._asset_repository.get_equities_by_symbols(symbols=symbols)
+
+    async def get_equities_by_symbols_and_exchange(self, symbols: list[str], exchange_name: str) -> list[Equity]:
+        return await self._asset_repository.get_equities_by_symbols_and_exchange(symbols=symbols,
+                                                                                 exchange_name=exchange_name)
 
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType, exchange_name: str) -> Asset | None:
@@ -57,6 +63,7 @@ class AssetService:
     async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContract | None:
         return await self._asset_repository.get_futures_contract_by_symbol(symbol=symbol,
                                                                            exchange_name=exchange_name)
+
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_currency_by_symbol(self, symbol: str, exchange_name: str) -> Currency | None:
         return await self._asset_repository.get_currency_by_symbol(symbol=symbol,
@@ -68,7 +75,7 @@ class AssetService:
 
     def get_stock_dividends(self, sid: int, trading_days: pl.Series) -> list[Dividend]:
         return self._adjustments_repository.get_stock_dividends(sid=sid,
-                                                                      trading_days=trading_days)
+                                                                trading_days=trading_days)
 
     def get_splits(self, assets: frozenset[Asset], dt: datetime.date):
         return self._adjustments_repository.get_splits(assets=assets, dt=dt)

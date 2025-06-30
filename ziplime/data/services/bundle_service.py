@@ -22,21 +22,20 @@ class BundleService:
     async def list_bundles(self) -> list[dict[str, Any]]:
         return await self._bundle_registry.list_bundles()
 
-    async def ingest_bundle(self, name: str,
-                            bundle_version: str,
-                            date_start: datetime.datetime,
-                            date_end: datetime.datetime,
-                            trading_calendar: ExchangeCalendar,
-                            symbols: list[str],
-                            data_bundle_source: DataBundleSource,
-                            frequency: datetime.timedelta,
-                            bundle_storage: BundleStorage,
-                            asset_service: AssetService,
-                            forward_fill_missing_ohlcv_data: bool
-                            ):
+    async def ingest_custom_data_bundle(self, name: str,
+                                        bundle_version: str,
+                                        date_start: datetime.datetime,
+                                        date_end: datetime.datetime,
+                                        trading_calendar: ExchangeCalendar,
+                                        symbols: list[str],
+                                        data_bundle_source: DataBundleSource,
+                                        frequency: datetime.timedelta,
+                                        bundle_storage: BundleStorage,
+                                        asset_service: AssetService,
+                                        ):
 
         """Ingest data for a given bundle.        """
-        self._logger.info(f"Ingesting bundle: name={name}, date_start={date_start}, date_end={date_end}, "
+        self._logger.info(f"Ingesting custom bundle: name={name}, date_start={date_start}, date_end={date_end}, "
                           f"symbols={symbols}, frequency={frequency}")
         if date_start < trading_calendar.first_session.replace(tzinfo=trading_calendar.tz):
             raise ValueError(
@@ -56,31 +55,167 @@ class BundleService:
             date_from=date_start,
             date_to=date_end
         )
+
+        if data.is_empty():
+            self._logger.warning(
+                f"No data for symbols={symbols}, frequency={frequency}, date_start={date_start},"
+                f"date_end={date_end} found. Skipping ingestion."
+            )
+            return
+
+
+
+        # repair data
+        all_bars = [
+            s for s in pl.from_pandas(
+                trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None),
+                                                  end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
+            ) if s >= date_start and s <= date_end
+        ]
+
+        required_sessions = pl.DataFrame({"date": all_bars}).group_by_dynamic(
+            index_column="date", every=frequency
+        ).agg()
+
+        required_columns = [
+            "date"
+        ]
+        missing = [c for c in required_columns if c not in data.columns]
+
+        if missing:
+            raise ValueError(f"Ingested data is missing required columns: {missing}. Cannot ingest bundle.")
+        if "symbol" not in data.columns and "sid" not in data.columns:
+            raise ValueError(f"When ingesting custom bundle you must supply either a symbol or a sid column.")
+
+        sid_id = "sid" in data.columns
+        symbol_id = "symbol" in data.columns
+
+        asset_identifiers = list(data["sid"].unique()) if sid_id else list(data["symbol"].unique())
+
+        if sid_id:
+            data = await self._backfill_symbol_data(data=data, asset_service=asset_service, required_sessions=required_sessions)
+        else:
+            data = await self._backfill_sid_data(data=data, asset_service=asset_service, required_sessions=required_sessions)
+
+        data_bundle = DataBundle(name=name,
+                                 start_date=date_start,
+                                 end_date=date_end,
+                                 trading_calendar=trading_calendar,
+                                 frequency=frequency,
+                                 data=data,
+                                 timestamp=datetime.datetime.now(tz=trading_calendar.tz),
+                                 version=bundle_version
+                                 )
+
+        await self._bundle_registry.register_bundle(data_bundle=data_bundle, bundle_storage=bundle_storage)
+        await bundle_storage.store_bundle(data_bundle=data_bundle)
+
+        self._logger.info(f"Finished ingesting custom bundle_name={name}, bundle_version={bundle_version}")
+
+
+    async def _backfill_sid_data(self, data: pl.DataFrame, asset_service: AssetService, required_sessions: pl.Series):
+
+        unique_symbols = list(data["symbol"].unique())
+        symbol_to_sid = {a.get_symbol_by_exchange(exchange_name=None): a.sid for a in
+                         await asset_service.get_equities_by_symbols(unique_symbols)}
+        data = data.with_columns(
+            pl.lit(0).alias("sid"),
+        )
+
+        for symbol in unique_symbols:
+            symbol_data = data.filter(symbol=symbol).with_columns(pl.col("date"))
+            missing_sessions = sorted(set(required_sessions["date"]) - set(symbol_data["date"]))
+
+            if len(missing_sessions) > 0:
+                self._logger.warning(
+                    f"Data for symbol {symbol} is missing on ticks ({len(missing_sessions)}): {[missing_session.isoformat() for missing_session in missing_sessions]}")
+                new_rows_df = pl.DataFrame(
+                    {"date": missing_sessions, "symbol": symbol},
+                    schema_overrides={"date": data.schema["date"]}
+                )
+                # Concatenate with the original DataFrame
+                data = pl.concat([data, new_rows_df], how="diagonal")
+
+            data = data.with_columns(
+                pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")
+            ).sort(["sid", "date"])
+        return data
+
+    async def _backfill_symbol_data(self):
+        pass
+
+    async def ingest_market_data_bundle(self, name: str,
+                                        bundle_version: str,
+                                        date_start: datetime.datetime,
+                                        date_end: datetime.datetime,
+                                        trading_calendar: ExchangeCalendar,
+                                        symbols: list[str],
+                                        data_bundle_source: DataBundleSource,
+                                        frequency: datetime.timedelta,
+                                        bundle_storage: BundleStorage,
+                                        asset_service: AssetService,
+                                        forward_fill_missing_ohlcv_data: bool
+                                        ):
+
+        """Ingest data for a given bundle.        """
+        self._logger.info(f"Ingesting market data bundle: name={name}, date_start={date_start}, date_end={date_end}, "
+                          f"symbols={symbols}, frequency={frequency}")
+        if date_start < trading_calendar.first_session.replace(tzinfo=trading_calendar.tz):
+            raise ValueError(
+                f"Date start must be after first session of trading calendar. "
+                f"First session is {trading_calendar.first_session.replace(tzinfo=trading_calendar.tz)} "
+                f"and date start is {date_start}")
+
+        if date_end > trading_calendar.last_session.replace(tzinfo=trading_calendar.tz):
+            raise ValueError(
+                f"Date end must be before last session of trading calendar. "
+                f"Last session is {trading_calendar.last_session.replace(tzinfo=trading_calendar.tz)} "
+                f"and date end is {date_end}")
+
+        data = await data_bundle_source.get_data(
+            symbols=symbols,
+            frequency=frequency,
+            date_from=date_start,
+            date_to=date_end
+        )
+
         if data.is_empty():
             self._logger.warning(
                 "No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
             return
+
+        required_columns = [
+            "date", "symbol", "exchange", "exchange_country", "open", "high", "low", "close", "volume"
+        ]
+        missing = [c for c in required_columns if c not in data.columns]
+
+        if missing:
+            raise ValueError(f"Ingested data is missing required columns: {missing}. Cannot ingest bundle.")
+
         data = data.with_columns(
             pl.lit(0).alias("sid"),
             pl.lit(False).alias("backfilled")
         )
         # repair data
-        all_bars = [s for s in pl.from_pandas(
-            trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None),
-                                              end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
-        ) if s >= date_start and s <= date_end]
+        all_bars = [
+            s for s in pl.from_pandas(
+                trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None),
+                                                  end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
+            ) if s >= date_start and s <= date_end
+        ]
         required_sessions = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
             index_column="date", every=frequency
         ).df
 
-        equities_by_exchange = data.select("symbol", "exchange", "exchange_country").group_by("exchange",
-                                                                                              "exchange_country").agg(
-            pl.col("symbol").unique())
+        equities_by_exchange = data.select(
+            "symbol", "exchange", "exchange_country"
+        ).group_by("exchange", "exchange_country").agg(pl.col("symbol").unique())
         for row in equities_by_exchange.iter_rows(named=True):
             exchange_name = row["exchange"]
             exchange_country = row["exchange_country"]
             symbols = row["symbol"]
-            equities = await asset_service.get_equities_by_symbols(symbols=symbols, exchange_name=exchange_name)
+            equities = await asset_service.get_equities_by_symbols_and_exchange(symbols=symbols,
+                                                                                exchange_name=exchange_name)
             symbol_to_sid = {e.get_symbol_by_exchange(exchange_name=exchange_name): e.sid for e in equities}
 
             for symbol in symbols:
@@ -89,14 +224,6 @@ class BundleService:
                 if len(missing_sessions) > 0:
                     self._logger.warning(
                         f"Data for symbol {symbol} is missing on ticks ({len(missing_sessions)}): {[missing_session.isoformat() for missing_session in missing_sessions]}")
-                    # new_rows = {"date": None for col in data.columns}
-                    # for missing_session in missing_sessions:
-                    #     # Create a dictionary with None for all columns
-                    #     new_rows = {col: None for col in data.columns}
-                    #     # Set the specified column to the desired value
-                    #     new_rows[column_name] = value
-
-                    # Create a DataFrame with just this one row
                     new_rows_df = pl.DataFrame({"date": missing_sessions, "symbol": symbol, "exchange": exchange_name,
                                                 "exchange_country": exchange_country},
                                                schema_overrides={"date": data.schema["date"]})
@@ -112,78 +239,6 @@ class BundleService:
             data = data.with_columns(pl.col("high", "low", "open").fill_null(pl.col("price")))
             data = data.with_columns(pl.col("volume").fill_null(pl.lit(0.0)))
 
-        # equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
-        #                                                    pl.min("date").alias("min_date"))
-        #
-        # exchanges = [
-        #     ExchangeInfo(exchange=exchange["exchange"],
-        #              canonical_name=exchange["exchange"],
-        #              country_code="US")  # TODO: make dynamic
-        #     for exchange in equities.select(pl.col("exchange")).unique().iter_rows(named=True)
-        # ]
-        # assets_db = []
-        # equity_symbol_mappings = []
-        # currency_asset_router = AssetRouter(sid=1, asset_type="currency")
-        # asset_routers_db = [currency_asset_router]
-        # trading_pairs = []
-        #
-        # currencies_db = [
-        #     CurrencyModel(sid=currency_asset_router.sid,
-        #              start_date=datetime.date.today().replace(year=1900),
-        #              first_traded=datetime.date.today().replace(year=1900),
-        #              end_date=datetime.date.today().replace(year=2099),
-        #              asset_name="Currency USD",
-        #              symbol="USD",
-        #              auto_close_date=datetime.date.today().replace(year=2099), )
-        # ]
-        # sid_counter = 2
-        #
-        # for idx, asset in enumerate(equities.iter_rows(named=True)):
-        #     # asset_router = AssetRouter(
-        #     #     sid=sid_counter,
-        #     #     asset_type=AssetType.EQUITY.value
-        #     # )
-        #     # asset_routers_db.append(asset_router)
-        #     asset_db = Equity(
-        #         sid=asset_router.sid,
-        #         start_date=asset["min_date"].date().replace(year=1900),
-        #         first_traded=asset["min_date"].date(),
-        #         end_date=asset["max_date"].date().replace(year=2099),
-        #         asset_name=asset["symbol"],
-        #         auto_close_date=asset["max_date"].date().replace(year=2099),
-        #         symbol_mapping={"LIME": asset["symbol"]}
-        #     )
-        #     assets_db.append(asset_db)
-        #     equity_symbol_mapping = EquitySymbolMappingModel(
-        #         sid=asset_db.sid,
-        #         company_symbol=asset["symbol"],
-        #         symbol=asset["symbol"],
-        #         share_class_symbol="",
-        #         start_date=asset_db.start_date.replace(year=1900),
-        #         end_date=asset_db.end_date.replace(year=2099),
-        #         exchange=asset["exchange"],
-        #     )
-        #     equity_symbol_mappings.append(equity_symbol_mapping)
-        #
-        #     # trading_pair = TradingPairModel(
-        #     #     id=uuid.uuid4(),
-        #     #     base_asset_sid=asset_router.sid,
-        #     #     quote_asset_sid=asset_db.sid,
-        #     #     exchange=asset["exchange"],
-        #     # )
-        #     # trading_pairs.append(trading_pair)
-        #
-        #     data = data.with_columns(
-        #         sid=pl.when(pl.col("symbol") == asset["symbol"]).then(sid_counter).otherwise(data["sid"]))
-        #     sid_counter += 1
-        #
-        # await assets_repository.save_exchanges(exchanges=exchanges)
-        # await assets_repository.save_asset_routers(asset_routers=asset_routers_db)
-        # await assets_repository.save_currencies(currencies=currencies)
-        # await assets_repository.save_equities(equities=assets_db)
-        # await assets_repository.save_trading_pairs(trading_pairs=trading_pairs)
-        # await assets_repository.save_equity_symbol_mappings(equity_symbol_mappings=equity_symbol_mappings)
-        #
         data_bundle = DataBundle(name=name,
                                  start_date=date_start,
                                  end_date=date_end,
@@ -196,7 +251,7 @@ class BundleService:
         await self._bundle_registry.register_bundle(data_bundle=data_bundle, bundle_storage=bundle_storage)
         await bundle_storage.store_bundle(data_bundle=data_bundle)
 
-        self._logger.info(f"Finished ingesting bundle_name={name}, bundle_version={bundle_version}")
+        self._logger.info(f"Finished ingesting market data bundle_name={name}, bundle_version={bundle_version}")
 
     async def load_bundle(self, bundle_name: str, bundle_version: str | None) -> DataBundle:
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,

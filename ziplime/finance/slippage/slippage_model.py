@@ -3,6 +3,7 @@ import math
 from abc import abstractmethod
 from decimal import Decimal
 
+import structlog
 from pandas import isnull
 
 from ziplime.assets.entities.asset import Asset
@@ -59,6 +60,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
 
     def __init__(self):
         self._volume_for_bar = 0
+        self._logger = structlog.get_logger(__name__)
 
     @property
     def volume_for_bar(self):
@@ -106,19 +108,26 @@ class SlippageModel(metaclass=FinancialModelMeta):
     def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime):
         self._volume_for_bar = 0
         current_val = exchange.current(assets=assets, fields=frozenset({"close", "volume"}), dt=current_dt)
-        volume = current_val["volume"][0]
+
+        volume_s = current_val["volume"]
+        close_price_s = current_val["close"]
+        if len(volume_s) == 0:
+            self._logger.warning(f"No volume for {current_dt}, assets={[a.asset_name for a in assets]}")
+            # volume is 0, since there is no volume our order couldn't have been executed
+            return
+        volume = volume_s[0]
 
         if volume == 0:
             return
 
         # can use the close price, since we verified there's volume in this
         # bar.
-        price = current_val["close"][0]
+        price = close_price_s[0]
 
         # BEGIN
         #
         # Remove this block after fixing data to ensure volume always has
-        # corresponding price.
+        # a corresponding price.
         if isnull(price):
             return
         # END

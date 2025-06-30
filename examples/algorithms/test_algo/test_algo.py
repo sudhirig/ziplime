@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import numpy as np
 import talib
-import polars as pl
+
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.execution import MarketOrder
 from ziplime.trading.trading_algorithm import TradingAlgorithm
@@ -20,3 +20,9 @@ async def handle_data(context, data):
     df_aapl = data.history(assets=[asset], fields=["close"], bar_count=10,
                            frequency=datetime.timedelta(minutes=1)
                            )
+    df_aapl = data.history(assets=[asset], fields=["close"], bar_count=10,
+                          frequency=datetime.timedelta(minutes=1),
+                          source="limex_hub_fundamental"
+                          )
+
+

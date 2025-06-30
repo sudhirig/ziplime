@@ -32,7 +32,8 @@ async def _run_simulation(
         trading_calendar: str,
         emission_rate: datetime.timedelta,
         cash_balance: Decimal,
-        bundle_name: str,
+        market_data_bundle_name: str,
+        custom_data_bundles:str,
         algorithm_file: str,
         stop_on_error: bool,
         exchange: Exchange = None,
@@ -47,12 +48,15 @@ async def _run_simulation(
     #     benchmark_file=benchmark_file,
     #     no_benchmark=no_benchmark,
     # )
-    calendar = get_calendar(trading_calendar)
-
     bundle_storage_path = str(Path(Path.home(), ".ziplime", "data"))
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
     bundle_service = BundleService(bundle_registry=bundle_registry)
-    data_bundle = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
+    market_data_bundle = await bundle_service.load_bundle(bundle_name=market_data_bundle_name, bundle_version=None)
+
+    custom_data_bundles = [await bundle_service.load_bundle(bundle_name=bundle, bundle_version=None) for bundle in custom_data_bundles]
+
+    calendar = get_calendar(trading_calendar)
+
     algo = AlgorithmFile(algorithm_file=algorithm_file, algorithm_config_file=config_file)
 
     clock = SimulationClock(
@@ -66,7 +70,7 @@ async def _run_simulation(
             name="LIME",
             country_code="US",
             trading_calendar=calendar,
-            data_bundle=data_bundle,
+            data_bundle=market_data_bundle,
             equity_slippage=FixedBasisPointsSlippage(),
             equity_commission=PerShare(
                 cost=DEFAULT_PER_SHARE_COST,
@@ -101,7 +105,8 @@ async def _run_simulation(
         clock=clock,
         benchmark_returns=benchmark_returns,
         benchmark_asset_symbol=benchmark_asset_symbol,
-        stop_on_error=stop_on_error
+        stop_on_error=stop_on_error,
+        custom_data_bundles=custom_data_bundles
     )
 
 
@@ -111,7 +116,8 @@ def run_simulation(start_date: datetime.datetime,
                    trading_calendar: str,
                    algorithm_file: str,
                    total_cash: Decimal,
-                   bundle_name: str,
+                   market_data_bundle_name: str,
+                   custom_data_bundles:list[str],
                    stop_on_error: bool,
                    config_file: str | None = None,
                    exchange: Exchange | None = None,
@@ -122,7 +128,9 @@ def run_simulation(start_date: datetime.datetime,
     return asyncio.run(_run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
                                        cash_balance=total_cash,
                                        algorithm_file=algorithm_file,
-                                       config_file=config_file, bundle_name=bundle_name, exchange=exchange,
+                                       config_file=config_file, market_data_bundle_name=market_data_bundle_name,
+                                       custom_data_bundles=custom_data_bundles,
+                                       exchange=exchange,
                                        emission_rate=emission_rate,
                                        benchmark_asset_symbol=benchmark_asset_symbol,
                                        benchmark_returns=benchmark_returns,

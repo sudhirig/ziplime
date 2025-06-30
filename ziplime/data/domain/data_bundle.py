@@ -84,7 +84,6 @@ class DataBundle:
         if self.frequency < frequency:
             multiplier = int(frequency / self.frequency)
             total_bar_count = limit * multiplier
-
         cols = list(fields.union({"date", "sid"}))
         if include_end_date:
             df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(

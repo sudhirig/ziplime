@@ -1,5 +1,8 @@
 # Release Notes
 
+### Version 1.6.26
+- Add the forward_fill_missing_ohlcv_data parameter to the BundleService ingest_data function
+
 ### Version v1.6.11
 - Add an option to continue running algorith on error - stop_on_error
 

@@ -31,7 +31,8 @@ class BundleService:
                             data_bundle_source: DataBundleSource,
                             frequency: datetime.timedelta,
                             bundle_storage: BundleStorage,
-                            asset_service: AssetService
+                            asset_service: AssetService,
+                            forward_fill_missing_ohlcv_data: bool
                             ):
 
         """Ingest data for a given bundle.        """
@@ -65,13 +66,16 @@ class BundleService:
         )
         # repair data
         all_bars = [s for s in pl.from_pandas(
-            trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None), end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
+            trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None),
+                                              end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
         ) if s >= date_start and s <= date_end]
         required_sessions = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
             index_column="date", every=frequency
         ).df
 
-        equities_by_exchange = data.select("symbol", "exchange", "exchange_country").group_by("exchange", "exchange_country").agg(pl.col("symbol").unique())
+        equities_by_exchange = data.select("symbol", "exchange", "exchange_country").group_by("exchange",
+                                                                                              "exchange_country").agg(
+            pl.col("symbol").unique())
         for row in equities_by_exchange.iter_rows(named=True):
             exchange_name = row["exchange"]
             exchange_country = row["exchange_country"]
@@ -103,8 +107,10 @@ class BundleService:
             data = data.with_columns(
                 pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")
             ).sort(["sid", "date"])
-
-
+        if forward_fill_missing_ohlcv_data:
+            data = data.with_columns(pl.col("close", "price").fill_null(strategy="forward"))
+            data = data.with_columns(pl.col("high", "low", "open").fill_null(pl.col("price")))
+            data = data.with_columns(pl.col("volume").fill_null(pl.lit(0.0)))
 
         # equities = data.group_by("symbol", "exchange").agg(pl.max("date").alias("max_date"),
         #                                                    pl.min("date").alias("min_date"))

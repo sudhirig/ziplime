@@ -77,8 +77,8 @@ async def _ingest_data(
         bundle_name: str,
         symbols: list[str],
         frequency: datetime.timedelta,
+        forward_fill_missing_ohlcv_data: bool = True,
         bundle_storage_path: str = str(Path(Path.home(), ".ziplime", "data")),
-
 ):
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
     bundle_service = BundleService(bundle_registry=bundle_registry)
@@ -107,7 +107,8 @@ async def _ingest_data(
         name=bundle_name,
         bundle_version=bundle_version,
         trading_calendar=trading_calendar,
-        asset_service=asset_service
+        asset_service=asset_service,
+        forward_fill_missing_ohlcv_data=forward_fill_missing_ohlcv_data,
     )
 
 
@@ -117,5 +118,6 @@ def ingest_data(start_date: datetime.datetime, end_date: datetime.datetime,
                 bundle_name: str,
                 data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
     calendar = get_calendar(trading_calendar)
-    asyncio.run(_ingest_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
-                            trading_calendar=calendar, symbols=symbols))
+    asyncio.run(
+        _ingest_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
+                     trading_calendar=calendar, symbols=symbols))

@@ -1,6 +1,7 @@
 import asyncio
 import datetime
-from ziplime.core.ingest_data import ingest_market_data, ingest_custom_data, ingest_default_assets, get_asset_service
+
+from ziplime.core.ingest_data import ingest_custom_data, ingest_default_assets, get_asset_service
 from ziplime.data.data_sources.limex_hub_fundamental_data_source import LimexHubFundamentalDataSource
 from ziplime.data.services.limex_hub_data_source import LimexHubDataSource
 
@@ -29,6 +30,7 @@ if __name__ == "__main__":
         trading_calendar="NYSE",
         bundle_name="limex_us_fundamental_data",
         data_bundle_source=data_bundle_source,
-        data_frequency=datetime.timedelta(days=1),
+        data_frequency="1mo",
+        data_frequency_use_window_end=True,
         asset_service=asset_service
     )

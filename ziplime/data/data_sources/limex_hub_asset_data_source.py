@@ -27,7 +27,7 @@ class LimexHubAssetDataSource(AssetDataSource):
             self._maximum_threads = multiprocessing.cpu_count() * 2
 
     async def get_assets(self, symbols: list[str], **kwargs) -> pl.DataFrame:
-        assets = self._limex_client.constituents("SPX")
+        assets = self._limex_client.instruments("SPX")
         return assets
 
     async def get_constituents(self, index: str) -> pl.DataFrame:

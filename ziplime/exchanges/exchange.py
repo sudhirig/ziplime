@@ -6,6 +6,7 @@ from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.entities.asset import Asset
 from ziplime.data.domain.data_bundle import DataBundle
+from ziplime.data.services.data_source import DataSource
 
 from ziplime.domain.position import Position
 from ziplime.domain.portfolio import Portfolio
@@ -16,7 +17,7 @@ from ziplime.finance.domain.order import Order
 from ziplime.gens.domain.trading_clock import TradingClock
 
 
-class Exchange:
+class Exchange(DataSource):
 
     def __init__(self, name: str, canonical_name: str, country_code: str,
                  clock: TradingClock,

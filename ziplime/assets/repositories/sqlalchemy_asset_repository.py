@@ -413,7 +413,7 @@ class SqlAlchemyAssetRepository(AssetRepository):
             ) for asset in assets]
 
     async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None:
-        equities = await self.get_equities_by_symbols(symbols=[symbol], exchange_name=exchange_name)
+        equities = await self.get_equities_by_symbols_and_exchange(symbols=[symbol], exchange_name=exchange_name)
         if equities:
             return equities[0]
         return None

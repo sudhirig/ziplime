@@ -6,6 +6,7 @@ import structlog
 from exchange_calendars import ExchangeCalendar, get_calendar
 
 from ziplime.assets.services.asset_service import AssetService
+from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.bundle_registry import BundleRegistry
@@ -29,7 +30,8 @@ class BundleService:
                                         trading_calendar: ExchangeCalendar,
                                         symbols: list[str],
                                         data_bundle_source: DataBundleSource,
-                                        frequency: datetime.timedelta,
+                                        frequency: datetime.timedelta | Period,
+                                        data_frequency_use_window_end: bool,
                                         bundle_storage: BundleStorage,
                                         asset_service: AssetService,
                                         ):
@@ -63,8 +65,6 @@ class BundleService:
             )
             return
 
-
-
         # repair data
         all_bars = [
             s for s in pl.from_pandas(
@@ -76,7 +76,17 @@ class BundleService:
         required_sessions = pl.DataFrame({"date": all_bars}).group_by_dynamic(
             index_column="date", every=frequency
         ).agg()
+        if data_frequency_use_window_end:
+            if (
+                    (type(frequency) is datetime.timedelta and frequency >=datetime.timedelta(days=1)) or
+                    (type(frequency) is str and frequency in ["1d", "1w", "1mo", "1q", "1y"])
+            ):
+                last_row = required_sessions.tail(1).with_columns(pl.col("date").dt.offset_by(frequency) - pl.duration(days=1))
+                required_sessions = required_sessions.with_columns(
+                    pl.col("date") - pl.duration(days=1)
+                )[1:]
 
+                required_sessions = pl.concat([required_sessions, last_row])
         required_columns = [
             "date"
         ]
@@ -93,9 +103,11 @@ class BundleService:
         asset_identifiers = list(data["sid"].unique()) if sid_id else list(data["symbol"].unique())
 
         if sid_id:
-            data = await self._backfill_symbol_data(data=data, asset_service=asset_service, required_sessions=required_sessions)
+            data = await self._backfill_symbol_data(data=data, asset_service=asset_service,
+                                                    required_sessions=required_sessions)
         else:
-            data = await self._backfill_sid_data(data=data, asset_service=asset_service, required_sessions=required_sessions)
+            data = await self._backfill_sid_data(data=data, asset_service=asset_service,
+                                                 required_sessions=required_sessions)
 
         data_bundle = DataBundle(name=name,
                                  start_date=date_start,
@@ -111,7 +123,6 @@ class BundleService:
         await bundle_storage.store_bundle(data_bundle=data_bundle)
 
         self._logger.info(f"Finished ingesting custom bundle_name={name}, bundle_version={bundle_version}")
-
 
     async def _backfill_sid_data(self, data: pl.DataFrame, asset_service: AssetService, required_sessions: pl.Series):
 
@@ -277,15 +288,15 @@ class BundleService:
         start_date = start_date.replace(tzinfo=trading_calendar.tz)
         end_date = datetime.datetime.strptime(bundle_metadata["end_date"], "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=trading_calendar.tz)
-        frequency = datetime.timedelta(seconds=int(bundle_metadata["frequency_seconds"]))
+        frequency_timedelta = datetime.timedelta(seconds=int(bundle_metadata["frequency_seconds"])) if bundle_metadata["frequency_seconds"] is not None else None
+        frequency_text = bundle_metadata.get("frequency_text", None)
         timestamp = datetime.datetime.strptime(bundle_metadata["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=trading_calendar.tz)
         data_bundle = DataBundle(name=bundle_name,
                                  start_date=start_date,
                                  end_date=end_date,
                                  trading_calendar=trading_calendar,
-                                 frequency=frequency,
-                                 data=None,
+                                 frequency=frequency_timedelta or frequency_text,
                                  timestamp=timestamp,
                                  version=bundle_metadata["version"]
                                  )

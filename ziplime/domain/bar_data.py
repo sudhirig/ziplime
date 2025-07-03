@@ -10,7 +10,9 @@ from contextlib import contextmanager
 import numpy as np
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
+from ziplime.data.services.data_source import DataSource
 from ziplime.exchanges.exchange import Exchange
 
 
@@ -50,7 +52,7 @@ class BarData:
     """
 
     def __init__(self,
-                 exchanges: dict[str, Exchange],
+                 data_sources: dict[str, DataSource],
                  simulation_dt_func: Callable,
                  trading_calendar: ExchangeCalendar,
                  restrictions):
@@ -63,10 +65,10 @@ class BarData:
 
         self._trading_calendar = trading_calendar
         self._is_restricted = restrictions.is_restricted
-        self.exchanges = exchanges
-        first_exchange = exchanges[list(exchanges.keys())[0]]
-        self.default_exchange = first_exchange
-
+        self.data_sources = data_sources
+        self.default_data_source = data_sources[list(data_sources.keys())[0]]
+        # first_exchange = exchanges[list(exchanges.keys())[0]]
+        # self.default_exchange = first_exchange
 
     def _get_current_minute(self):
         """Internal utility method to get the current simulation time.
@@ -95,7 +97,7 @@ class BarData:
         return dt
 
     def current(self, assets: list[Asset], fields: list[str],
-                exchange_name: str | None = None) -> pl.DataFrame:
+                data_source: str | None = None) -> pl.DataFrame:
         """Returns the "current" value of the given fields for the given assets
         at the current simulation time.
 
@@ -158,11 +160,10 @@ class BarData:
         data = {}
         assets = frozenset(assets)
         fields = frozenset(fields)
-        if exchange_name is None:
-            exchange_name = self.default_exchange.name
-
+        if data_source is None:
+            data_source = self.default_data_source.name
         if not self._adjust_minutes:
-            return self.exchanges[exchange_name].current(
+            return self.data_sources[data_source].current(
                 assets=assets,
                 fields=fields,
                 dt=self._get_current_minute(),
@@ -170,7 +171,7 @@ class BarData:
         else:
             for field in fields:
                 series = pd.Series(data={
-                    asset: self.exchanges[exchange_name].get_adjusted_value(
+                    asset: self.data_sources[data_source].get_adjusted_value(
                         asset,
                         field,
                         self._get_current_minute(),
@@ -279,9 +280,8 @@ class BarData:
             )
         )
 
-    def history(self, assets: list[Asset], fields: list[str], bar_count: int,
-                frequency: datetime.timedelta = datetime.timedelta(days=1),
-                exchange_name: str | None = None,
+    def history(self, assets: list[Asset], fields: list[str] | None, bar_count: int,
+                frequency: datetime.timedelta | Period = datetime.timedelta(days=1),
                 data_source: str | None = None
                 ) -> pl.DataFrame:
         """Returns a trailing window of length ``bar_count`` with data for
@@ -340,18 +340,26 @@ class BarData:
         If the current simulation time is not a valid market time, we use the last market close instead.
         """
         assets = frozenset(assets)
-        fields = frozenset(fields)
+        fields = frozenset(fields) if fields else None
 
-        if exchange_name is None:
-            exchange_name = self.default_exchange.name
+        if data_source is None:
+            data_source = self.default_data_source.name
 
-        df = self.exchanges[exchange_name].get_data_by_limit(assets=assets,
-                                                             end_date=self._get_current_minute(),
-                                                             limit=bar_count,
-                                                             frequency=frequency,
-                                                             fields=fields,
-                                                             include_end_date=False
-                                                             )
+        df = self.data_sources[data_source].get_data_by_limit(assets=assets,
+                                                         end_date=self._get_current_minute(),
+                                                         limit=bar_count,
+                                                         frequency=frequency,
+                                                         fields=fields,
+                                                         include_end_date=False
+                                                         )
+
+        # df = self.exchanges[exchange_name].get_data_by_limit(assets=assets,
+        #                                                      end_date=self._get_current_minute(),
+        #                                                      limit=bar_count,
+        #                                                      frequency=frequency,
+        #                                                      fields=fields,
+        #                                                      include_end_date=False
+        #                                                      )
         if self._adjust_minutes:
             adjs = {
                 field: self.exchanges[exchange_name].get_adjustments(

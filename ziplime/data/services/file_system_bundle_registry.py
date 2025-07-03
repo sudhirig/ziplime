@@ -21,6 +21,12 @@ class FileSystemBundleRegistry(BundleRegistry):
         os.makedirs(self._base_data_path, exist_ok=True)
 
     async def get_bundle_metadata(self, data_bundle: DataBundle, bundle_storage: BundleStorage) -> dict[str, Any]:
+        frequency_seconds = None
+        frequency_text = None
+        if type(data_bundle.frequency) is datetime.timedelta:
+            frequency_seconds = data_bundle.frequency.total_seconds()
+        else:
+            frequency_text = data_bundle.frequency
         return {
             "name": data_bundle.name,
             "version": data_bundle.version,
@@ -37,7 +43,8 @@ class FileSystemBundleRegistry(BundleRegistry):
             "start_date": data_bundle.start_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "end_date": data_bundle.end_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "trading_calendar_name": data_bundle.trading_calendar.name,
-            "frequency_seconds": data_bundle.frequency.total_seconds(),
+            "frequency_seconds": frequency_seconds,
+            "frequency_text": frequency_text,
             "timestamp": data_bundle.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
         }
 
@@ -80,4 +87,5 @@ class FileSystemBundleRegistry(BundleRegistry):
 
     async def list_bundles_by_name(self, bundle_name: str) -> list[dict[str, Any]]:
         bundles = await self.list_bundles()
-        return sorted(list(filter(lambda b: b["name"] == bundle_name, bundles)), key=lambda b: b["timestamp"], reverse=True)
+        return sorted(list(filter(lambda b: b["name"] == bundle_name, bundles)), key=lambda b: b["timestamp"],
+                      reverse=True)

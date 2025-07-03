@@ -21,14 +21,14 @@ if __name__ == "__main__":
     #     stop_on_error=False
     # )
     # print(errors)
-    data_bundle_source = CSVDataSource(csv_file_name="/home/user/Downloads/minute-bars(1).csv", column_mapping={
-        "Time": "date",
-        "Open": "open",
-        "High": "high",
-        "Low": "low",
-        "Close": "close",
-        "Volume": "volume"
-    }, date_format="%Y-%m-%d-%H%M%S%%z")
+    # data_bundle_source = CSVDataSource(csv_file_name="/home/user/Downloads/minute-bars(1).csv", column_mapping={
+    #     "Time": "date",
+    #     "Open": "open",
+    #     "High": "high",
+    #     "Low": "low",
+    #     "Close": "close",
+    #     "Volume": "volume"
+    # }, date_format="%Y-%m-%d-%H%M%S%%z")
 
     # daily
     res, errors = run_simulation(
@@ -38,7 +38,7 @@ if __name__ == "__main__":
         algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
         total_cash=Decimal(100000.0),
         market_data_bundle_name="limex_us_polars_minute",
-        custom_bundles=["limex_us_fundamental_data"],
+        custom_data_bundles=["limex_us_fundamental_data"],
         config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),
         emission_rate=datetime.timedelta(days=1),
         benchmark_asset_symbol="VOO",

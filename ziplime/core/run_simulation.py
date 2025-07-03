@@ -33,7 +33,7 @@ async def _run_simulation(
         emission_rate: datetime.timedelta,
         cash_balance: Decimal,
         market_data_bundle_name: str,
-        custom_data_bundles:str,
+        custom_data_bundles: list[str],
         algorithm_file: str,
         stop_on_error: bool,
         exchange: Exchange = None,
@@ -53,7 +53,8 @@ async def _run_simulation(
     bundle_service = BundleService(bundle_registry=bundle_registry)
     market_data_bundle = await bundle_service.load_bundle(bundle_name=market_data_bundle_name, bundle_version=None)
 
-    custom_data_bundles = [await bundle_service.load_bundle(bundle_name=bundle, bundle_version=None) for bundle in custom_data_bundles]
+    custom_data_bundles = [await bundle_service.load_bundle(bundle_name=bundle, bundle_version=None) for bundle in
+                           custom_data_bundles]
 
     calendar = get_calendar(trading_calendar)
 
@@ -106,7 +107,7 @@ async def _run_simulation(
         benchmark_returns=benchmark_returns,
         benchmark_asset_symbol=benchmark_asset_symbol,
         stop_on_error=stop_on_error,
-        custom_data_bundles=custom_data_bundles
+        custom_data_sources=custom_data_bundles
     )
 
 
@@ -117,7 +118,7 @@ def run_simulation(start_date: datetime.datetime,
                    algorithm_file: str,
                    total_cash: Decimal,
                    market_data_bundle_name: str,
-                   custom_data_bundles:list[str],
+                   custom_data_bundles: list[str],
                    stop_on_error: bool,
                    config_file: str | None = None,
                    exchange: Exchange | None = None,

@@ -1,5 +1,4 @@
 import datetime
-from dataclasses import dataclass
 from functools import reduce
 from operator import mul
 from typing import Any
@@ -10,31 +9,38 @@ from exchange_calendars import ExchangeCalendar
 from ziplime.assets.domain.continuous_future import ContinuousFuture
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
+from ziplime.constants.period import Period
+from ziplime.data.services.data_source import DataSource
+from ziplime.utils.date_utils import period_to_timedelta
 
 
-@dataclass
-class DataBundle:
-    name: str
-    version: str
+class DataBundle(DataSource):
 
-    start_date: datetime.date
-    end_date: datetime.date
-    trading_calendar: ExchangeCalendar
-    frequency: datetime.timedelta
-    timestamp: datetime.datetime
-
-    data: pl.DataFrame
+    def __init__(self, name: str, version: str, start_date: datetime.date,
+                 end_date: datetime.date,
+                 trading_calendar: ExchangeCalendar,
+                 frequency: datetime.timedelta | Period,
+                 timestamp: datetime.datetime, data: pl.DataFrame = None):
+        super().__init__(name=name)
+        self.version = version
+        self.start_date = start_date
+        self.end_date = end_date
+        self.trading_calendar = trading_calendar
+        self.frequency = frequency
+        self.frequency_td = period_to_timedelta(self.frequency)
+        self.timestamp = timestamp
+        self.data = data
 
     def get_dataframe(self) -> pl.DataFrame:
         return self.data
 
     def get_data_by_date(self, fields: frozenset[str],
-                               from_date: datetime.datetime,
-                               to_date: datetime.datetime,
-                               frequency: datetime.timedelta,
-                               assets: frozenset[Asset],
-                               include_bounds: bool,
-                               ) -> pl.DataFrame:
+                         from_date: datetime.datetime,
+                         to_date: datetime.datetime,
+                         frequency: datetime.timedelta | Period,
+                         assets: frozenset[Asset],
+                         include_bounds: bool,
+                         ) -> pl.DataFrame:
 
         cols = set(fields.union({"date", "sid"}))
         if include_bounds:
@@ -54,12 +60,12 @@ class DataBundle:
         return df.sort(by="date")
 
     def get_missing_data_by_limit(self, fields: frozenset[str],
-                                        limit: int,
-                                        end_date: datetime.datetime,
-                                        frequency: datetime.timedelta,
-                                        assets: frozenset[Asset],
-                                        include_end_date: bool,
-                                        ) -> pl.DataFrame:
+                                  limit: int,
+                                  end_date: datetime.datetime,
+                                  frequency: datetime.timedelta | Period,
+                                  assets: frozenset[Asset],
+                                  include_end_date: bool,
+                                  ) -> pl.DataFrame:
 
         return self.missing_data_bundle_source.get_data_sync(
             symbols=[asset.get_symbol_by_exchange(None) for asset in assets], frequency=frequency,
@@ -67,24 +73,29 @@ class DataBundle:
             date_to=end_date)
 
     # @lru_cache(maxsize=100)
-    def get_data_by_limit(self, fields: frozenset[str],
-                                limit: int,
-                                end_date: datetime.datetime,
-                                frequency: datetime.timedelta,
-                                assets: frozenset[Asset],
-                                include_end_date: bool,
-                                ) -> pl.DataFrame:
-
+    def get_data_by_limit(self, fields: frozenset[str] | None,
+                          limit: int,
+                          end_date: datetime.datetime,
+                          frequency: datetime.timedelta | Period,
+                          assets: frozenset[Asset],
+                          include_end_date: bool,
+                          ) -> pl.DataFrame:
+        frequency_td = period_to_timedelta(frequency)
         total_bar_count = limit
         if end_date > self.end_date:
             return self.get_missing_data_by_limit(frequency=frequency, assets=assets, fields=fields,
                                                   limit=limit, include_end_date=include_end_date,
                                                   end_date=end_date
                                                   )  # pl.DataFrame() # we have missing data
-        if self.frequency < frequency:
-            multiplier = int(frequency / self.frequency)
+
+        if  self.frequency_td < frequency_td:
+            multiplier = int(frequency_td / self.frequency_td)
             total_bar_count = limit * multiplier
+        df = self.get_dataframe()
+        if fields is None:
+            fields = frozenset(df.columns)
         cols = list(fields.union({"date", "sid"}))
+
         if include_end_date:
             df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
                 pl.col("date") <= end_date,
@@ -95,14 +106,16 @@ class DataBundle:
                 pl.col("date") < end_date,
                 pl.col("sid").is_in([asset.sid for asset in assets])).group_by(pl.col("sid")).tail(
                 total_bar_count).sort(by="date")
-        if self.frequency < frequency:
+
+        if self.frequency_td < frequency_td:
             df = df_raw.group_by_dynamic(
-                index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields).tail(limit)
+                index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields).tail(
+                limit)
             return df
         return df_raw
 
     def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
-                             frequency: datetime.timedelta):
+                       frequency: datetime.timedelta):
         """Public API method that returns a scalar value representing the value
         of the desired asset's field at either the given dt.
 
@@ -173,10 +186,12 @@ class DataBundle:
             is 'last_traded' the value will be a Timestamp.
         """
         if spot_value is None:
-            spot_value = self.get_spot_value(assets=frozenset({asset}), fields=frozenset({field}), dt=dt, data_frequency=data_frequency)
+            spot_value = self.get_spot_value(assets=frozenset({asset}), fields=frozenset({field}), dt=dt,
+                                             data_frequency=data_frequency)
 
         if isinstance(asset, Equity):  # TODO: fix this, not valid way to check if it is equity
-            ratio = self.get_adjustments(assets=frozenset({asset}), field=field, dt=dt, perspective_dt=perspective_dt)[0]
+            ratio = self.get_adjustments(assets=frozenset({asset}), field=field, dt=dt, perspective_dt=perspective_dt)[
+                0]
             spot_value *= ratio
 
         return spot_value
@@ -214,7 +229,6 @@ class DataBundle:
             ] = self.adjustment_repository.get_adjustments_for_sid(table_name, sid)
 
         return adjustments
-
 
     async def get_current_future_chain(self, continuous_future: ContinuousFuture, dt: datetime.datetime):
         """Retrieves the future chain for the contract at the given `dt` according

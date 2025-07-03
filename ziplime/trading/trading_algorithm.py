@@ -22,6 +22,7 @@ from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
+from ziplime.data.services.data_source import DataSource
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.blotter.blotter import Blotter
 from ziplime.finance.controls.long_only import LongOnly
@@ -195,6 +196,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             blotter: Blotter,
             benchmark_source: BenchmarkSource | None,
             clock: TradingClock,
+            custom_data_sources: list[DataSource],
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
@@ -274,9 +276,11 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             ),
             prepend=True,
         )
+        data_sources = {}
 
         # TODO: what if we add funds?
         for exchange in exchanges.values():
+            data_sources[exchange.name]= exchange
             if exchange.get_start_cash_balance() <= 0:
                 raise ZeroCapitalError()
 
@@ -291,12 +295,13 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         self.capital_change_deltas = {}
 
         self.restrictions = NoRestrictions()
-
+        for ds in custom_data_sources:
+            data_sources[ds.name] = ds
         self.current_data = BarData(
-            exchanges=exchanges,
             simulation_dt_func=self.get_datetime,
             trading_calendar=self.clock.trading_calendar,
             restrictions=self.restrictions,
+            data_sources=data_sources
         )
 
         # We don't have a datetime for the current snapshot until we

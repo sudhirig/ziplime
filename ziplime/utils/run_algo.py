@@ -6,6 +6,7 @@ import structlog
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
+from ziplime.data.services.data_source import DataSource
 from ziplime.exchanges.exchange import Exchange
 
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
@@ -38,6 +39,7 @@ async def run_algorithm(
         metrics_set: str,
         custom_loader,
         clock: TradingClock,
+        custom_data_sources: list[DataSource],
         stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
@@ -98,7 +100,8 @@ async def run_algorithm(
         #        benchmark_source=None,
         algorithm=algorithm,
         clock=clock,
-        stop_on_error=stop_on_error
+        stop_on_error=stop_on_error,
+        custom_data_sources=custom_data_sources
     )
 
     start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)

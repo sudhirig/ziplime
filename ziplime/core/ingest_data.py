@@ -14,6 +14,7 @@ from ziplime.assets.models.exchange_info import ExchangeInfo
 from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
 from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
 from ziplime.assets.services.asset_service import AssetService
+from ziplime.constants.period import Period
 from ziplime.constants.stock_symbols import ALL_US_STOCK_SYMBOLS
 from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.data_bundle_source import DataBundleSource
@@ -120,7 +121,8 @@ async def _ingest_custom_data(
         trading_calendar: ExchangeCalendar,
         bundle_name: str,
         symbols: list[str],
-        frequency: datetime.timedelta,
+        frequency: datetime.timedelta | Period,
+        data_frequency_use_window_end: bool,
         data_bundle_source: DataBundleSource,
         asset_service: AssetService,
         bundle_storage_path: str = str(Path(Path.home(), ".ziplime", "data")),
@@ -136,6 +138,7 @@ async def _ingest_custom_data(
         bundle_storage=bundle_storage,
         data_bundle_source=data_bundle_source,
         frequency=frequency,
+        data_frequency_use_window_end=data_frequency_use_window_end,
         symbols=symbols,
         name=bundle_name,
         bundle_version=bundle_version,
@@ -164,9 +167,11 @@ def ingest_custom_data(start_date: datetime.datetime, end_date: datetime.datetim
                        bundle_name: str,
                        data_bundle_source: DataBundleSource,
                        asset_service: AssetService,
-                       data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
+                       data_frequency: datetime.timedelta | Period = datetime.timedelta(minutes=1),
+                       data_frequency_use_window_end: bool = True):
     calendar = get_calendar(trading_calendar)
     asyncio.run(
         _ingest_custom_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
+                            data_frequency_use_window_end=data_frequency_use_window_end,
                             trading_calendar=calendar, symbols=symbols, data_bundle_source=data_bundle_source,
                             asset_service=asset_service))

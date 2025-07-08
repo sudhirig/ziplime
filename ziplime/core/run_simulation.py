@@ -11,6 +11,7 @@ from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAs
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.bundle_service import BundleService
+from ziplime.data.services.data_source import DataSource
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
 from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, \
     PerContract, DEFAULT_PER_CONTRACT_COST, DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
@@ -32,8 +33,8 @@ async def _run_simulation(
         trading_calendar: str,
         emission_rate: datetime.timedelta,
         cash_balance: Decimal,
-        market_data_bundle_name: str,
-        custom_data_bundles: list[str],
+        market_data_source: DataSource,
+        custom_data_sources: list[DataSource],
         algorithm_file: str,
         stop_on_error: bool,
         exchange: Exchange = None,
@@ -48,13 +49,6 @@ async def _run_simulation(
     #     benchmark_file=benchmark_file,
     #     no_benchmark=no_benchmark,
     # )
-    bundle_storage_path = str(Path(Path.home(), ".ziplime", "data"))
-    bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
-    bundle_service = BundleService(bundle_registry=bundle_registry)
-    market_data_bundle = await bundle_service.load_bundle(bundle_name=market_data_bundle_name, bundle_version=None)
-
-    custom_data_bundles = [await bundle_service.load_bundle(bundle_name=bundle, bundle_version=None) for bundle in
-                           custom_data_bundles]
 
     calendar = get_calendar(trading_calendar)
 
@@ -71,7 +65,7 @@ async def _run_simulation(
             name="LIME",
             country_code="US",
             trading_calendar=calendar,
-            data_bundle=market_data_bundle,
+            data_bundle=market_data_source,
             equity_slippage=FixedBasisPointsSlippage(),
             equity_commission=PerShare(
                 cost=DEFAULT_PER_SHARE_COST,
@@ -107,33 +101,33 @@ async def _run_simulation(
         benchmark_returns=benchmark_returns,
         benchmark_asset_symbol=benchmark_asset_symbol,
         stop_on_error=stop_on_error,
-        custom_data_sources=custom_data_bundles
+        custom_data_sources=custom_data_sources,
     )
 
 
-def run_simulation(start_date: datetime.datetime,
+async def run_simulation(start_date: datetime.datetime,
                    end_date: datetime.datetime,
                    emission_rate: datetime.timedelta,
                    trading_calendar: str,
                    algorithm_file: str,
                    total_cash: Decimal,
-                   market_data_bundle_name: str,
-                   custom_data_bundles: list[str],
+                   market_data_source: DataSource,
+                   custom_data_sources: list[DataSource],
                    stop_on_error: bool,
                    config_file: str | None = None,
                    exchange: Exchange | None = None,
                    benchmark_asset_symbol: str | None = None,
                    benchmark_returns: pl.Series | None = None,
-
                    ):
-    return asyncio.run(_run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
+    return await _run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
                                        cash_balance=total_cash,
                                        algorithm_file=algorithm_file,
-                                       config_file=config_file, market_data_bundle_name=market_data_bundle_name,
-                                       custom_data_bundles=custom_data_bundles,
+                                       config_file=config_file,
+                                       market_data_source=market_data_source,
+                                       custom_data_sources=custom_data_sources,
                                        exchange=exchange,
                                        emission_rate=emission_rate,
                                        benchmark_asset_symbol=benchmark_asset_symbol,
                                        benchmark_returns=benchmark_returns,
                                        stop_on_error=stop_on_error
-                                       ))
+                                       )

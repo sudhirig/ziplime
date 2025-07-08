@@ -2,7 +2,7 @@ from typing import Literal
 
 # define a type that can only be one of these three strings
 Period = Literal[
-    "1ns",  # (1 nanosecond)
+    # "1ns",  # (1 nanosecond)
     "1us",  # (1 microsecond)
     "1ms",  # (1 millisecond)
     "1s",  # (1 second)
@@ -13,5 +13,5 @@ Period = Literal[
     "1mo",  # (1 calendar month)
     "1q",  # (1 calendar quarter)
     "1y",  # (1 calendar year)
-    "1i",  # (1 index count)
+    # "1i",  # (1 index count)
 ]

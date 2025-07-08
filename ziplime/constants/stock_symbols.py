@@ -943,7 +943,7 @@ ALL_US_STOCK_SYMBOLS = ["A", "AA", "AACB", "AACBR", "AACBU", "AACG", "AACT", "AA
                         "XXCH", "XXRP", "XYLG", "XYZG", "XYZY", "YALL", "YANG", "YDEC", "YINN", "YLDE", "YMAG", "YMAR",
                         "YOKE", "YOLO", "YPS", "YQQQ", "YSEP", "YSPY", "YUMY", "ZALT", "ZAP", "ZAPR", "ZAUG", "ZDEK",
                         "ZFEB", "ZHDG", "ZIG", "ZIPP", "ZJAN", "ZJUL", "ZJUN", "ZMAR", "ZMAY", "ZNOV", "ZOCT", "ZSEP",
-
+                        "SPX",
                         "BRK.B","BRK.A", "TLT", "GLD", "ES", "NQ"
 
 

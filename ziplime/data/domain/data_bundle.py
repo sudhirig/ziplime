@@ -21,7 +21,10 @@ class DataBundle(DataSource):
                  trading_calendar: ExchangeCalendar,
                  frequency: datetime.timedelta | Period,
                  timestamp: datetime.datetime, data: pl.DataFrame = None):
-        super().__init__(name=name)
+        super().__init__(name=name,
+                         start_date=start_date,
+                         end_date=end_date,
+                         frequency=frequency)
         self.version = version
         self.start_date = start_date
         self.end_date = end_date
@@ -88,7 +91,7 @@ class DataBundle(DataSource):
                                                   end_date=end_date
                                                   )  # pl.DataFrame() # we have missing data
 
-        if  self.frequency_td < frequency_td:
+        if self.frequency_td < frequency_td:
             multiplier = int(frequency_td / self.frequency_td)
             total_bar_count = limit * multiplier
         df = self.get_dataframe()

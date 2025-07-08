@@ -280,8 +280,9 @@ class BarData:
             )
         )
 
-    def history(self, assets: list[Asset], fields: list[str] | None, bar_count: int,
+    def history(self, assets: list[Asset], bar_count: int,
                 frequency: datetime.timedelta | Period = datetime.timedelta(days=1),
+                fields: list[str] | None=None,
                 data_source: str | None = None
                 ) -> pl.DataFrame:
         """Returns a trailing window of length ``bar_count`` with data for

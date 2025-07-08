@@ -97,6 +97,7 @@ class BundleService:
         if "symbol" not in data.columns and "sid" not in data.columns:
             raise ValueError(f"When ingesting custom bundle you must supply either a symbol or a sid column.")
 
+
         sid_id = "sid" in data.columns
         symbol_id = "symbol" in data.columns
 

@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-from decimal import Decimal
 from pathlib import Path
 
 from exchange_calendars import get_calendar
@@ -32,7 +31,7 @@ async def _run_live_trading(
         end_date: datetime.datetime,
         trading_calendar: str,
         emission_rate: datetime.timedelta,
-        cash_balance: Decimal,
+        cash_balance: float,
         bundle_name: str,
         algorithm_file: str,
         exchange: Exchange = None,
@@ -96,7 +95,7 @@ async def _run_live_trading(
 def run_live_trading(
         trading_calendar: str,
         algorithm_file: str,
-        total_cash: Decimal,
+        total_cash: float,
         emission_rate: datetime.timedelta,
         start_date: datetime.datetime | None = None,
         end_date: datetime.datetime | None = None,

@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import logging
 import polars as pl
-from decimal import Decimal
 from functools import partial
 
 from exchange_calendars import ExchangeCalendar
@@ -47,7 +46,7 @@ class LimeTraderSdkExchange(Exchange):
                  country_code: str,
                  trading_calendar: ExchangeCalendar,
                  clock: TradingClock,
-                 cash_balance: Decimal,
+                 cash_balance: float,
                  account_id: str | None = None,
                  lime_sdk_credentials_file: str | None = None,
                  data_bundle: DataBundle | None = None,
@@ -74,11 +73,11 @@ class LimeTraderSdkExchange(Exchange):
                                                                     trading_calendar=trading_calendar)
         self.cash_balance = cash_balance
 
-    def get_start_cash_balance(self) -> Decimal:
+    def get_start_cash_balance(self) -> float:
         # TODO: fix: get real cash
         return self.cash_balance
 
-    def get_current_cash_balance(self) -> Decimal:
+    def get_current_cash_balance(self) -> float:
         # TODO: fix: get real cash
         return self.cash_balance
 
@@ -100,9 +99,9 @@ class LimeTraderSdkExchange(Exchange):
             try:
                 quote = quotes[pos.symbol]
                 z_position = ZpPosition(asset=asset,
-                                        cost_basis=Decimal(pos.average_open_price),
+                                        cost_basis=float(pos.average_open_price),
                                         last_sale_date=quote.date,
-                                        last_sale_price=Decimal(quote.last) if quote.last is not None else None,
+                                        last_sale_price=float(quote.last) if quote.last is not None else None,
                                         amount=int(pos.quantity),
                                         )
                 z_positions[asset] = z_position
@@ -114,23 +113,23 @@ class LimeTraderSdkExchange(Exchange):
 
     def get_portfolio(self) -> ZpPortfolio:
         account = self.get_account_balance(account_number=self._account_id)
-        z_portfolio = ZpPortfolio(portfolio_value=Decimal(account.account_value_total),
+        z_portfolio = ZpPortfolio(portfolio_value=float(account.account_value_total),
                                   positions=self.get_positions(),
-                                  positions_value=Decimal(account.position_market_value),
-                                  cash=Decimal(account.cash),
+                                  positions_value=float(account.position_market_value),
+                                  cash=float(account.cash),
                                   start_date=None,
-                                  returns=Decimal(0.0),
-                                  starting_cash=Decimal(0.0),
-                                  capital_used=Decimal(0.0),
-                                  pnl=Decimal(0.0)
+                                  returns=float(0.0),
+                                  starting_cash=float(0.0),
+                                  capital_used=float(0.0),
+                                  pnl=float(0.0)
                                   )
         return z_portfolio
 
     def get_account(self) -> ZpAccount:
         account = self.get_account_balance(account_number=self._account_id)
         z_account = ZpAccount()
-        z_account.buying_power = Decimal(account.cash)
-        z_account.total_position_value = Decimal(account.position_market_value)
+        z_account.buying_power = float(account.cash)
+        z_account.total_position_value = float(account.position_market_value)
         return z_account
 
     def get_account_balance(self, account_number: str) -> AccountDetails:
@@ -189,7 +188,7 @@ class LimeTraderSdkExchange(Exchange):
             amount=int(order.quantity) if order.order_side == OrderSide.BUY else -int(order.quantity),
             filled=int(order.executed_quantity),
             dt=order.executed_timestamp,
-            commission=Decimal(0.0),
+            commission=0.0,
             execution_style=execution_style,
             status=order_status,
             exchange_order_id=order.order_id,
@@ -267,7 +266,7 @@ class LimeTraderSdkExchange(Exchange):
                 # total_commissions = sum(
                 #     fee.amount for fee in transaction_sdk.fees
                 # )
-                total_commissions = Decimal(0.0)
+                total_commissions = 0.0
 
                 if transaction_sdk.trade_id in self.processed_transaction_ids:
                     continue
@@ -429,7 +428,7 @@ class LimeTraderSdkExchange(Exchange):
         new_order_id = uuid.uuid4().hex
         sdk_order = LimeTraderOrder(
             symbol=symbol,
-            quantity=Decimal(qty),
+            quantity=float(qty),
             side=side,
             order_type=order_type,
             time_in_force=TimeInForce.DAY,

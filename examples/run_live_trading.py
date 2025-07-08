@@ -1,5 +1,4 @@
 import datetime
-from decimal import Decimal
 from pathlib import Path
 
 from ziplime.core.run_live_trading import run_live_trading
@@ -10,7 +9,7 @@ if __name__ == "__main__":
         end_date=None,
         trading_calendar="NYSE",
         algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
-        total_cash=Decimal(100000.0),
+        total_cash=100000.0,
         # bundle_name="limex_us_polars_minute",
         bundle_name=None,
         config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),

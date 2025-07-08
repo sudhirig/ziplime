@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from ziplime.core.entities.enums.task_status import TaskStatus
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.order import Order
@@ -49,7 +47,7 @@ class OrderExecuteTradingSignal(TradingSignal):
             asset=self.order.trading_pair.base_asset,
             amount=self.order.quantity,
             id=self.order.order_id,
-            commission=Decimal(0.00),
+            commission=0.00,
             filled=0,
             execution_style=execution_style,
             status=OrderStatus.OPEN,

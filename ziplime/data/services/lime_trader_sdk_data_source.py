@@ -49,10 +49,10 @@ class LimeTraderSdkDataSource(DataBundleSource):
             cols["exchange"].append(exchange_name)
             cols["exchange_country"].append(exchange_country)
             cols["symbol"].append(result.symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Decimal(scale=8)), ("close", pl.Decimal(scale=8)),
-                                        ("price", pl.Decimal(scale=8)),
-                                        ("high", pl.Decimal(scale=8)), ("low", pl.Decimal(scale=8)),
-                                        ("volume", pl.Decimal(scale=8)),
+        df = pl.DataFrame(cols, schema=[("open", pl.Float64()), ("close", pl.Float64()),
+                                        ("price", pl.Float64()),
+                                        ("high", pl.Float64()), ("low", pl.Float64()),
+                                        ("volume", pl.Float64()),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])
@@ -83,10 +83,10 @@ class LimeTraderSdkDataSource(DataBundleSource):
                 cols["exchange"].append("LIME")
                 cols["exchange_country"].append("US")
                 cols["symbol"].append(symbol)
-        df = pl.DataFrame(cols, schema=[("open", pl.Decimal(scale=8)), ("close", pl.Decimal(scale=8)),
-                                        ("price", pl.Decimal(scale=8)),
-                                        ("high", pl.Decimal(scale=8)), ("low", pl.Decimal(scale=8)),
-                                        ("volume", pl.Decimal(scale=8)),
+        df = pl.DataFrame(cols, schema=[("open", pl.Float64()), ("close", pl.Float64()),
+                                        ("price", pl.Float64()),
+                                        ("high", pl.Float64()), ("low", pl.Float64()),
+                                        ("volume", pl.Float64()),
                                         ("date", pl.Datetime), ("exchange", pl.String),
                                         ("exchange_country", pl.String), ("symbol", pl.String)
                                         ])
@@ -179,10 +179,10 @@ class LimeTraderSdkDataSource(DataBundleSource):
                 cols["exchange"].append(exchange_name)
                 cols["exchange_country"].append(exchange_country)
                 cols["symbol"].append(symbol)
-        df_raw = pl.DataFrame(cols, schema=[("open", pl.Decimal(scale=8)), ("close", pl.Decimal(scale=8)),
-                                            ("price", pl.Decimal(scale=8)),
-                                            ("high", pl.Decimal(scale=8)), ("low", pl.Decimal(scale=8)),
-                                            ("volume", pl.Decimal(scale=8)),
+        df_raw = pl.DataFrame(cols, schema=[("open", pl.Float64()), ("close", pl.Float64()),
+                                            ("price", pl.Float64()),
+                                            ("high", pl.Float64()), ("low", pl.Float64()),
+                                            ("volume", pl.Float64()),
                                             ("date", pl.Datetime), ("exchange", pl.String),
                                             ("exchange_country", pl.String), ("symbol", pl.String)
                                             ])

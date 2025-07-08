@@ -1,14 +1,13 @@
 import functools
 from collections import namedtuple  # noqa: compatibility with python 3.11
 from contextlib import contextmanager, ExitStack
-from decimal import Decimal
 from html import escape as escape_html
 from math import ceil
 from types import MappingProxyType as mappingproxy
 
 
 def consistent_round(val):
-    if (val % 1) >= Decimal(0.5):
+    if (val % 1) >= 0.5:
         return ceil(val)
     else:
         return round(val)

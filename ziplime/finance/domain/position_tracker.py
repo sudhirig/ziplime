@@ -1,6 +1,5 @@
 import datetime
 from collections import OrderedDict
-from decimal import Decimal
 from functools import partial
 from math import isnan, copysign
 
@@ -46,8 +45,8 @@ class PositionTracker:
     def update_position(
             self,
             asset: Asset,
-            amount: Decimal | None = None,
-            last_sale_price: Decimal | None = None,
+            amount: float | None = None,
+            last_sale_price: float | None = None,
             last_sale_date=None,
             cost_basis=None,
     ):
@@ -56,8 +55,8 @@ class PositionTracker:
         if asset not in self.positions:
             position = Position(asset,
                                 amount=0,
-                                cost_basis=Decimal(0.0),
-                                last_sale_price=Decimal(0.0),
+                                cost_basis=float(0.0),
+                                last_sale_price=float(0.0),
                                 last_sale_date=None)
             self.positions[asset] = position
         else:
@@ -80,8 +79,8 @@ class PositionTracker:
         if asset not in self.positions:
             position = Position(asset=asset,
                                 amount=0,
-                                cost_basis=Decimal(0.0),
-                                last_sale_price=Decimal(0.0),
+                                cost_basis=0.0,
+                                last_sale_price=0.0,
                                 last_sale_date=None
                                 )
             self.positions[asset] = position
@@ -107,7 +106,7 @@ class PositionTracker:
         total_shares = position.amount + txn.amount
 
         if total_shares == 0:
-            position.cost_basis = Decimal(0.0)
+            position.cost_basis = 0.0
         else:
             prev_direction = copysign(1, position.amount)
             txn_direction = copysign(1, txn.amount)
@@ -132,13 +131,13 @@ class PositionTracker:
 
         position.amount = total_shares
 
-    def handle_commission(self, asset: Asset, cost: Decimal) -> None:
+    def handle_commission(self, asset: Asset, cost: float) -> None:
         # Adjust the cost basis of the stock if we own it
         if asset in self.positions:
             self._dirty_stats = True
             self.adjust_commission_cost_basis(position=self.positions[asset], asset=asset, cost=cost)
 
-    def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: Decimal):
+    def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: float):
         """
         A note about cost-basis in ziplime: all positions are considered
         to share a cost basis, even if they were executed in different
@@ -151,7 +150,7 @@ class PositionTracker:
 
         if asset != position.asset:
             raise Exception("Updating a commission for a different asset?")
-        if cost == Decimal(0.0):
+        if cost == 0.0:
             return
 
         # If we no longer hold this position, there is no cost basis to
@@ -206,7 +205,7 @@ class PositionTracker:
 
         return total_leftover_cash
 
-    def earn_dividend(self, position: Position, dividend: Dividend) -> dict[str, Decimal]:
+    def earn_dividend(self, position: Position, dividend: Dividend) -> dict[str, float]:
         """
         Register the number of shares we held at this dividend's ex date so
         that we can pay out the correct amount on the dividend's pay date.
@@ -306,7 +305,7 @@ class PositionTracker:
         according to the accumulated bookkeeping of earned, unpaid, and stock
         dividends.
         """
-        net_cash_payment = Decimal(0.0)
+        net_cash_payment = 0.0
 
         try:
             payments = self._unpaid_dividends[next_trading_day]

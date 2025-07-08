@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import logging
-from decimal import Decimal
 from functools import partial
 
 from lime_trader.models.page import PageRequest
@@ -182,7 +181,7 @@ class TradingSignalExchange(Exchange):
                 # total_commissions = sum(
                 #     fee.amount for fee in transaction_sdk.fees
                 # )
-                total_commissions = Decimal(0)
+                total_commissions = 0.0
 
                 if transaction_sdk.trade_id in self.processed_transaction_ids:
                     continue
@@ -373,7 +372,7 @@ class TradingSignalExchange(Exchange):
         new_order_id = uuid.uuid4().hex
         sdk_order = LimeTraderOrder(
             symbol=symbol,
-            quantity=Decimal(qty),
+            quantity=float(qty),
             side=side,
             order_type=order_type,
             time_in_force=TimeInForce.DAY,

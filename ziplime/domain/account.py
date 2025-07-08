@@ -1,6 +1,4 @@
 from dataclasses import dataclass
-from decimal import Decimal
-
 
 @dataclass
 class Account:
@@ -11,20 +9,20 @@ class Account:
     account values as reported by the exchange.
     """
 
-    settled_cash: Decimal
-    accrued_interest: Decimal
-    buying_power: Decimal
-    equity_with_loan: Decimal
-    total_positions_value: Decimal
-    total_positions_exposure: Decimal
-    regt_equity: Decimal
-    regt_margin: Decimal
-    initial_margin_requirement: Decimal
-    maintenance_margin_requirement: Decimal
-    available_funds: Decimal
-    excess_liquidity: Decimal
-    cushion: Decimal
-    day_trades_remaining: Decimal
-    leverage: Decimal
-    net_leverage: Decimal
-    net_liquidation: Decimal
+    settled_cash: float
+    accrued_interest: float
+    buying_power: float
+    equity_with_loan: float
+    total_positions_value: float
+    total_positions_exposure: float
+    regt_equity: float
+    regt_margin: float
+    initial_margin_requirement: float
+    maintenance_margin_requirement: float
+    available_funds: float
+    excess_liquidity: float
+    cushion: float
+    day_trades_remaining: float
+    leverage: float
+    net_leverage: float
+    net_liquidation: float

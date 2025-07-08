@@ -1,7 +1,5 @@
 import datetime
-from decimal import Decimal
 
-from ziplime.domain.bar_data import BarData
 from ziplime.errors import LiquidityExceeded
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.order import Order
@@ -28,10 +26,10 @@ class FixedBasisPointsSlippage(SlippageModel):
 
     Parameters
     ----------
-    basis_points : Decimal, optional
+    basis_points : float, optional
         Number of basis points of slippage to apply for each fill. Default
         is 5 basis points.
-    volume_limit : Decimal, optional
+    volume_limit : float, optional
         Fraction of trading volume that can be filled each minute. Default is
         10% of trading volume.
 
@@ -42,7 +40,7 @@ class FixedBasisPointsSlippage(SlippageModel):
       equities.
     """
 
-    def __init__(self, basis_points=Decimal(5.0), volume_limit=Decimal(0.1)):
+    def __init__(self, basis_points=5.0, volume_limit=0.1):
         super(FixedBasisPointsSlippage, self).__init__()
         if volume_limit <= 0:
             raise ValueError("volume_limit must be positive.")
@@ -50,7 +48,7 @@ class FixedBasisPointsSlippage(SlippageModel):
             raise ValueError("volume_limit must be positive.")
 
         self.basis_points = basis_points
-        self.percentage = Decimal(self.basis_points / Decimal(10000.0))
+        self.percentage = float(self.basis_points) / 10000.0
         self.volume_limit = volume_limit
 
     def __repr__(self):
@@ -65,7 +63,7 @@ class FixedBasisPointsSlippage(SlippageModel):
             volume_limit=self.volume_limit,
         )
 
-    def process_order(self, exchange: Exchange, dt:datetime.datetime, order: Order) -> tuple[Decimal, Decimal]:
+    def process_order(self, exchange: Exchange, dt:datetime.datetime, order: Order) -> tuple[float, float]:
         current_val = exchange.current(assets=frozenset({order.asset}), fields=frozenset({"close", "volume"}), dt=dt)
         volume = current_val["volume"][0]
         max_volume = int(self.volume_limit * volume)

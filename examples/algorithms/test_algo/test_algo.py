@@ -1,6 +1,5 @@
 import datetime
 import logging
-from decimal import Decimal
 
 import numpy as np
 import talib
@@ -56,6 +55,6 @@ async def handle_data(context, data: BarData):
 #             if len(df_current) > 0:
 #                 current_close = df_current["close"][0]
 #                 if current_close > upper_last:
-#                     await context.order_target_percent(asset=asset, target=Decimal('0.01'), style=MarketOrder())
+#                     await context.order_target_percent(asset=asset, target=0.01, style=MarketOrder())
 #                 elif current_close < sma_last and context.portfolio.positions.get(asset, None) and context.portfolio.positions[asset].amount > 0:
-#                     await context.order_target_percent(asset=asset, target=Decimal('0.0'), style=MarketOrder())
+#                     await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())

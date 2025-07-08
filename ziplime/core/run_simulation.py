@@ -1,6 +1,4 @@
-import asyncio
 import datetime
-from decimal import Decimal
 from pathlib import Path
 
 from exchange_calendars import get_calendar
@@ -32,7 +30,7 @@ async def _run_simulation(
         end_date: datetime.datetime,
         trading_calendar: str,
         emission_rate: datetime.timedelta,
-        cash_balance: Decimal,
+        cash_balance: float,
         market_data_source: DataSource,
         custom_data_sources: list[DataSource],
         algorithm_file: str,
@@ -110,7 +108,7 @@ async def run_simulation(start_date: datetime.datetime,
                    emission_rate: datetime.timedelta,
                    trading_calendar: str,
                    algorithm_file: str,
-                   total_cash: Decimal,
+                   total_cash: float,
                    market_data_source: DataSource,
                    custom_data_sources: list[DataSource],
                    stop_on_error: bool,

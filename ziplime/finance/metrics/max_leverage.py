@@ -1,5 +1,4 @@
 import datetime
-from decimal import Decimal
 from typing import Any
 
 import pandas as pd
@@ -17,7 +16,7 @@ class MaxLeverage:
 
     def start_of_simulation(self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar,
                             sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource):
-        self._max_leverage = Decimal(0.0)
+        self._max_leverage = 0.0
 
     def end_of_bar(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
                    exchanges: dict[str, Exchange]):

@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from ziplime.trading.entities.orders.order_request import OrderRequest
 from ziplime.trading.entities.trading_pair import TradingPair
 from ziplime.trading.enums.order_side import OrderSide
@@ -10,7 +8,7 @@ class LimitOrderRequest(OrderRequest):
 
     def __init__(self, order_id: str, trading_pair: TradingPair,
                  order_side: OrderSide,
-                 quantity: Decimal, limit_price: Decimal):
+                 quantity: float, limit_price: float):
         super().__init__(order_id=order_id, order_type=OrderType.LIMIT)
         self.order_side = order_side
         self.quantity = quantity

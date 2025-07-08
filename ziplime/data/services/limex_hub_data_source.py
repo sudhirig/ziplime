@@ -37,8 +37,8 @@ def fetch_historical_limex_data_task(date_from: datetime.datetime,
                                              from_date=(date_from - datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
                                              to_date=(date_to + datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
                                              timeframe=timeframe), include_index=True,
-                        schema_overrides={"o": pl.Decimal(scale=8), "h": pl.Decimal(scale=8), "l": pl.Decimal(scale=8), "c": pl.Decimal(scale=8),
-                                          "v": pl.Decimal(scale=8)}
+                        schema_overrides={"o": pl.Float64(), "h": pl.Float64(), "l": pl.Float64(), "c": pl.Float64(),
+                                          "v": pl.Float64()}
                         )
     if len(df) > 0:
         df = df.rename(

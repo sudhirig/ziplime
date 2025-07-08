@@ -1,5 +1,4 @@
 import datetime
-from decimal import Decimal
 from typing import Any
 
 import pandas as pd
@@ -18,7 +17,7 @@ class PNL:
             self, ledger: Ledger, emission_rate: datetime.timedelta, trading_calendar: ExchangeCalendar,
             sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
-        self._previous_pnl = Decimal(0.0)
+        self._previous_pnl = 0.0
 
     def start_of_session(self, ledger, session, exchanges: dict[str, Exchange]):
         self._previous_pnl = ledger.portfolio.pnl

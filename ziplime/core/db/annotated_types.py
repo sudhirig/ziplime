@@ -1,6 +1,5 @@
 import datetime
 import uuid
-from _decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import Numeric, String, TextClause, ForeignKey
@@ -21,9 +20,9 @@ String4096 = Annotated[str, mapped_column(String(length=4096))]
 String2048Indexed = Annotated[str, mapped_column(String(length=2048), index=True)]
 StringIndexed = Annotated[str, mapped_column(index=True)]
 StringDefaultEmpty = Annotated[str, mapped_column(default="", index=True, server_default="")]
-Decimal8 = Annotated[Decimal, mapped_column(Numeric(precision=12, scale=8))]
-Decimal4 = Annotated[Decimal, mapped_column(Numeric(precision=8, scale=4))]
-Decimal2 = Annotated[Decimal, mapped_column(Numeric(precision=8, scale=2))]
+Decimal8 = Annotated[float, mapped_column(Numeric(precision=12, scale=8))]
+Decimal4 = Annotated[float, mapped_column(Numeric(precision=8, scale=4))]
+Decimal2 = Annotated[float, mapped_column(Numeric(precision=8, scale=2))]
 DateTimeIndexed = Annotated[datetime.datetime, mapped_column(index=True)]
 DateIndexed = Annotated[datetime.date, mapped_column(index=True)]
 

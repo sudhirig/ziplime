@@ -1,7 +1,6 @@
 import datetime
 import math
 from abc import abstractmethod
-from decimal import Decimal
 
 import structlog
 from pandas import isnull
@@ -21,8 +20,8 @@ LIMIT = 1 << 3
 
 SQRT_252 = math.sqrt(252)
 
-DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT = Decimal(0.025)
-DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT = Decimal(0.05)
+DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT = 0.025
+DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT = 0.05
 
 
 class SlippageModel(metaclass=FinancialModelMeta):

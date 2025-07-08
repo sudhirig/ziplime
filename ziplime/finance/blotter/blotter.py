@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from decimal import Decimal
 
 from ziplime.assets.entities.asset import Asset
 from ziplime.finance.cancel_policy import NeverCancel
@@ -69,7 +68,7 @@ class Blotter(ABC):
         raise NotImplementedError("execute_cancel_policy")
 
     @abstractmethod
-    def process_splits(self, splits: list[tuple[Asset, Decimal]]) -> None:
+    def process_splits(self, splits: list[tuple[Asset, float]]) -> None:
         """
         Processes a list of splits by modifying any open orders as needed.
 

@@ -7,10 +7,8 @@ from collections import namedtuple, OrderedDict
 from contextlib import AsyncExitStack
 from copy import copy
 import warnings
-from decimal import Decimal
 from typing import Callable
 import pandas as pd
-import numpy as np
 import structlog
 
 import ziplime
@@ -439,7 +437,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
     def calculate_capital_changes(
             self, dt: datetime.datetime, emission_rate: datetime.timedelta, is_interday: bool,
-            portfolio_value_adjustment: Decimal = Decimal(0.00)
+            portfolio_value_adjustment: float = 0.00
     ):
         """If there is a capital change for a given dt, this means the the change
         occurs before `handle_data` on the given dt. In the case of the
@@ -764,7 +762,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name or self.default_exchange.name
         )
 
-    def _calculate_order_value_amount(self, asset: Asset, value: Decimal, exchange_name: str):
+    def _calculate_order_value_amount(self, asset: Asset, value: float, exchange_name: str):
         """Calculates how many shares/contracts to order based on the type of
         asset being ordered.
         """
@@ -909,7 +907,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             asset=asset,
             amount=order_qty_rounded,
             id=order_id,
-            commission=Decimal(0.00),
+            commission=0.00,
             filled=0,
             execution_style=style,
             status=OrderStatus.OPEN,
@@ -934,7 +932,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         #                                      quote_asset=quote_asset,
         #                                      exchange_name=exchange.name),
         #             order_side=OrderSide.BUY if amount > 0 else OrderSide.SELL,
-        #             quantity=Decimal(amount),
+        #             quantity=float(amount),
         #             limit_price=style.get_limit_price(is_buy=amount > 0)
         #         )
         #     case OrderType.MARKET:
@@ -944,7 +942,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         #                                      quote_asset=quote_asset,
         #                                      exchange_name=exchange.name),
         #             order_side=OrderSide.BUY if amount > 0 else OrderSide.SELL,
-        #             quantity=Decimal(amount),
+        #             quantity=float(amount),
         #             exchange_name=exchange.name,
         #             creation_date=self.simulation_dt
         #         )
@@ -990,8 +988,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    async def order_value(self, asset: Asset, value: Decimal, limit_price: Decimal | None = None,
-                          stop_price: Decimal | None = None,
+    async def order_value(self, asset: Asset, value: float, limit_price: float | None = None,
+                          stop_price: float | None = None,
                           style: ExecutionStyle | None = None,
                           exchange_name: str | None = None
                           ):
@@ -1003,12 +1001,12 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         ----------
         asset : Asset
             The asset to be ordered.
-        value : Decimal
+        value : float
             Amount of value of ``asset`` to be transacted. The number of shares
             bought or sold will be equal to ``value / current_price``.
-        limit_price : Decimal, optional
+        limit_price : float, optional
             Limit price for the order.
-        stop_price : Decimal, optional
+        stop_price : float, optional
             Stop price for the order.
         style : ExecutionStyle
             The execution style for the order.
@@ -1243,7 +1241,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_percent(
-            self, asset: Asset, percent: Decimal, style: ExecutionStyle,
+            self, asset: Asset, percent: float, style: ExecutionStyle,
             exchange_name: str | None = None
     ):
         """Place an order in the specified asset corresponding to the given
@@ -1253,7 +1251,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         ----------
         asset : Asset
             The asset that this order is for.
-        percent : Decimal
+        percent : float
             The percentage of the portfolio value to allocate to ``asset``.
             This is specified as a decimal, for example: 0.50 means 50%.
         style : ExecutionStyle
@@ -1287,7 +1285,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name
         )
 
-    def _calculate_order_percent_amount(self, asset: Asset, percent: Decimal, exchange_name: str):
+    def _calculate_order_percent_amount(self, asset: Asset, percent: float, exchange_name: str):
         value = self.portfolio.portfolio_value * percent
         return self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
 
@@ -1309,9 +1307,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             The asset that this order is for.
         target : int
             The desired number of shares of ``asset``.
-        limit_price : Decimal, optional
+        limit_price : float, optional
             The limit price for the order.
-        stop_price : Decimal, optional
+        stop_price : float, optional
             The stop price for the order.
         style : ExecutionStyle
             The execution style for the order.
@@ -1367,7 +1365,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_value(
-            self, asset: Asset, target: Decimal, style: ExecutionStyle,
+            self, asset: Asset, target: float, style: ExecutionStyle,
             exchange_name: str | None = None
     ):
         """Place an order to adjust a position to a target value. If
@@ -1382,7 +1380,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         ----------
         asset : Asset
             The asset that this order is for.
-        target : Decimal
+        target : float
             The desired total value of ``asset``.
         style : ExecutionStyle
             The execution style for the order.
@@ -1429,7 +1427,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_percent(
-            self, asset: Asset, target: Decimal,
+            self, asset: Asset, target: float,
             style: ExecutionStyle, exchange_name: str | None = None
     ):
         """Place an order to adjust a position to a target percent of the
@@ -1442,7 +1440,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         ----------
         asset : Asset
             The asset that this order is for.
-        target : Decimal
+        target : float
             The desired percentage of the portfolio value to allocate to
             ``asset``. This is specified as a decimal, for example:
             0.50 means 50%.
@@ -1660,7 +1658,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         Parameters
         ----------
-        max_leverage : Decimal
+        max_leverage : float
             The maximum leverage for the algorithm. If not provided there will
             be no maximum.
         """
@@ -1673,7 +1671,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         Parameters
         ----------
-        min_leverage : Decimal
+        min_leverage : float
             The minimum leverage for the algorithm.
         grace_period : pd.Timedelta
             The offset from the start date used to enforce a minimum leverage.
@@ -1716,7 +1714,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             asset.
         max_shares : int, optional
             The maximum number of shares to hold for an asset.
-        max_notional : Decimal, optional
+        max_notional : float, optional
             The maximum value to hold for an asset.
         """
         control = MaxPositionSize(
@@ -1745,7 +1743,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             asset.
         max_shares : int, optional
             The maximum number of shares that can be ordered at one time.
-        max_notional : Decimal, optional
+        max_notional : float, optional
             The maximum value that can be ordered at one time.
         """
         control = MaxOrderSize(

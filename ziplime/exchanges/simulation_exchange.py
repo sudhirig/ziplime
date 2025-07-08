@@ -3,7 +3,6 @@ from functools import lru_cache
 
 import polars as pl
 import uuid
-from decimal import Decimal
 
 from exchange_calendars import ExchangeCalendar
 
@@ -29,7 +28,7 @@ class SimulationExchange(Exchange):
                  country_code: str,
                  trading_calendar: ExchangeCalendar,
                  clock: TradingClock,
-                 cash_balance: Decimal,
+                 cash_balance: float,
                  equity_slippage: SlippageModel,
                  future_slippage: SlippageModel,
                  equity_commission: EquityCommissionModel,
@@ -53,10 +52,10 @@ class SimulationExchange(Exchange):
         }
         self.cash_balance = cash_balance
 
-    def get_start_cash_balance(self) -> Decimal:
+    def get_start_cash_balance(self) -> float:
         return self.cash_balance
 
-    def get_current_cash_balance(self) -> Decimal:
+    def get_current_cash_balance(self) -> float:
         return self.cash_balance
 
     def get_commission_model(self, asset: Asset) -> CommissionModel:

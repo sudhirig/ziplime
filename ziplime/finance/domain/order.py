@@ -1,5 +1,4 @@
 import math
-from decimal import Decimal
 
 from ziplime.assets.entities.asset import Asset
 from ziplime.finance.domain.order_status import OrderStatus
@@ -23,7 +22,7 @@ class Order:
             asset: Asset,
             amount: int,
             filled: int,
-            commission: Decimal,
+            commission: float,
             execution_style: ExecutionStyle,
             status: OrderStatus,
             exchange_name: str,
@@ -55,7 +54,7 @@ class Order:
         self.limit = execution_style.get_limit_price(is_buy=is_buy)
         self.stop_reached = False
         self.limit_reached = False
-        self.direction = Decimal(math.copysign(1, self.amount))
+        self.direction = math.copysign(1, self.amount)
         self.type = DataSourceType.ORDER
         self.execution_style = execution_style
         self.exchange_order_id = exchange_order_id

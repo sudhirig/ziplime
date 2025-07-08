@@ -1,4 +1,3 @@
-from decimal import Decimal
 from math import sqrt
 
 import numpy as np
@@ -74,14 +73,14 @@ class PositionStats:
     # cdef object underlying_index_array
 
     def __init__(self):
-        self.gross_exposure = Decimal(0.0)
-        self.gross_value = Decimal(0.0)
-        self.long_exposure = Decimal(0.0)
-        self.long_value = Decimal(0.0)
-        self.net_exposure = Decimal(0.0)
-        self.net_value = Decimal(0.0)
-        self.short_exposure = Decimal(0.0)
-        self.short_value = Decimal(0.0)
+        self.gross_exposure = 0.0
+        self.gross_value = 0.0
+        self.long_exposure = 0.0
+        self.long_value = 0.0
+        self.net_exposure = 0.0
+        self.net_value = 0.0
+        self.short_exposure = 0.0
+        self.short_value = 0.0
         self.longs_count = 0
         self.shorts_count = 0
         self.position_exposure_array = None
@@ -124,11 +123,11 @@ def calculate_position_tracker_stats(positions, stats):
         stats.underlying_value_array
     )
 
-    long_value = Decimal(0.0)
-    short_value = Decimal(0.0)
+    long_value = 0.0
+    short_value = 0.0
 
-    long_exposure = Decimal(0.0)
-    short_exposure = Decimal(0.0)
+    long_exposure = 0.0
+    short_exposure = 0.0
 
     longs_count = 0
     shorts_count = 0

@@ -1,6 +1,6 @@
 import datetime
+import math
 from collections import OrderedDict
-from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -30,7 +30,7 @@ class Ledger:
         The updated account being managed.
     position_tracker : PositionTracker
         The current set of positions.
-    todays_returns : Decimal
+    todays_returns : float
         The current day's returns. In minute emission mode, this is the partial
         day's returns. In daily emission mode, this is
         ``daily_returns[session]``.
@@ -59,11 +59,11 @@ class Ledger:
                                     starting_cash=self.default_exchange.get_start_cash_balance(),
                                     portfolio_value=self.default_exchange.get_start_cash_balance(),
                                     cash=self.default_exchange.get_current_cash_balance(),
-                                    cash_flow=Decimal("0.00"),
-                                    pnl=Decimal("0.00"),
-                                    returns=Decimal("0.00"),
-                                    positions_value=Decimal("0.00"),
-                                    positions_exposure=Decimal("0.00"),
+                                    cash_flow=0.00,
+                                    pnl=0.00,
+                                    returns=0.00,
+                                    positions_value=0.00,
+                                    positions_exposure=0.00,
                                     )
 
         self.logger = structlog.get_logger(__name__)
@@ -85,23 +85,23 @@ class Ledger:
         self._dirty_account = True
         # self._immutable_account =
         self._account = Account(
-            settled_cash=Decimal("0.00"),
-            accrued_interest=Decimal("0.00"),
-            buying_power=Decimal('inf'),
-            equity_with_loan=Decimal("0.00"),
-            total_positions_value=Decimal("0.00"),
-            total_positions_exposure=Decimal("0.00"),
-            regt_equity=Decimal("0.00"),
-            regt_margin=Decimal('inf'),
-            initial_margin_requirement=Decimal("0.00"),
-            maintenance_margin_requirement=Decimal("0.00"),
-            available_funds=Decimal("0.00"),
-            excess_liquidity=Decimal("0.00"),
-            cushion=Decimal("0.00"),
-            day_trades_remaining=Decimal('inf'),
-            leverage=Decimal("0.00"),
-            net_leverage=Decimal("0.00"),
-            net_liquidation=Decimal("0.00")
+            settled_cash=0.00,
+            accrued_interest=0.00,
+            buying_power=math.inf,
+            equity_with_loan=0.00,
+            total_positions_value=0.00,
+            total_positions_exposure=0.00,
+            regt_equity=0.00,
+            regt_margin=math.inf,
+            initial_margin_requirement=0.00,
+            maintenance_margin_requirement=0.00,
+            available_funds=0.00,
+            excess_liquidity=0.00,
+            cushion=0.00,
+            day_trades_remaining=math.inf,
+            leverage=0.00,
+            net_leverage=0.00,
+            net_liquidation=0.00
         )
 
         # The exchange blotter can override some fields on the account. This is
@@ -125,7 +125,7 @@ class Ledger:
         self._payout_last_sale_prices = {}
 
     @property
-    def todays_returns(self) -> Decimal:
+    def todays_returns(self) -> float:
         # compute today's returns in returns space instead of portfolio-value
         # space to work even when we have capital changes
         return (self.portfolio.returns + 1) / (self._previous_total_returns + 1) - 1
@@ -177,10 +177,10 @@ class Ledger:
         self._dirty_portfolio = True
 
     @staticmethod
-    def _calculate_payout(multiplier: Decimal, amount: Decimal, old_price: Decimal, price: Decimal) -> Decimal:
+    def _calculate_payout(multiplier: float, amount: float, old_price: float, price: float) -> float:
         return (price - old_price) * multiplier * amount
 
-    def _cash_flow(self, amount: Decimal) -> None:
+    def _cash_flow(self, amount: float) -> None:
         self._dirty_portfolio = True
         self._portfolio.cash_flow += amount
         self._portfolio.cash += amount
@@ -422,7 +422,7 @@ class Ledger:
         if start_value != 0:
             returns = pnl / start_value
         else:
-            returns = Decimal("0.00")
+            returns = 0.00
 
         self._portfolio.pnl += pnl
         self._portfolio.returns = (1 + self._portfolio.returns) * (1 + returns) - 1
@@ -467,15 +467,15 @@ class Ledger:
             # these attributes. In this case we do not want to over write the
             # exchange values with the default values.
             account.settled_cash = portfolio.cash
-            account.accrued_interest = Decimal("0.00")
+            account.accrued_interest = 0.00
             account.buying_power = np.inf
             account.equity_with_loan = portfolio.portfolio_value
             account.total_positions_value = portfolio.portfolio_value - portfolio.cash
             account.total_positions_exposure = portfolio.positions_exposure
             account.regt_equity = portfolio.cash
             account.regt_margin = np.inf
-            account.initial_margin_requirement = Decimal("0.00")
-            account.maintenance_margin_requirement = Decimal("0.00")
+            account.initial_margin_requirement = 0.00
+            account.maintenance_margin_requirement = 0.00
             account.available_funds = portfolio.cash
             account.excess_liquidity = portfolio.cash
             account.cushion = (

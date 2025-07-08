@@ -1,4 +1,3 @@
-from decimal import Decimal
 from typing import Callable
 
 from exchange_calendars import ExchangeCalendar
@@ -43,8 +42,8 @@ class BaseTradingAlgorithm:
     async def order(self, asset: Asset, amount: int, style: ExecutionStyle,
                     exchange_name: str | None = None) -> Order | None: ...
 
-    async def order_value(self, asset: Asset, value: Decimal, limit_price: Decimal | None = None,
-                          stop_price: Decimal | None = None,
+    async def order_value(self, asset: Asset, value: float, limit_price: float | None = None,
+                          stop_price: float | None = None,
                           style: ExecutionStyle | None = None): ...
 
     def get_datetime(self): ...
@@ -58,7 +57,7 @@ class BaseTradingAlgorithm:
     def set_symbol_lookup_date(self, dt): ...
 
     async def order_percent(
-            self, asset: Asset, percent: Decimal, style: ExecutionStyle
+            self, asset: Asset, percent: float, style: ExecutionStyle
     ): ...
 
     async def order_target(
@@ -66,11 +65,11 @@ class BaseTradingAlgorithm:
     ): ...
 
     async def order_target_value(
-            self, asset: Asset, target: Decimal, style: ExecutionStyle
+            self, asset: Asset, target: float, style: ExecutionStyle
     ): ...
 
     async def order_target_percent(
-            self, asset: Asset, target: Decimal,
+            self, asset: Asset, target: float,
             style: ExecutionStyle
     ): ...
 

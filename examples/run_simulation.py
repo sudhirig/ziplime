@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-from decimal import Decimal
 from pathlib import Path
 
 from ziplime.core.ingest_data import get_asset_service
@@ -49,7 +48,7 @@ async def _run_simulation():
     #     end_date=datetime.datetime(year=2023, month=2, day=10, tzinfo=datetime.timezone.utc),
     #     trading_calendar="NYSE",
     #     algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
-    #     total_cash=Decimal(100000.0),
+    #     total_cash=100000.0,
     #     bundle_name="limex_us_polars_minute",
     #     config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),
     #     emission_rate=datetime.timedelta(seconds=60),
@@ -66,7 +65,7 @@ async def _run_simulation():
         end_date=datetime.datetime(year=2025, month=4, day=18, tzinfo=datetime.timezone.utc),
         trading_calendar="NYSE",
         algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
-        total_cash=Decimal(100000.0),
+        total_cash=100000.0,
         market_data_source=market_data_bundle,
         custom_data_sources=custom_data_sources,
         config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),

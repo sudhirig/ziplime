@@ -1,5 +1,12 @@
 # Release Notes
 
+### Version 1.7.14
+- Custom data - Limex fundamental data ingestion
+- Add all frequencies supported by polars
+- Allow both string and timedelta as frequency
+- Add option to use custom CSV data
+- Use float for all decimal types
+
 ### Version 1.6.26
 - Add the forward_fill_missing_ohlcv_data parameter to the BundleService ingest_data function
 

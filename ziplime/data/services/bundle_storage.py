@@ -1,7 +1,10 @@
+import datetime
+
 import polars as pl
 from abc import abstractmethod
 from typing import Any, Self
 
+from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 
 
@@ -14,7 +17,12 @@ class BundleStorage:
     async def store_bundle(self, data_bundle: DataBundle): ...
 
     @abstractmethod
-    async def load_data_bundle(self, data_bundle: DataBundle) -> pl.DataFrame: ...
+    async def load_data_bundle(self, data_bundle: DataBundle,
+                               symbols: list[str] | None = None,
+                               start_date: datetime.datetime | None = None,
+                               end_date: datetime.datetime | None = None,
+                               frequency: datetime.timedelta | Period | None = None,
+                               ) -> pl.DataFrame: ...
 
     @classmethod
     @abstractmethod

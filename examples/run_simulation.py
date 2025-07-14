@@ -2,6 +2,8 @@ import asyncio
 import datetime
 from pathlib import Path
 
+import pytz
+
 from ziplime.core.ingest_data import get_asset_service
 from ziplime.core.run_simulation import run_simulation
 from ziplime.data.services.bundle_service import BundleService
@@ -16,10 +18,19 @@ async def _run_simulation():
     bundle_service = BundleService(bundle_registry=bundle_registry)
     asset_service = get_asset_service(clear_asset_db=False)
 
-    market_data_bundle = await bundle_service.load_bundle(bundle_name="limex_us_polars_minute", bundle_version=None)
+    market_data_bundle = await bundle_service.load_bundle(bundle_name="limex_us_polars_minute", bundle_version=None,
+                                                          frequency=datetime.timedelta(days=1),
+                                                          start_date=datetime.datetime(year=2024, month=4, day=14,
+                                                                                       tzinfo=pytz.timezone("America/New_York")),
+                                                          end_date=datetime.datetime(year=2025, month=4, day=18,
+                                                                                     tzinfo=pytz.timezone("America/New_York")),
+                                                          symbols=["AAPL", "NVDA", "AMD", "AMGN", "VOO"]
+
+                                                          )
 
     custom_data_sources = []
-    custom_data_sources.append(await bundle_service.load_bundle(bundle_name="limex_us_fundamental_data", bundle_version=None))
+    custom_data_sources.append(
+        await bundle_service.load_bundle(bundle_name="limex_us_fundamental_data", bundle_version=None))
     # custom_data_bundles.append(await bundle_service.load_bundle(bundle_name="custom_minute_bars", bundle_version=None))
     data_bundle_source = CSVDataSource(
         csv_file_name="/home/user/Downloads/minute-bars(1).csv",
@@ -61,7 +72,7 @@ async def _run_simulation():
     # print(res["result"].orders)
     # daily
     res, errors = await run_simulation(
-        start_date=datetime.datetime(year=2023, month=4, day=14, tzinfo=datetime.timezone.utc),
+        start_date=datetime.datetime(year=2024, month=4, day=14, tzinfo=datetime.timezone.utc),
         end_date=datetime.datetime(year=2025, month=4, day=18, tzinfo=datetime.timezone.utc),
         trading_calendar="NYSE",
         algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
@@ -81,7 +92,6 @@ async def _run_simulation():
 if __name__ == "__main__":
     asyncio.run(
         _run_simulation(
-
 
         )
     )

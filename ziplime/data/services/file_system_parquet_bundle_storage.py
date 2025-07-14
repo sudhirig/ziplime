@@ -1,9 +1,13 @@
+import datetime
+
 import aiofiles.os
 from pathlib import Path
 from typing import Any, Sequence, Literal, Self
 from polars import CredentialProviderFunction
 from polars._typing import ParquetCompression
 import polars as pl
+
+from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.bundle_storage import BundleStorage
 
@@ -50,11 +54,29 @@ class FileSystemParquetBundleStorage(BundleStorage):
                                        partition_chunk_size_bytes=self.partition_chunk_size_bytes,
                                        storage_options=self.storage_options)
 
-    async def load_data_bundle(self, data_bundle: DataBundle) -> pl.DataFrame:
+    async def load_data_bundle(self, data_bundle: DataBundle,
+                               symbols: list[str] | None = None,
+                               start_date: datetime.datetime | None = None,
+                               end_date: datetime.datetime | None = None,
+                               frequency: datetime.timedelta | Period | None = None,
+                               ) -> pl.DataFrame:
         bundle_path = self.get_data_bundle_path(data_bundle=data_bundle)
-        data = pl.read_parquet(source=bundle_path)
-        return data
+        filters = []
+        pl_parquet = pl.scan_parquet(bundle_path)
+        if symbols is not None:
+            filters.append(pl.col("symbol").is_in(symbols))
+        if start_date is not None:
+            filters.append(pl.col("date") >= start_date)
+        if end_date is not None:
+            filters.append(pl.col("date") <= end_date)
 
+        if filters:
+            pl_parquet = pl_parquet.filter(*filters)
+        if frequency is not None:
+            pl_parquet = pl_parquet.group_by_dynamic(
+                index_column="date", every=frequency, by="sid").agg(
+                pl.col(field).last() for field in pl_parquet.columns if field not in ('sid', 'date'))
+        return pl_parquet.collect()
 
     @classmethod
     async def from_json(cls, data: dict[str, Any]) -> Self:

@@ -12,6 +12,7 @@ from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.bundle_registry import BundleRegistry
 from ziplime.data.services.bundle_storage import BundleStorage
 from ziplime.utils.class_utils import load_class
+from ziplime.utils.date_utils import period_to_timedelta
 
 
 class BundleService:
@@ -265,7 +266,12 @@ class BundleService:
 
         self._logger.info(f"Finished ingesting market data bundle_name={name}, bundle_version={bundle_version}")
 
-    async def load_bundle(self, bundle_name: str, bundle_version: str | None) -> DataBundle:
+    async def load_bundle(self, bundle_name: str, bundle_version: str | None,
+                          symbols: list[str] | None = None,
+                          start_date: datetime.datetime | None = None,
+                          end_date: datetime.datetime | None = None,
+                          frequency: datetime.timedelta | Period | None = None,
+                          ) -> DataBundle:
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
                                                                            bundle_version=bundle_version)
 
@@ -283,25 +289,40 @@ class BundleService:
 
         # asset_repository = asset_repository_class.from_json(bundle_metadata["asset_repository_data"])
         # adjustment_repository = adjustment_repository_class.from_json(bundle_metadata["adjustment_repository_data"])
-        start_date = datetime.datetime.strptime(bundle_metadata["start_date"], "%Y-%m-%dT%H:%M:%SZ")
+        bundle_start_date = datetime.datetime.strptime(bundle_metadata["start_date"], "%Y-%m-%dT%H:%M:%SZ")
         trading_calendar = get_calendar(bundle_metadata["trading_calendar_name"],
-                                        start=start_date - datetime.timedelta(days=30))
-        start_date = start_date.replace(tzinfo=trading_calendar.tz)
-        end_date = datetime.datetime.strptime(bundle_metadata["end_date"], "%Y-%m-%dT%H:%M:%SZ").replace(
+                                        start=bundle_start_date - datetime.timedelta(days=30))
+        bundle_start_date = bundle_start_date.replace(tzinfo=trading_calendar.tz)
+        bundle_end_date = datetime.datetime.strptime(bundle_metadata["end_date"], "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=trading_calendar.tz)
         frequency_timedelta = datetime.timedelta(seconds=int(bundle_metadata["frequency_seconds"])) if bundle_metadata["frequency_seconds"] is not None else None
         frequency_text = bundle_metadata.get("frequency_text", None)
         timestamp = datetime.datetime.strptime(bundle_metadata["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=trading_calendar.tz)
+        bundle_frequency = frequency_timedelta or frequency_text
+
+
+        if start_date is not None and start_date < bundle_start_date:
+            raise ValueError(f"Start date {start_date} is before bundle start date {bundle_start_date}")
+        if end_date is not None and end_date > bundle_end_date:
+            raise ValueError(f"End date {end_date} is after bundle end date {bundle_end_date}")
+        if frequency is not None and period_to_timedelta(frequency) < period_to_timedelta(bundle_frequency):
+            raise ValueError(f"Requested frequency {frequency} is less than bundle frequency {bundle_frequency}")
+
         data_bundle = DataBundle(name=bundle_name,
-                                 start_date=start_date,
-                                 end_date=end_date,
+                                 start_date=start_date or bundle_start_date,
+                                 end_date=end_date or bundle_end_date,
                                  trading_calendar=trading_calendar,
-                                 frequency=frequency_timedelta or frequency_text,
+                                 frequency=frequency or bundle_frequency,
                                  timestamp=timestamp,
                                  version=bundle_metadata["version"]
                                  )
-        data = await bundle_storage.load_data_bundle(data_bundle=data_bundle)
+        data = await bundle_storage.load_data_bundle(data_bundle=data_bundle,
+                                                     symbols=symbols,
+                                                     start_date=start_date,
+                                                     end_date=end_date,
+                                                     frequency=frequency
+                                                     )
         data_bundle.data = data
         return data_bundle
         # data_portal = DataPortal(

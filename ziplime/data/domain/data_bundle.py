@@ -4,6 +4,7 @@ from operator import mul
 from typing import Any
 
 import polars as pl
+import structlog
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.continuous_future import ContinuousFuture
@@ -33,6 +34,7 @@ class DataBundle(DataSource):
         self.frequency_td = period_to_timedelta(self.frequency)
         self.timestamp = timestamp
         self.data = data
+        self._logger = structlog.get_logger(__name__)
 
     def get_dataframe(self) -> pl.DataFrame:
         return self.data
@@ -86,6 +88,7 @@ class DataBundle(DataSource):
         frequency_td = period_to_timedelta(frequency)
         total_bar_count = limit
         if end_date > self.end_date:
+            raise ValueError(f"Requested end date {end_date} is greater than end date {self.end_date} of the bundle.")
             return self.get_missing_data_by_limit(frequency=frequency, assets=assets, fields=fields,
                                                   limit=limit, include_end_date=include_end_date,
                                                   end_date=end_date

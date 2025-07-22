@@ -75,7 +75,7 @@ class FileSystemParquetBundleStorage(BundleStorage):
         if frequency is not None:
             pl_parquet = pl_parquet.group_by_dynamic(
                 index_column="date", every=frequency, by="sid").agg(
-                pl.col(field).last() for field in pl_parquet.columns if field not in ('sid', 'date'))
+                pl.col(field).last() for field in pl_parquet.collect_schema().names() if field not in ('sid', 'date'))
         return pl_parquet.collect()
 
     @classmethod

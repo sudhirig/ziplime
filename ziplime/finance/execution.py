@@ -102,6 +102,9 @@ class MarketOrder(ExecutionStyle):
         )
         return order_req
 
+    def __str__(self):
+        return "MarketOrder()"
+
 
 class LimitOrder(ExecutionStyle):
     """
@@ -134,6 +137,9 @@ class LimitOrder(ExecutionStyle):
 
     def to_order_type(self) -> OrderType:
         return OrderType.LIMIT
+
+    def __str__(self):
+        return f"LimitOrder(limit_price={self.limit_price})"
 
 
 class StopOrder(ExecutionStyle):
@@ -168,6 +174,9 @@ class StopOrder(ExecutionStyle):
 
     def to_order_type(self) -> OrderType:
         return OrderType.STOP
+
+    def __str__(self):
+        return f"StopOrder(stop_price={self.stop_price})"
 
 
 class StopLimitOrder(ExecutionStyle):
@@ -211,6 +220,9 @@ class StopLimitOrder(ExecutionStyle):
 
     def to_order_type(self) -> OrderType:
         return OrderType.STOP_LIMIT
+
+    def __str__(self):
+        return f"StopLimitOrder(limit_price={self.limit_price}, stop_price={self.stop_price})"
 
 
 def asymmetric_round_price(price: float, prefer_round_down: bool, tick_size: float, diff: float = 0.95):

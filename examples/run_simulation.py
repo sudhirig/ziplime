@@ -1,5 +1,12 @@
 import asyncio
 import datetime
+import logging
+
+import structlog
+
+from ziplime.utils.logging_utils import configure_logging
+
+
 from pathlib import Path
 
 import pytz
@@ -11,6 +18,8 @@ from ziplime.data.services.csv_data_source import CSVDataSource
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
 from exchange_calendars import get_calendar
 
+logger = structlog.get_logger(__name__)
+
 
 async def _run_simulation():
     bundle_storage_path = str(Path(Path.home(), ".ziplime", "data"))
@@ -20,10 +29,12 @@ async def _run_simulation():
 
     market_data_bundle = await bundle_service.load_bundle(bundle_name="limex_us_polars_minute", bundle_version=None,
                                                           frequency=datetime.timedelta(days=1),
-                                                          start_date=datetime.datetime(year=2024, month=4, day=14,
-                                                                                       tzinfo=pytz.timezone("America/New_York")),
-                                                          end_date=datetime.datetime(year=2025, month=4, day=18,
-                                                                                     tzinfo=pytz.timezone("America/New_York")),
+                                                          start_date=datetime.datetime(year=2024, month=4, day=16,
+                                                                                       tzinfo=pytz.timezone(
+                                                                                           "America/New_York")),
+                                                          end_date=datetime.datetime(year=2025, month=4, day=20,
+                                                                                     tzinfo=pytz.timezone(
+                                                                                         "America/New_York")),
                                                           symbols=["AAPL", "NVDA", "AMD", "AMGN", "VOO"]
 
                                                           )
@@ -72,8 +83,8 @@ async def _run_simulation():
     # print(res["result"].orders)
     # daily
     res, errors = await run_simulation(
-        start_date=datetime.datetime(year=2024, month=4, day=14, tzinfo=datetime.timezone.utc),
-        end_date=datetime.datetime(year=2025, month=4, day=18, tzinfo=datetime.timezone.utc),
+        start_date=datetime.datetime(year=2024, month=4, day=16, tzinfo=datetime.timezone.utc),
+        end_date=datetime.datetime(year=2025, month=4, day=20, tzinfo=datetime.timezone.utc),
         trading_calendar="NYSE",
         algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
         total_cash=100000.0,
@@ -83,15 +94,16 @@ async def _run_simulation():
         emission_rate=datetime.timedelta(days=1),
         benchmark_asset_symbol="VOO",
         benchmark_returns=None,
-        stop_on_error=True
+        stop_on_error=False
     )
-    print(errors)
+
+    logger.error(errors)
     print(res.head(n=10).to_markdown())
 
 
 if __name__ == "__main__":
+    configure_logging(level=logging.ERROR, file_name=None)
+    # configure_logging(level=logging.ERROR, file_name="ziplime_trading_algorith.log")
     asyncio.run(
-        _run_simulation(
-
-        )
+        _run_simulation()
     )

@@ -3,6 +3,7 @@ import datetime
 import logging
 from functools import partial
 
+import structlog
 from lime_trader.models.page import PageRequest
 from lime_trader.utils.pagination import iterate_pages_async
 
@@ -37,7 +38,7 @@ class TradingSignalExchange(Exchange):
 
     def __init__(self, name: str):
         super().__init__(name=name)
-        self._logger = logging.getLogger(__name__)
+        self._logger = structlog.get_logger(__name__)
 
     def get_positions(self) -> dict[Asset, ZpPosition]:
         return {}
@@ -279,7 +280,7 @@ class TradingSignalExchange(Exchange):
             order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(order_id=zp_order_id)
             self._lime_sdk_client.trading.cancel_order(order_id=order.order_id)
         except Exception as e:
-            logging.error(e)
+            self._logger.error(e)
             return
 
     def get_last_traded_dt(self, asset) -> datetime.datetime:

@@ -15,8 +15,9 @@
 import logging
 
 import pandas as pd
+import structlog
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger(__name__)
 
 
 def get_benchmark_returns_from_file(filelike):

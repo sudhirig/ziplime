@@ -4,6 +4,7 @@ import logging
 import polars as pl
 from functools import partial
 
+import structlog
 from exchange_calendars import ExchangeCalendar
 from lime_trader.models.page import PageRequest
 from lime_trader.utils.pagination import iterate_pages_async
@@ -59,7 +60,7 @@ class LimeTraderSdkExchange(Exchange):
                          trading_calendar=trading_calendar)
 
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
-        self._logger = logging.getLogger(__name__)
+        self._logger = structlog.get_logger(__name__)
         if lime_sdk_credentials_file is None:
             self._sync_lime_sdk_client = LimeClient.from_env(logger=self._logger)
             self._lime_sdk_client = AsyncLimeClient.from_env(logger=self._logger)
@@ -365,7 +366,7 @@ class LimeTraderSdkExchange(Exchange):
             order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(order_id=zp_order_id)
             self._lime_sdk_client.trading.cancel_order(order_id=order.order_id)
         except Exception as e:
-            logging.error(e)
+            self._logger.error(e)
             return
 
     def get_last_traded_dt(self, asset) -> datetime.datetime:

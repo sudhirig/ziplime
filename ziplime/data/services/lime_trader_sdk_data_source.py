@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import logging
 
+import structlog
 from exchange_calendars import ExchangeCalendar
 from lime_trader import AsyncLimeClient, LimeClient
 from lime_trader.models.market import Period
@@ -19,7 +20,7 @@ class LimeTraderSdkDataSource(DataBundleSource):
         super().__init__()
         self._lime_sdk_credentials_file = lime_sdk_credentials_file
         self.trading_calendar = trading_calendar
-        self._logger = logging.getLogger(__name__)
+        self._logger = structlog.get_logger(__name__)
         if lime_sdk_credentials_file is None:
             self._lime_sdk_client = AsyncLimeClient.from_env(logger=self._logger)
             self._lime_sdk_client_sync = LimeClient.from_env(logger=self._logger)

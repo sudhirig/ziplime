@@ -4,6 +4,7 @@ from collections import namedtuple
 import logging
 import pandas as pd
 import sqlalchemy as sa
+import structlog
 from toolz import (
     concatv,
     curry,
@@ -16,7 +17,7 @@ import numpy as np
 
 from .domain.continuous_future import ContinuousFuture
 
-log = logging.getLogger("assets.py")
+log = structlog.get_logger("assets.py")
 
 # A set of fields that need to be converted to timestamps in UTC
 _asset_timestamp_fields = frozenset(

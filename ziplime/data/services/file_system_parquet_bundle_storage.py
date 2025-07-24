@@ -3,6 +3,8 @@ import datetime
 import aiofiles.os
 from pathlib import Path
 from typing import Any, Sequence, Literal, Self
+
+import structlog
 from polars import CredentialProviderFunction
 from polars._typing import ParquetCompression
 import polars as pl
@@ -41,6 +43,7 @@ class FileSystemParquetBundleStorage(BundleStorage):
         self.partition_by = partition_by
         self.partition_chunk_size_bytes = partition_chunk_size_bytes
         self.storage_options = storage_options
+        self._logger = structlog.get_logger(__name__)
 
     async def store_bundle(self, data_bundle: DataBundle):
         # we need here to know ehere to store bundle, and info is in bundle metadata
@@ -60,6 +63,9 @@ class FileSystemParquetBundleStorage(BundleStorage):
                                end_date: datetime.datetime | None = None,
                                frequency: datetime.timedelta | Period | None = None,
                                ) -> pl.DataFrame:
+        self._logger.info(
+            f"Loading data bundle {data_bundle.name} start_date={start_date}, end_date={end_date},"
+            f" version={data_bundle.version}, frequency={frequency}")
         bundle_path = self.get_data_bundle_path(data_bundle=data_bundle)
         filters = []
         pl_parquet = pl.scan_parquet(bundle_path)

@@ -97,6 +97,7 @@ import h5py
 import logging
 import numpy as np
 import pandas as pd
+import structlog
 
 from ziplime.utils.numpy_utils import bytes_array_to_native_str_object_array
 
@@ -112,7 +113,7 @@ CURRENCIES = "currencies"
 DTS = "dts"
 RATES = "rates"
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger(__name__)
 
 
 class HDF5FXRateReader(FXRateReader):

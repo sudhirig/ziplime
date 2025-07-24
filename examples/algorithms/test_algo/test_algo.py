@@ -24,9 +24,13 @@ async def handle_data(context, data: BarData):
     # asset_spx = await context.symbol("SPX")
     for asset in context.assets:
         await context.order(asset=asset, amount=1, style=MarketOrder())
-    # df_aapl = data.history(assets=[asset], fields=["close"], bar_count=10,
-    #                        frequency=datetime.timedelta(minutes=1)
-    #                        )
+    df_aapl = data.history(
+        assets=[asset], fields=["close"], bar_count=10,
+        frequency=datetime.timedelta(days=1)
+    )
+
+
+
     # df_aapl = data.current(assets=[asset], fields=["close"]
     #                        )
     # print(df_aapl.head(n=10))

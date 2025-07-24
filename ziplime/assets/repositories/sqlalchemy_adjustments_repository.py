@@ -8,6 +8,7 @@ from typing import Self, Any
 import polars as pl
 import numpy as np
 import pandas as pd
+import structlog
 from numpy import integer as any_integer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -27,7 +28,7 @@ from ziplime.data.adjustments import load_adjustments_from_sqlite
 
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger(__name__)
 
 SQLITE_ADJUSTMENT_TABLENAMES = frozenset(["splits", "dividends", "mergers"])
 

@@ -19,6 +19,7 @@ from exchange_calendars import ExchangeCalendar
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.services.asset_service import AssetService
+from ziplime.constants.logging_event import LoggingEvent, LoggingEvent
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.data_source import DataSource
 from ziplime.domain.bar_data import BarData
@@ -278,7 +279,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         # TODO: what if we add funds?
         for exchange in exchanges.values():
-            data_sources[exchange.name]= exchange
+            data_sources[exchange.name] = exchange
             if exchange.get_start_cash_balance() <= 0:
                 raise ZeroCapitalError()
 
@@ -919,6 +920,10 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         quote_asset = await self.asset_service.get_currency_by_symbol(symbol="USD",
                                                                       exchange_name=exchange_name)
+
+        self._logger.info(LoggingEvent.ORDER_SUBMIT, style=str(style), quantity=order_qty_rounded,
+                          symbol=asset.get_symbol_by_exchange(exchange_name),
+                          simulation_dt=self.simulation_dt)
 
         submitted_order = await self.default_exchange.submit_order(order=order)
         # quote_asset = await self.asset_service.get_currency_by_symbol(symbol="USD",

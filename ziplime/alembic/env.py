@@ -1,6 +1,7 @@
 import enum
 import os
 
+import structlog
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 from logging.config import fileConfig
@@ -11,8 +12,10 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-fileConfig(config.config_file_name)
-
+# l = structlog.get_logger(__name__)
+# l.info("Initializing alembic")
+# fileConfig(config.config_file_name)
+# l.info("Done initializing alembic")
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel

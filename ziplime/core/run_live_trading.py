@@ -8,6 +8,7 @@ from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
 from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
 from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
 from ziplime.assets.services.asset_service import AssetService
+from ziplime.constants.data_type import DataType
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
@@ -52,7 +53,8 @@ async def _run_live_trading(
     bundle_service = BundleService(bundle_registry=bundle_registry)
     data_bundle = None
     if bundle_name is not None:
-        data_bundle = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None)
+        data_bundle = await bundle_service.load_bundle(bundle_name=bundle_name, bundle_version=None,
+                                                       data_type=DataType.CUSTOM)
 
     algo = AlgorithmFile(algorithm_file=algorithm_file, algorithm_config_file=config_file)
     timedelta_diff_from_current_time = -datetime.timedelta(seconds=0)

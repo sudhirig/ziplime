@@ -45,7 +45,8 @@ class FileSystemBundleRegistry(BundleRegistry):
             "trading_calendar_name": data_bundle.trading_calendar.name,
             "frequency_seconds": frequency_seconds,
             "frequency_text": frequency_text,
-            "timestamp": data_bundle.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+            "timestamp": data_bundle.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "data_type": data_bundle.data_type.value,
         }
 
     async def load_bundle_metadata(self, bundle_name: str, bundle_version: str | None) -> dict[str, Any] | None:

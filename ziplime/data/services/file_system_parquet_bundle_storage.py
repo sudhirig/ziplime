@@ -5,10 +5,11 @@ from pathlib import Path
 from typing import Any, Sequence, Literal, Self
 
 import structlog
-from polars import CredentialProviderFunction
+from polars import CredentialProviderFunction, Expr
 from polars._typing import ParquetCompression
 import polars as pl
 
+from ziplime.constants.data_type import DataType
 from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.bundle_storage import BundleStorage
@@ -62,6 +63,9 @@ class FileSystemParquetBundleStorage(BundleStorage):
                                start_date: datetime.datetime | None = None,
                                end_date: datetime.datetime | None = None,
                                frequency: datetime.timedelta | Period | None = None,
+                               start_auction_delta: datetime.timedelta = None,
+                               end_auction_delta: datetime.timedelta = None,
+                               aggregations: list[pl.Expr] = None
                                ) -> pl.DataFrame:
         self._logger.info(
             f"Loading data bundle {data_bundle.name} start_date={start_date}, end_date={end_date},"
@@ -78,10 +82,57 @@ class FileSystemParquetBundleStorage(BundleStorage):
 
         if filters:
             pl_parquet = pl_parquet.filter(*filters)
+
         if frequency is not None:
-            pl_parquet = pl_parquet.group_by_dynamic(
-                index_column="date", every=frequency, by="sid").agg(
-                pl.col(field).last() for field in pl_parquet.collect_schema().names() if field not in ('sid', 'date'))
+
+            if data_bundle.aggregation_specification:
+                pl_parquet = pl_parquet.group_by_dynamic(
+                    index_column="date", every=frequency, by="sid").agg(
+                    pl.col(field).last() for field in pl_parquet.collect_schema().names() if
+                    field not in ('sid', 'date')
+                )
+            else:
+                # nth_row_start = 0
+                # nth_row_end = 0
+                # if start_auction_delta is not None:
+                #     nth_row_start = start_auction_delta / data_bundle.original_frequency
+                # if end_auction_delta is not None:
+                #     nth_row_end = end_auction_delta / data_bundle.original_frequency
+                if start_auction_delta is not None:
+                    pl_parquet = pl_parquet.filter(
+                        pl.col("date") >= (
+                                pl.col("date").min().over(pl.col("date").dt.date()) + pl.duration(
+                            seconds=start_auction_delta.total_seconds())
+                        )
+                    )
+                if end_auction_delta is not None:
+                    pl_parquet = pl_parquet.filter(pl.col("date") <= (
+                            pl.col("date").max().over(pl.col("date").dt.date()) - pl.duration(
+                        seconds=end_auction_delta.total_seconds())
+                    ))
+
+                if not aggregations and data_bundle.data_type == DataType.MARKET_DATA:
+                    aggregations = [
+                        pl.col("open").first(),
+                        pl.col("high").max(),
+                        pl.col("low").min(),
+                        pl.col("volume").sum()
+                    ]
+                if aggregations:
+                    aggregation_columns = {aggregation.meta.output_name() for aggregation in aggregations}
+                    # default aggregation is last()
+                    missing_aggregation_columns = [
+                        pl.col(col).last() for col in pl_parquet.collect_schema().names()
+                        if col not in aggregation_columns and col not in ('sid', 'date')
+                    ]
+                    pl_parquet = pl_parquet.group_by_dynamic(
+                        index_column="date", every=frequency, by="sid").agg(*aggregations, *missing_aggregation_columns)
+                else:
+                    pl_parquet = pl_parquet.group_by_dynamic(
+                        index_column="date", every=frequency, by="sid").agg(
+                        pl.col(field).last() for field in pl_parquet.collect_schema().names() if
+                        field not in ('sid', 'date')
+                    )
         return pl_parquet.collect()
 
     @classmethod

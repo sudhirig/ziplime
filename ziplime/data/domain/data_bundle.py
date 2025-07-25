@@ -10,6 +10,7 @@ from exchange_calendars import ExchangeCalendar
 from ziplime.assets.domain.continuous_future import ContinuousFuture
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
+from ziplime.constants.data_type import DataType
 from ziplime.constants.period import Period
 from ziplime.data.services.data_source import DataSource
 from ziplime.utils.date_utils import period_to_timedelta
@@ -17,15 +18,22 @@ from ziplime.utils.date_utils import period_to_timedelta
 
 class DataBundle(DataSource):
 
-    def __init__(self, name: str, version: str, start_date: datetime.date,
+    def __init__(self, name: str,
+                 version: str,
+                 start_date: datetime.date,
                  end_date: datetime.date,
                  trading_calendar: ExchangeCalendar,
                  frequency: datetime.timedelta | Period,
+                 original_frequency: datetime.timedelta | Period,
+                 data_type: DataType,
                  timestamp: datetime.datetime, data: pl.DataFrame = None):
         super().__init__(name=name,
                          start_date=start_date,
                          end_date=end_date,
-                         frequency=frequency)
+                         frequency=frequency,
+                         data_type=data_type,
+                         original_frequency=original_frequency
+                         )
         self.version = version
         self.start_date = start_date
         self.end_date = end_date

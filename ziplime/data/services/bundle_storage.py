@@ -22,6 +22,9 @@ class BundleStorage:
                                start_date: datetime.datetime | None = None,
                                end_date: datetime.datetime | None = None,
                                frequency: datetime.timedelta | Period | None = None,
+                               start_auction_delta: datetime.timedelta = None,
+                               end_auction_delta: datetime.timedelta = None,
+                               aggregations: list[pl.Expr] = None,
                                ) -> pl.DataFrame: ...
 
     @classmethod

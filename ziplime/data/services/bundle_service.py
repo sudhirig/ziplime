@@ -6,6 +6,7 @@ import structlog
 from exchange_calendars import ExchangeCalendar, get_calendar
 
 from ziplime.assets.services.asset_service import AssetService
+from ziplime.constants.data_type import DataType
 from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.data_bundle_source import DataBundleSource
@@ -79,10 +80,11 @@ class BundleService:
         ).agg()
         if data_frequency_use_window_end:
             if (
-                    (type(frequency) is datetime.timedelta and frequency >=datetime.timedelta(days=1)) or
+                    (type(frequency) is datetime.timedelta and frequency >= datetime.timedelta(days=1)) or
                     (type(frequency) is str and frequency in ["1d", "1w", "1mo", "1q", "1y"])
             ):
-                last_row = required_sessions.tail(1).with_columns(pl.col("date").dt.offset_by(frequency) - pl.duration(days=1))
+                last_row = required_sessions.tail(1).with_columns(
+                    pl.col("date").dt.offset_by(frequency) - pl.duration(days=1))
                 required_sessions = required_sessions.with_columns(
                     pl.col("date") - pl.duration(days=1)
                 )[1:]
@@ -97,7 +99,6 @@ class BundleService:
             raise ValueError(f"Ingested data is missing required columns: {missing}. Cannot ingest bundle.")
         if "symbol" not in data.columns and "sid" not in data.columns:
             raise ValueError(f"When ingesting custom bundle you must supply either a symbol or a sid column.")
-
 
         sid_id = "sid" in data.columns
         symbol_id = "symbol" in data.columns
@@ -116,9 +117,11 @@ class BundleService:
                                  end_date=date_end,
                                  trading_calendar=trading_calendar,
                                  frequency=frequency,
+                                 original_frequency=frequency,
                                  data=data,
                                  timestamp=datetime.datetime.now(tz=trading_calendar.tz),
-                                 version=bundle_version
+                                 version=bundle_version,
+                                 data_type=DataType.CUSTOM
                                  )
 
         await self._bundle_registry.register_bundle(data_bundle=data_bundle, bundle_storage=bundle_storage)
@@ -167,7 +170,7 @@ class BundleService:
                                         frequency: datetime.timedelta,
                                         bundle_storage: BundleStorage,
                                         asset_service: AssetService,
-                                        forward_fill_missing_ohlcv_data: bool
+                                        forward_fill_missing_ohlcv_data: bool,
                                         ):
 
         """Ingest data for a given bundle.        """
@@ -257,9 +260,11 @@ class BundleService:
                                  end_date=date_end,
                                  trading_calendar=trading_calendar,
                                  frequency=frequency,
+                                 original_frequency=frequency,
                                  data=data,
                                  timestamp=datetime.datetime.now(tz=trading_calendar.tz),
-                                 version=bundle_version
+                                 version=bundle_version,
+                                 data_type=DataType.MARKET_DATA
                                  )
         await self._bundle_registry.register_bundle(data_bundle=data_bundle, bundle_storage=bundle_storage)
         await bundle_storage.store_bundle(data_bundle=data_bundle)
@@ -271,6 +276,9 @@ class BundleService:
                           start_date: datetime.datetime | None = None,
                           end_date: datetime.datetime | None = None,
                           frequency: datetime.timedelta | Period | None = None,
+                          start_auction_delta: datetime.timedelta = None,
+                          end_auction_delta: datetime.timedelta = None,
+                          aggregations: list[pl.Expr] = None
                           ) -> DataBundle:
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
                                                                            bundle_version=bundle_version)
@@ -295,12 +303,13 @@ class BundleService:
         bundle_start_date = bundle_start_date.replace(tzinfo=trading_calendar.tz)
         bundle_end_date = datetime.datetime.strptime(bundle_metadata["end_date"], "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=trading_calendar.tz)
-        frequency_timedelta = datetime.timedelta(seconds=int(bundle_metadata["frequency_seconds"])) if bundle_metadata["frequency_seconds"] is not None else None
+        frequency_timedelta = datetime.timedelta(seconds=int(bundle_metadata["frequency_seconds"])) if bundle_metadata[
+                                                                                                           "frequency_seconds"] is not None else None
         frequency_text = bundle_metadata.get("frequency_text", None)
         timestamp = datetime.datetime.strptime(bundle_metadata["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=trading_calendar.tz)
+        data_type = DataType(bundle_metadata["data_type"])
         bundle_frequency = frequency_timedelta or frequency_text
-
 
         if start_date is not None and start_date < bundle_start_date:
             raise ValueError(f"Start date {start_date} is before bundle start date {bundle_start_date}")
@@ -309,19 +318,34 @@ class BundleService:
         if frequency is not None and period_to_timedelta(frequency) < period_to_timedelta(bundle_frequency):
             raise ValueError(f"Requested frequency {frequency} is less than bundle frequency {bundle_frequency}")
 
+        if start_auction_delta is not None and period_to_timedelta(start_auction_delta) < period_to_timedelta(
+                bundle_frequency):
+            raise ValueError(
+                f"Requested start auction delta frequency {frequency} is less than bundle frequency {bundle_frequency}")
+
+        if end_auction_delta is not None and period_to_timedelta(end_auction_delta) < period_to_timedelta(
+                bundle_frequency):
+            raise ValueError(
+                f"Requested end auction delta frequency {frequency} is less than bundle frequency {bundle_frequency}")
+
         data_bundle = DataBundle(name=bundle_name,
                                  start_date=start_date or bundle_start_date,
                                  end_date=end_date or bundle_end_date,
                                  trading_calendar=trading_calendar,
                                  frequency=frequency or bundle_frequency,
+                                 original_frequency=bundle_frequency,
                                  timestamp=timestamp,
-                                 version=bundle_metadata["version"]
+                                 version=bundle_metadata["version"],
+                                 data_type=data_type
                                  )
         data = await bundle_storage.load_data_bundle(data_bundle=data_bundle,
                                                      symbols=symbols,
                                                      start_date=start_date,
                                                      end_date=end_date,
-                                                     frequency=frequency
+                                                     frequency=frequency,
+                                                     start_auction_delta=start_auction_delta,
+                                                     end_auction_delta=end_auction_delta,
+                                                     aggregations=aggregations
                                                      )
         data_bundle.data = data
         return data_bundle

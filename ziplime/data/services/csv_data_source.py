@@ -1,21 +1,13 @@
-import asyncio
 import datetime
-import multiprocessing
-import os
-import sys
-from typing import Self
 
-import limexhub
 import structlog
-from asyncclick import progressbar
 from exchange_calendars import ExchangeCalendar
-from joblib import Parallel, delayed
 
 import polars as pl
 
 from ziplime.assets.services.asset_service import AssetService
+from ziplime.constants.data_type import DataType
 from ziplime.constants.period import Period
-from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.data_source import DataSource
 from ziplime.utils.data_utils import _process_data
 
@@ -31,7 +23,9 @@ class CSVDataSource(DataSource):
                  data_frequency_use_window_end: bool,
                  symbols: list[str],
                  asset_service: AssetService,
-                 trading_calendar: ExchangeCalendar):
+                 trading_calendar: ExchangeCalendar,
+                 data_type: DataType,
+                 ):
         self._csv_file_name = csv_file_name
         self._column_mapping = column_mapping
         self._logger = structlog.get_logger(__name__)
@@ -44,7 +38,9 @@ class CSVDataSource(DataSource):
         self.data = None
         self.start_date = None
         self.end_date = None
-        super().__init__(name=name, start_date=self.start_date, end_date=self.end_date, frequency=frequency, )
+        self.data_type = data_type
+        super().__init__(name=name, start_date=self.start_date, end_date=self.end_date, frequency=frequency,
+                         data_type=data_type, original_frequency=frequency)
 
     async def load_data_in_memory(self) -> pl.DataFrame:
         df = pl.read_csv(self._csv_file_name)  # s, schema_overrides={self._date_column_name: pl.Datetime})

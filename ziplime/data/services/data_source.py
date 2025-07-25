@@ -2,6 +2,7 @@ import datetime
 import polars as pl
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.constants.data_type import DataType
 from ziplime.constants.period import Period
 from ziplime.utils.date_utils import period_to_timedelta
 
@@ -9,12 +10,18 @@ from ziplime.utils.date_utils import period_to_timedelta
 class DataSource:
 
     def __init__(self, name: str, start_date: datetime.date, end_date: datetime.date,
-                 frequency: datetime.timedelta | Period, ):
+                 frequency: datetime.timedelta | Period,
+                 original_frequency: datetime.timedelta | Period,
+                 data_type: DataType,
+                 aggregation_specification: dict[str, str] = None):
         self.name = name
         self.start_date = start_date
         self.end_date = end_date
         self.frequency = frequency
         self.frequency_td = period_to_timedelta(self.frequency)
+        self.data_type = data_type
+        self.aggregation_specification = aggregation_specification
+        self.original_frequency = original_frequency
 
     def get_dataframe(self) -> pl.DataFrame:
         return self.data
@@ -123,4 +130,3 @@ class DataSource:
             include_end_date=True,
         )
         return df_raw
-

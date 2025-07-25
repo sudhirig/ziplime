@@ -2,13 +2,14 @@ import datetime
 import logging
 
 import numpy as np
+import structlog
 import talib
 
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.execution import MarketOrder
 from ziplime.trading.trading_algorithm import TradingAlgorithm
 
-
+logger = structlog.get_logger(__name__)
 async def initialize(context):
     assets = [
         await context.symbol("AAPL"),
@@ -28,9 +29,6 @@ async def handle_data(context, data: BarData):
         assets=[asset], fields=["close"], bar_count=10,
         frequency=datetime.timedelta(days=1)
     )
-
-
-
     # df_aapl = data.current(assets=[asset], fields=["close"]
     #                        )
     # print(df_aapl.head(n=10))

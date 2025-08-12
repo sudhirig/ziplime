@@ -25,6 +25,7 @@ from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.currency_symbol_mapping import CurrencySymbolMapping
 from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
+from ziplime.assets.entities.symbol_universe import SymbolsUniverse
 from ziplime.assets.models.asset_router import AssetRouter
 from ziplime.assets.entities.commodity import Commodity
 from ziplime.assets.entities.currency import Currency
@@ -33,6 +34,8 @@ from ziplime.assets.models.currency_model import CurrencyModel
 from ziplime.assets.models.currency_symbol_mapping_model import CurrencySymbolMappingModel
 from ziplime.assets.models.equity_model import EquityModel
 from ziplime.assets.models.futures_contract_model import FuturesContractModel
+from ziplime.assets.models.symbols_universe import SymbolsUniverseModel
+from ziplime.assets.models.symbols_universe_asset import SymbolsUniverseAssetModel
 from ziplime.trading.models.trading_pair import TradingPair
 from ziplime.core.db.base_model import BaseModel
 from ziplime.errors import (
@@ -186,6 +189,23 @@ class SqlAlchemyAssetRepository(AssetRepository):
         #     session.add_all(symbol_mappings)
         #     await session.commit()
 
+    async def save_symbol_universe(self, symbol_universe: SymbolsUniverse):
+        async with self.session_maker() as session:
+
+            symbol_universe_model = SymbolsUniverseModel(symbol=symbol_universe.symbol,
+                                                         universe_type=symbol_universe.universe_type,
+                                                         name=symbol_universe.name,
+                                                         )
+            session.add(symbol_universe_model)
+            await session.commit()
+            await session.refresh(symbol_universe_model)
+            symbol_universe_assets = [
+                SymbolsUniverseAssetModel(symbol_universe_id=symbol_universe_model.id, asset_sid=asset.sid)
+                for asset in symbol_universe.assets
+            ]
+            session.add_all(symbol_universe_assets)
+            await session.commit()
+
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_exchange_by_name(self, exchange_name: str) -> ExchangeInfo | None:
         async with self.session_maker() as session:
@@ -277,6 +297,27 @@ class SqlAlchemyAssetRepository(AssetRepository):
             }
         return res
 
+    @cached(cache=Cache.MEMORY)
+    async def get_all_universes(self) -> dict[str, SymbolsUniverse]:
+        async with self.session_maker() as session:
+            q = select(SymbolsUniverseModel).options(
+                selectinload(SymbolsUniverseModel.assets)
+            )
+            universes = list((await session.execute(q)).scalars())
+
+            res = {
+                universe.symbol:
+                    SymbolsUniverse(
+                        assets=await self.get_assets_by_sids(sids=[asset.asset_sid for asset in universe.assets]),
+                        universe_type=universe.universe_type,
+                        symbol=universe.symbol,
+                        name=universe.name
+                    )
+                for
+                universe in universes
+            }
+        return res
+
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType,
                                   exchange_name: str | None) -> Asset | None:
@@ -298,10 +339,9 @@ class SqlAlchemyAssetRepository(AssetRepository):
         assets_by_sid = await self.get_all_assets()
         return [assets_by_sid.get(sid, None) for sid in sids]
 
-        # async with self.session_maker() as session:
-        #     q = select(Asset).where(Asset.sid == sid)
-        #     asset = await session.execute(q).scalar_one_or_none()
-        #     return asset
+    async def get_symbols_universe(self, symbol: str) -> SymbolsUniverse | None:
+        universes_by_symbol = await self.get_all_universes()
+        return universes_by_symbol.get(symbol, None)
 
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_currency_by_symbol(self, symbol: str, exchange_name: str) -> Currency | None:

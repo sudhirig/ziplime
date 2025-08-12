@@ -5,6 +5,7 @@ from aiocache import Cache
 
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.symbol_universe import SymbolsUniverse
 from ziplime.assets.models.asset_router import AssetRouter
 from ziplime.assets.entities.commodity import Commodity
 from ziplime.assets.entities.currency import Currency
@@ -18,6 +19,7 @@ from ziplime.trading.models.trading_pair import TradingPair
 class AssetRepository:
 
     async def save_equities(self, equities: list[Equity]) -> None: ...
+    async def save_symbol_universe(self, symbol_universe: SymbolsUniverse): ...
 
     async def save_commodities(self, commodities: list[Commodity]) -> None: ...
 
@@ -37,6 +39,7 @@ class AssetRepository:
     async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None: ...
     async def get_equities_by_symbols(self, symbols: list[str]) -> list[Equity]: ...
     async def get_equities_by_symbols_and_exchange(self, symbols: list[str], exchange_name: str) -> list[Equity]: ...
+    async def get_symbols_universe(self, symbol: str) -> SymbolsUniverse | None: ...
 
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType, exchange_name: str) -> Asset | None:

@@ -8,3 +8,5 @@ class AssetDataSource:
 
     async def get_assets(self, **kwargs) -> pl.DataFrame:
         pass
+
+    async def get_constituents(self, index: str) -> pl.DataFrame: ...

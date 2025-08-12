@@ -16,4 +16,6 @@ from ziplime.assets.models.futures_root_symbol import FuturesRootSymbol # noqa
 from ziplime.assets.models.merger import Merger # noqa
 from ziplime.assets.models.split import Split # noqa
 from ziplime.assets.models.stock_divident_payout import StockDividendPayout # noqa
+from ziplime.assets.models.symbols_universe import SymbolsUniverseModel # noqa
+from ziplime.assets.models.symbols_universe_asset import SymbolsUniverseAssetModel # noqa
 # from ziplime.assets.models.trading_pair import TradingPair # noqa

@@ -26,6 +26,12 @@ async def _run_simulation():
     bundle_registry = FileSystemBundleRegistry(base_data_path=bundle_storage_path)
     bundle_service = BundleService(bundle_registry=bundle_registry)
     asset_service = get_asset_service(clear_asset_db=False)
+
+    sp500 = await asset_service.get_symbols_universe(symbol="SP500")
+    if sp500 is not None:
+        sp500_assets = sp500.assets
+    else:
+        sp500_assets = []
     aggregations = [
         pl.col("open").first(),
         pl.col("high").max(),

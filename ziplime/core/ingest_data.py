@@ -10,12 +10,15 @@ from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.currency_symbol_mapping import CurrencySymbolMapping
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
+from ziplime.assets.entities.symbol_universe import SymbolsUniverse
 from ziplime.assets.models.exchange_info import ExchangeInfo
+from ziplime.assets.models.symbols_universe_asset import SymbolsUniverseAssetModel
 from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
 from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.constants.period import Period
 from ziplime.constants.stock_symbols import ALL_US_STOCK_SYMBOLS
+from ziplime.data.data_sources.asset_data_source import AssetDataSource
 from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
@@ -33,7 +36,7 @@ def get_asset_service(clear_asset_db: bool = False) -> AssetService:
     return asset_service
 
 
-async def ingest_default_assets(asset_service: AssetService):
+async def ingest_default_assets(asset_service: AssetService, asset_data_source: AssetDataSource):
     asset_start_date = datetime.datetime(year=1900, month=1, day=1, tzinfo=datetime.timezone.utc)
     asset_end_date = datetime.datetime(year=2099, month=1, day=1, tzinfo=datetime.timezone.utc)
 
@@ -80,6 +83,20 @@ async def ingest_default_assets(asset_service: AssetService):
         exchanges=[ExchangeInfo(exchange="LIME", canonical_name="LIME", country_code="US")])
     await asset_service.save_currencies([usd_currency])
     await asset_service.save_equities(equities)
+
+
+async def ingest_symbol_universes(asset_service: AssetService, asset_data_source: AssetDataSource):
+    sp500 = await asset_data_source.get_constituents(index='SP500')
+    assets_symbols = list(sp500[0])
+
+    equities = await asset_service.get_equities_by_symbols(symbols=assets_symbols)
+    universe = SymbolsUniverse(
+        name="SP500",
+        universe_type="index",
+        symbol="SP500",
+        assets=equities
+    )
+    await asset_service.save_symbol_universe(symbol_universe=universe)
 
 
 async def _ingest_market_data(

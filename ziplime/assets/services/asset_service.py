@@ -10,6 +10,7 @@ from ziplime.assets.entities.commodity import Commodity
 from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.futures_contract import FuturesContract
+from ziplime.assets.entities.symbol_universe import SymbolsUniverse
 from ziplime.assets.models.dividend import Dividend
 from ziplime.assets.repositories.adjustments_repository import AdjustmentRepository
 from ziplime.assets.repositories.asset_repository import AssetRepository
@@ -25,6 +26,8 @@ class AssetService:
 
     async def save_equities(self, equities: list[Equity]) -> None:
         await self._asset_repository.save_equities(equities=equities)
+    async def save_symbol_universe(self, symbol_universe: SymbolsUniverse) -> None:
+        await self._asset_repository.save_symbol_universe(symbol_universe=symbol_universe)
 
     async def save_commodities(self, commodities: list[Commodity]) -> None:
         await self._asset_repository.save_commodities(commodities=commodities)
@@ -79,3 +82,6 @@ class AssetService:
 
     def get_splits(self, assets: frozenset[Asset], dt: datetime.date):
         return self._adjustments_repository.get_splits(assets=assets, dt=dt)
+
+    async def get_symbols_universe(self, symbol: str) -> SymbolsUniverse | None:
+        return await self._asset_repository.get_symbols_universe(symbol=symbol)

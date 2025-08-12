@@ -1,8 +1,8 @@
 """migration
 
-Revision ID: 8a637677b647
+Revision ID: 3055001d8d17
 Revises: 
-Create Date: 2025-04-28 03:49:54.273311
+Create Date: 2025-08-12 10:34:58.267664
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '8a637677b647'
+revision = '3055001d8d17'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -81,6 +81,13 @@ def upgrade():
     )
     op.create_index(op.f('ix_stock_dividend_payouts_ex_date'), 'stock_dividend_payouts', ['ex_date'], unique=False)
     op.create_index(op.f('ix_stock_dividend_payouts_sid'), 'stock_dividend_payouts', ['sid'], unique=False)
+    op.create_table('symbols_universe',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(), nullable=False),
+    sa.Column('symbol', sa.String(), nullable=False),
+    sa.Column('universe_type', sa.String(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('commodities',
     sa.Column('sid', sa.Integer(), nullable=False),
     sa.Column('asset_name', sa.String(), nullable=False),
@@ -121,13 +128,21 @@ def upgrade():
     sa.PrimaryKeyConstraint('root_symbol')
     )
     op.create_index(op.f('ix_futures_root_symbols_exchange'), 'futures_root_symbols', ['exchange'], unique=False)
+    op.create_table('symbols_universe_assets',
+    sa.Column('symbol_universe_id', sa.Integer(), nullable=False),
+    sa.Column('asset_sid', sa.Integer(), nullable=False),
+    sa.Column('ratio', sa.Numeric(precision=12, scale=8), nullable=True),
+    sa.ForeignKeyConstraint(['asset_sid'], ['asset_router.sid'], ),
+    sa.ForeignKeyConstraint(['symbol_universe_id'], ['symbols_universe.id'], ),
+    sa.PrimaryKeyConstraint('symbol_universe_id', 'asset_sid')
+    )
     op.create_table('currency_symbol_mappings',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('sid', sa.Integer(), nullable=False),
     sa.Column('symbol', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
-    sa.Column('exchange', sa.String(), nullable=False),
+    sa.Column('exchange', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['exchange'], ['exchanges.exchange'], ),
     sa.ForeignKeyConstraint(['sid'], ['currencies.sid'], ),
     sa.PrimaryKeyConstraint('id')
@@ -155,7 +170,7 @@ def upgrade():
     sa.Column('share_class_symbol', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
-    sa.Column('exchange', sa.String(), nullable=False),
+    sa.Column('exchange', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['exchange'], ['exchanges.exchange'], ),
     sa.ForeignKeyConstraint(['sid'], ['equities.sid'], ),
     sa.PrimaryKeyConstraint('id')
@@ -205,11 +220,13 @@ def downgrade():
     op.drop_index(op.f('ix_currency_symbol_mappings_sid'), table_name='currency_symbol_mappings')
     op.drop_index(op.f('ix_currency_symbol_mappings_exchange'), table_name='currency_symbol_mappings')
     op.drop_table('currency_symbol_mappings')
+    op.drop_table('symbols_universe_assets')
     op.drop_index(op.f('ix_futures_root_symbols_exchange'), table_name='futures_root_symbols')
     op.drop_table('futures_root_symbols')
     op.drop_table('equities')
     op.drop_table('currencies')
     op.drop_table('commodities')
+    op.drop_table('symbols_universe')
     op.drop_index(op.f('ix_stock_dividend_payouts_sid'), table_name='stock_dividend_payouts')
     op.drop_index(op.f('ix_stock_dividend_payouts_ex_date'), table_name='stock_dividend_payouts')
     op.drop_table('stock_dividend_payouts')

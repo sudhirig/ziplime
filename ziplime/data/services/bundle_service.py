@@ -221,7 +221,7 @@ class BundleService:
         ]
         required_sessions = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
             index_column="date", every=frequency
-        ).df
+        ).agg()
 
         equities_by_exchange = data.select(
             "symbol", "exchange", "exchange_country"

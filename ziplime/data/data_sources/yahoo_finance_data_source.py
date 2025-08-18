@@ -87,9 +87,11 @@ class YahooFinanceDataSource(DataBundleSource):
                     pl.lit("LIME").alias("exchange"),
                     pl.lit("US").alias("exchange_country"),
                     pl.col("close").alias("price"),
-                    date=pl.col("date").dt.replace_time_zone(str(date_from.tzinfo)),
-                ).filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
+                )
+                if date_column == "Datetime":
+                    df = df.with_columns(date=pl.col("date").dt.convert_time_zone(str(date_from.tzinfo)))
+                else:
+                    df = df.with_columns(date=pl.col("date").dt.replace_time_zone(str(date_from.tzinfo)))
+                df = df.filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
                 final = pl.concat([final, df])
-
-        print(final)
         return final

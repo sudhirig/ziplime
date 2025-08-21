@@ -1,5 +1,14 @@
 # Release Notes
 
+### Version 1.8.21
+- Use scan_parquet to load bundle data partially
+- Throw proper error in bundle when data is missing
+- Add an option to configure the logging level and log to the file
+- Add a start / end auction date to allow getting open/close prices at a specific time in the day when running daily simulation for a minute data bundle
+- Allow custom aggregations when using aggregated low-frequency data bundle in simulation
+- Symbols universe
+- Support for ingesting market data from Yahoo Finance
+
 ### Version 1.7.14
 - Custom data - Limex fundamental data ingestion
 - Add all frequencies supported by polars
